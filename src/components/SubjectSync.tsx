@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { Eye, Plus, Check, ChevronDown } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Eye, Plus, Check } from "lucide-react";
 import subject1 from "@/assets/subject-1.png";
 import subject2 from "@/assets/subject-2.png";
 import subject3 from "@/assets/subject-3.png";
 import subject4 from "@/assets/subject-4.png";
+import PresetDropdown from "./PresetDropdown";
 
 const groups = ["All Subjects", "Masculine", "Feminine", "Elderly", "Child"];
 
@@ -14,25 +15,51 @@ const subjects = [
   { avatar: subject4, count: 200 },
 ];
 
-const presetOptions = ["Anti Aging", "Face Glow Up", "Skin Retouch", "Eye Enhance", "Natural Look"];
-
-// Group initial letter map
 const groupInitial: Record<string, string> = {
   "All Subjects": "A", "Masculine": "M", "Feminine": "F", "Elderly": "E", "Child": "C",
 };
 
-interface SubjectSyncProps {
-  isScanning: boolean;
-  onSelectionsChange?: (hasSelections: boolean) => void;
+export interface SubjectSyncState {
+  selectedSubjects: number[];
+  selectedGroups: string[];
+  presets: Record<string, string | null>;
+  subjectCounts: number[];
 }
 
-const SubjectSync = ({ isScanning, onSelectionsChange }: SubjectSyncProps) => {
+interface SubjectSyncProps {
+  isScanning: boolean;
+  disabled?: boolean;
+  resetSignal?: number;
+  appliedPresets?: Record<string, string>;
+  onSelectionsChange?: (hasSelections: boolean) => void;
+  onStateChange?: (state: SubjectSyncState) => void;
+}
+
+const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSelectionsChange, onStateChange }: SubjectSyncProps) => {
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [selectedSubjects, setSelectedSubjects] = useState<Set<number>>(new Set());
-  const [presets, setPresets] = useState<Record<string, string>>({});
+  const [presets, setPresets] = useState<Record<string, string | null>>({});
 
-  const notify = (groups: Set<string>, subjects: Set<number>) => {
-    onSelectionsChange?.(groups.size > 0 || subjects.size > 0);
+  useEffect(() => {
+    if (!resetSignal) return;
+    setSelectedGroups(new Set());
+    setSelectedSubjects(new Set());
+    setPresets({});
+    onSelectionsChange?.(false);
+    onStateChange?.({ selectedSubjects: [], selectedGroups: [], presets: {}, subjectCounts: subjects.map((s) => s.count) });
+  }, [resetSignal]);
+
+  const notify = (groups: Set<string>, subs: Set<number>, currentPresets: Record<string, string | null>) => {
+    const hasValidSelections =
+      Array.from(subs).some((i) => !!currentPresets[`subject-${i}`]) ||
+      Array.from(groups).some((label) => !!currentPresets[`group-${label}`]);
+    onSelectionsChange?.(hasValidSelections);
+    onStateChange?.({
+      selectedSubjects: Array.from(subs),
+      selectedGroups: Array.from(groups),
+      presets: currentPresets,
+      subjectCounts: subjects.map((s) => s.count),
+    });
   };
 
   const toggleGroup = (label: string) => {
@@ -40,7 +67,7 @@ const SubjectSync = ({ isScanning, onSelectionsChange }: SubjectSyncProps) => {
       const next = new Set(prev);
       if (next.has(label)) next.delete(label);
       else next.add(label);
-      notify(next, selectedSubjects);
+      notify(next, selectedSubjects, presets);
       return next;
     });
   };
@@ -50,23 +77,23 @@ const SubjectSync = ({ isScanning, onSelectionsChange }: SubjectSyncProps) => {
       const next = new Set(prev);
       if (next.has(i)) next.delete(i);
       else next.add(i);
-      notify(selectedGroups, next);
+      notify(selectedGroups, next, presets);
       return next;
     });
   };
 
-  const cyclePreset = (key: string) => {
+  const setPreset = (key: string, value: string) => {
     setPresets((prev) => {
-      const current = prev[key] || presetOptions[0];
-      const idx = presetOptions.indexOf(current);
-      return { ...prev, [key]: presetOptions[(idx + 1) % presetOptions.length] };
+      const next = { ...prev, [key]: value };
+      notify(selectedGroups, selectedSubjects, next);
+      return next;
     });
   };
 
   const hasSelections = selectedSubjects.size > 0 || selectedGroups.size > 0;
 
   return (
-    <div className="px-5 flex flex-col gap-3">
+    <div className={`px-5 flex flex-col gap-3 transition-opacity ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-1.5">
           <h3 className="text-base font-normal text-[#e2e2e2]">Subject Sync</h3>
@@ -107,8 +134,13 @@ const SubjectSync = ({ isScanning, onSelectionsChange }: SubjectSyncProps) => {
 
           {/* Subject avatar grid */}
           <div className="grid grid-cols-5 gap-2">
-            {subjects.map((s, i) => {
+            {[
+              ...subjects.map((_, i) => i).filter((i) => !appliedPresets?.[`subject-${i}`]),
+              ...subjects.map((_, i) => i).filter((i) => !!appliedPresets?.[`subject-${i}`]),
+            ].map((i) => {
+              const s = subjects[i];
               const active = selectedSubjects.has(i);
+              const applied = !!appliedPresets?.[`subject-${i}`];
               return (
                 <div key={i} className="flex flex-col items-center gap-1 relative">
                   <button
@@ -125,6 +157,11 @@ const SubjectSync = ({ isScanning, onSelectionsChange }: SubjectSyncProps) => {
                   </button>
                   {active && (
                     <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#2563eb] flex items-center justify-center">
+                      <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
+                    </div>
+                  )}
+                  {!active && applied && (
+                    <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#16a34a] flex items-center justify-center">
                       <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
                     </div>
                   )}
@@ -152,13 +189,10 @@ const SubjectSync = ({ isScanning, onSelectionsChange }: SubjectSyncProps) => {
                     <div className="w-11 h-11 rounded shrink-0 overflow-hidden">
                       <img src={subjects[i].avatar} alt={`Subject ${i + 1}`} className="w-full h-full object-cover" />
                     </div>
-                    <button
-                      onClick={() => cyclePreset(`subject-${i}`)}
-                      className="flex flex-1 items-center justify-between px-2.5 py-2 bg-[#242424] rounded text-[12px] text-[#ababab] hover:text-[#e2e2e2] transition-colors"
-                    >
-                      <span>{presets[`subject-${i}`] || presetOptions[0]}</span>
-                      <ChevronDown className="w-4 h-4 shrink-0" />
-                    </button>
+                    <PresetDropdown
+                      value={presets[`subject-${i}`] ?? null}
+                      onChange={(v) => setPreset(`subject-${i}`, v)}
+                    />
                   </div>
                 ))}
                 {Array.from(selectedGroups).map((label) => (
@@ -166,13 +200,10 @@ const SubjectSync = ({ isScanning, onSelectionsChange }: SubjectSyncProps) => {
                     <div className="w-11 h-11 rounded shrink-0 bg-white/5 flex items-center justify-center">
                       <span className="text-white text-[20px] font-medium">{groupInitial[label]}</span>
                     </div>
-                    <button
-                      onClick={() => cyclePreset(`group-${label}`)}
-                      className="flex flex-1 items-center justify-between px-2.5 py-2 bg-[#242424] rounded text-[12px] text-[#ababab] hover:text-[#e2e2e2] transition-colors"
-                    >
-                      <span>{presets[`group-${label}`] || presetOptions[1]}</span>
-                      <ChevronDown className="w-4 h-4 shrink-0" />
-                    </button>
+                    <PresetDropdown
+                      value={presets[`group-${label}`] ?? null}
+                      onChange={(v) => setPreset(`group-${label}`, v)}
+                    />
                   </div>
                 ))}
               </div>
