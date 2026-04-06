@@ -1,16 +1,36 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState, useEffect } from "react";
+import TopBar from "@/components/TopBar";
+import ImageGrid from "@/components/ImageGrid";
+import RightPanel from "@/components/RightPanel";
+import BottomBar from "@/components/BottomBar";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
+  const [columns, setColumns] = useState(3);
+  const [isScanning, setIsScanning] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsScanning(false), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="flex flex-col h-screen bg-background">
+      <TopBar activeTab="RETOUCH" />
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <ImageGrid columns={columns} isScanning={isScanning} />
+        </div>
+        <RightPanel isScanning={isScanning} />
+      </div>
+      <BottomBar
+        columns={columns}
+        onColumnsChange={setColumns}
+        totalPhotos={1562}
+        visiblePhotos={232}
+        albumName="Juliana Wedding"
+      />
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
