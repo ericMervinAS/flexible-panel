@@ -1,5 +1,5 @@
-import { Sparkles } from "lucide-react";
 import { useState } from "react";
+import { Check } from "lucide-react";
 
 const distractions = [
   { label: "Exit Signs", count: 30 },
@@ -12,9 +12,10 @@ const distractions = [
 
 interface SmartObjectRemovalProps {
   isScanning: boolean;
+  onSelectionsChange?: (hasSelections: boolean) => void;
 }
 
-const SmartObjectRemoval = ({ isScanning }: SmartObjectRemovalProps) => {
+const SmartObjectRemoval = ({ isScanning, onSelectionsChange }: SmartObjectRemovalProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const toggle = (label: string) => {
@@ -22,56 +23,60 @@ const SmartObjectRemoval = ({ isScanning }: SmartObjectRemovalProps) => {
       const next = new Set(prev);
       if (next.has(label)) next.delete(label);
       else next.add(label);
+      onSelectionsChange?.(next.size > 0);
       return next;
     });
   };
 
   return (
-    <div className="px-5 py-4">
-      <div className="flex items-center gap-2 mb-1">
-        <h3 className="text-sm font-semibold text-foreground">Smart Object Removal</h3>
-        <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-warning text-primary-foreground">
-          Beta
-        </span>
-        {isScanning && (
-          <Sparkles className="w-3.5 h-3.5 text-muted-foreground animate-pulse" />
-        )}
+    <div className="px-5 pb-4 flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-base font-normal text-[#e2e2e2]">Smart Object Removal</h3>
+          <span className="px-1 py-0.5 text-[11px] font-medium leading-[12px] rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
+            Beta
+          </span>
+          {isScanning && (
+            <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
+          )}
+        </div>
+        <p className="text-[12px] text-[#ababab] leading-4">
+          Smart object detection will automatically identify and remove distractions you select
+        </p>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">
-        Smart object detection will automatically identify and remove distractions you select
-      </p>
 
       {!isScanning && (
-        <div className="grid grid-cols-2 gap-2">
-          {distractions.map((d) => (
-            <label
-              key={d.label}
-              className={`flex items-center justify-between px-3 py-2 rounded border cursor-pointer transition-colors text-xs ${
-                selected.has(d.label)
-                  ? "border-primary bg-accent"
-                  : "border-border hover:border-muted-foreground"
-              } ${d.count === 0 ? "opacity-40 cursor-not-allowed" : ""}`}
-              onClick={() => d.count > 0 && toggle(d.label)}
-            >
-              <span className="text-secondary-foreground">{d.label}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">{d.count}</span>
+        <div className="grid grid-cols-2 gap-1.5">
+          {distractions.map((d) => {
+            const isSelected = selected.has(d.label);
+            const isDisabled = d.count === 0;
+            return (
+              <button
+                key={d.label}
+                disabled={isDisabled}
+                onClick={() => toggle(d.label)}
+                className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${
+                  isDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-[#2a2a2a] cursor-pointer"
+                }`}
+              >
+                {/* Label + count */}
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">{d.label}</span>
+                  <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">{d.count}</span>
+                </div>
+                {/* Checkbox */}
                 <div
-                  className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${
-                    selected.has(d.label)
-                      ? "bg-primary border-primary"
-                      : "border-muted-foreground"
+                  className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
+                    isSelected
+                      ? "bg-[#2563eb]"
+                      : "border border-[#474747] bg-transparent"
                   }`}
                 >
-                  {selected.has(d.label) && (
-                    <svg className="w-2.5 h-2.5 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
+                  {isSelected && <Check className="w-2 h-2 text-white stroke-[3]" />}
                 </div>
-              </div>
-            </label>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

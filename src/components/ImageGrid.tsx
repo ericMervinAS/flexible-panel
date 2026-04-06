@@ -29,7 +29,7 @@ interface ImageGridProps {
 const ImageGrid = ({ columns, isScanning }: ImageGridProps) => {
   return (
     <div
-      className="grid gap-4 p-4 overflow-y-auto flex-1"
+      className="grid gap-px flex-1 overflow-y-auto content-start"
       style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
     >
       {images.map((img, i) => (

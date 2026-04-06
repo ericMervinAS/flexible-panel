@@ -6,56 +6,55 @@
 
 @layer base {
   :root {
-    --background: 220 15% 13%;
-    --foreground: 210 20% 92%;
+    /* Figma surface tokens */
+    --background: 0 0% 7%;          /* #111 — Surface/0 */
+    --foreground: 0 0% 89%;         /* #e2e2e2 — Type/1 */
 
-    --card: 220 14% 16%;
-    --card-foreground: 210 20% 92%;
+    --card: 0 0% 11%;               /* #1c1c1c — Surface/1 */
+    --card-foreground: 0 0% 89%;
 
-    --popover: 220 14% 16%;
-    --popover-foreground: 210 20% 92%;
+    --popover: 0 0% 11%;
+    --popover-foreground: 0 0% 89%;
 
-    --primary: 160 60% 45%;
-    --primary-foreground: 220 15% 10%;
+    --primary: 142 70% 29%;         /* #15803d — green selection border */
+    --primary-foreground: 0 0% 89%;
 
-    --secondary: 220 12% 22%;
-    --secondary-foreground: 210 15% 80%;
+    --secondary: 0 0% 14%;          /* #242424 — chip/input fill */
+    --secondary-foreground: 0 0% 67%; /* #ababab — Type/2 */
 
-    --muted: 220 12% 20%;
-    --muted-foreground: 215 12% 55%;
+    --muted: 0 0% 11%;              /* #1c1c1c */
+    --muted-foreground: 0 0% 47%;   /* #777 — Type/3 */
 
-    --accent: 220 12% 25%;
-    --accent-foreground: 210 15% 85%;
+    --accent: 0 0% 19%;             /* #303030 — active/elevated */
+    --accent-foreground: 0 0% 89%;
 
     --destructive: 0 62% 50%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 220 12% 22%;
-    --input: 220 12% 22%;
-    --ring: 160 60% 45%;
+    --border: 0 0% 19%;             /* #303030 */
+    --input: 0 0% 14%;
+    --ring: 142 70% 29%;
 
-    --radius: 0.5rem;
+    --radius: 0.25rem;              /* 4px to match Figma */
 
-    --surface-elevated: 220 14% 18%;
-    --surface-overlay: 220 14% 14%;
-    --success: 160 60% 45%;
-    --success-foreground: 220 15% 10%;
+    --surface-elevated: 0 0% 11%;   /* #1c1c1c */
+    --surface-overlay: 0 0% 11%;    /* #1c1c1c */
+
+    --success: 142 70% 29%;
+    --success-foreground: 0 0% 89%;
     --warning: 38 92% 50%;
     --info: 210 80% 55%;
-    --badge-new: 160 60% 45%;
-    --badge-beta: 38 92% 50%;
-    --thumbnail-border: 160 60% 45%;
-    --cta-gradient-from: 200 70% 45%;
-    --cta-gradient-to: 180 60% 40%;
 
-    --sidebar-background: 220 14% 14%;
-    --sidebar-foreground: 210 15% 80%;
-    --sidebar-primary: 160 60% 45%;
-    --sidebar-primary-foreground: 220 15% 10%;
-    --sidebar-accent: 220 12% 20%;
-    --sidebar-accent-foreground: 210 15% 85%;
-    --sidebar-border: 220 12% 22%;
-    --sidebar-ring: 160 60% 45%;
+    --thumbnail-border: 142 70% 29%; /* #15803d */
+
+    --sidebar-background: 0 0% 11%;
+    --sidebar-foreground: 0 0% 67%;
+    --sidebar-primary: 142 70% 29%;
+    --sidebar-primary-foreground: 0 0% 7%;
+    --sidebar-accent: 0 0% 14%;
+    --sidebar-accent-foreground: 0 0% 89%;
+    --sidebar-border: 0 0% 19%;
+    --sidebar-ring: 142 70% 29%;
   }
 }
 
@@ -67,5 +66,21 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
+  }
+
+  /* Subtle scrollbar to match the dark UI */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #303030;
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #474747;
   }
 }

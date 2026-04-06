@@ -8,47 +8,60 @@ interface TopBarProps {
 
 const TopBar = ({ activeTab }: TopBarProps) => {
   return (
-    <header className="flex items-center justify-between h-12 px-4 bg-surface-overlay border-b border-border">
-      <div className="flex items-center gap-3">
-        <button className="p-1.5 rounded bg-accent hover:bg-secondary transition-colors">
-          <Grid3X3 className="w-4 h-4 text-foreground" />
-        </button>
-        <button className="p-1.5 rounded hover:bg-secondary transition-colors">
-          <LayoutList className="w-4 h-4 text-muted-foreground" />
-        </button>
-        <div className="w-px h-5 bg-border mx-1" />
-        <button className="p-1.5 rounded hover:bg-secondary transition-colors">
-          <Filter className="w-4 h-4 text-muted-foreground" />
-        </button>
-        <button className="p-1.5 rounded hover:bg-secondary transition-colors">
-          <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
-        </button>
-        <div className="w-px h-5 bg-border mx-1" />
-        <button className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-secondary transition-colors text-sm text-muted-foreground">
+    <header className="flex items-center justify-between h-11 px-3 bg-[#1c1c1c] shrink-0">
+      {/* Left: Views + Filter + Add */}
+      <div className="flex items-center gap-2.5 w-[400px]">
+        <div className="flex items-center gap-1">
+          <button className="flex items-center justify-center w-6 h-6 rounded bg-white/10 border border-[#5e5e5e]">
+            <Grid3X3 className="w-4 h-4 text-[#e2e2e2]" />
+          </button>
+          <button className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/5 transition-colors">
+            <LayoutList className="w-4 h-4 text-[#777]" />
+          </button>
+        </div>
+
+        <div className="w-px h-4 bg-[#303030]" />
+
+        <div className="flex items-center gap-1">
+          <button className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/5 transition-colors">
+            <Filter className="w-4 h-4 text-[#777]" />
+          </button>
+          <button className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/5 transition-colors">
+            <SlidersHorizontal className="w-4 h-4 text-[#777]" />
+          </button>
+        </div>
+
+        <div className="w-px h-4 bg-[#303030]" />
+
+        <button className="flex items-center gap-1 text-[#ababab] text-[12px] font-medium hover:text-[#e2e2e2] transition-colors">
           <ImagePlus className="w-4 h-4" />
           <span>Add</span>
         </button>
       </div>
 
-      <nav className="flex items-center gap-1">
+      {/* Center: Feature Switcher */}
+      <div className="flex items-center bg-[#111] rounded p-[2px]">
         {tabs.map((tab) => (
           <button
             key={tab}
-            className={`px-4 py-1.5 text-xs font-medium tracking-wider rounded transition-colors ${
+            className={`w-20 h-7 text-[11px] font-semibold tracking-[0.5px] rounded transition-colors ${
               tab === activeTab
-                ? "bg-secondary text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-[#303030] text-[#e2e2e2]"
+                : "text-[#777] hover:text-[#ababab]"
             }`}
           >
             {tab}
           </button>
         ))}
-      </nav>
+      </div>
 
-      <button className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-        <Download className="w-4 h-4" />
-        <span>Export</span>
-      </button>
+      {/* Right: Export */}
+      <div className="flex items-center justify-end w-[400px]">
+        <button className="flex items-center gap-1 pl-2 pr-3 py-2 bg-[#303030] rounded text-[12px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors">
+          <Download className="w-4 h-4" />
+          <span>Export</span>
+        </button>
+      </div>
     </header>
   );
 };

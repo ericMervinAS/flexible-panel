@@ -6,21 +6,23 @@ interface ImageTileProps {
 
 const ImageTile = ({ src, filename, isScanning = false }: ImageTileProps) => {
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="relative aspect-[4/3] rounded border-2 border-thumbnail-border overflow-hidden bg-card">
-        <img
-          src={src}
-          alt={filename}
-          loading="lazy"
-          className="w-full h-full object-cover"
-        />
+    <div className="flex flex-col gap-2 p-4 bg-[#1c1c1c]">
+      <div className="relative rounded border-2 border-[#15803d] overflow-hidden bg-[#1c1c1c]" style={{ aspectRatio: "332/232" }}>
+        <div className="absolute inset-[2px] rounded-[2px] overflow-hidden bg-white/5">
+          <img
+            src={src}
+            alt={filename}
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+        </div>
         {isScanning && (
-          <div className="absolute inset-0 bg-background/40 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-5 h-5 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
           </div>
         )}
       </div>
-      <span className="text-xs text-muted-foreground truncate">{filename}</span>
+      <span className="text-[12px] text-[#ababab] truncate leading-4">{filename}</span>
     </div>
   );
 };
