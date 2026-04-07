@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Eye, Plus, Check } from "lucide-react";
+import { Eye, Plus, Check, X } from "lucide-react";
 import subject1 from "@/assets/subject-1.png";
 import subject2 from "@/assets/subject-2.png";
 import subject3 from "@/assets/subject-3.png";
@@ -63,23 +63,33 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSele
   };
 
   const toggleGroup = (label: string) => {
-    setSelectedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      notify(next, selectedSubjects, presets);
-      return next;
-    });
+    const isAdding = !selectedGroups.has(label);
+    const next = new Set(selectedGroups);
+    if (isAdding) next.add(label); else next.delete(label);
+
+    let currentPresets = presets;
+    if (isAdding && appliedPresets?.[`group-${label}`] && !presets[`group-${label}`]) {
+      currentPresets = { ...presets, [`group-${label}`]: appliedPresets[`group-${label}`] };
+      setPresets(currentPresets);
+    }
+
+    setSelectedGroups(next);
+    notify(next, selectedSubjects, currentPresets);
   };
 
   const toggleSubject = (i: number) => {
-    setSelectedSubjects((prev) => {
-      const next = new Set(prev);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
-      notify(selectedGroups, next, presets);
-      return next;
-    });
+    const isAdding = !selectedSubjects.has(i);
+    const next = new Set(selectedSubjects);
+    if (isAdding) next.add(i); else next.delete(i);
+
+    let currentPresets = presets;
+    if (isAdding && appliedPresets?.[`subject-${i}`] && !presets[`subject-${i}`]) {
+      currentPresets = { ...presets, [`subject-${i}`]: appliedPresets[`subject-${i}`] };
+      setPresets(currentPresets);
+    }
+
+    setSelectedSubjects(next);
+    notify(selectedGroups, next, currentPresets);
   };
 
   const setPreset = (key: string, value: string) => {
@@ -115,18 +125,27 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSele
           <div className="flex flex-wrap gap-x-1.5 gap-y-2">
             {groups.map((label) => {
               const active = selectedGroups.has(label);
+              const applied = !!appliedPresets?.[`group-${label}`];
               return (
                 <button
                   key={label}
                   onClick={() => toggleGroup(label)}
-                  className={`flex items-center gap-1 h-6 px-2 text-[13px] leading-4 rounded bg-[#242424] transition-colors ${
+                  className={`flex items-center gap-1 h-6 px-2 text-[13px] leading-4 rounded border transition-colors ${
                     active
-                      ? "border border-[#777] text-[#e2e2e2]"
-                      : "border border-transparent text-[#ababab] hover:text-[#e2e2e2]"
+                      ? "border-[#777] bg-[#242424] text-[#e2e2e2]"
+                      : applied
+                      ? "border-[rgba(21,128,61,0.4)] bg-[rgba(21,128,61,0.12)] text-[#e2e2e2] backdrop-blur-[2px] hover:bg-[rgba(21,128,61,0.18)]"
+                      : "border-transparent bg-[#242424] text-[#ababab] hover:text-[#e2e2e2]"
                   }`}
                 >
                   {label}
-                  {active ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                  {active ? (
+                    <X className="w-3 h-3" />
+                  ) : applied ? (
+                    <Check className="w-3 h-3 text-[#16a34a]" />
+                  ) : (
+                    <Plus className="w-3 h-3" />
+                  )}
                 </button>
               );
             })}

@@ -39,10 +39,15 @@ const RightPanel = ({ isScanning }: RightPanelProps) => {
         .map((label) => ({ label, preset: ss.presets[`group-${label}`]! })),
     ];
 
-    const photoCount = ss.selectedSubjects.reduce(
+    const subjectPhotoCount = ss.selectedSubjects.reduce(
       (sum, i) => sum + (ss.subjectCounts[i] ?? 0),
       0
     );
+    const objectPhotoCount = os.selectedWithCounts.reduce(
+      (sum, o) => sum + o.count,
+      0
+    );
+    const photoCount = subjectPhotoCount + objectPhotoCount;
 
     const entry: RetouchHistoryEntry = {
       id: history.length + 1,
@@ -77,36 +82,54 @@ const RightPanel = ({ isScanning }: RightPanelProps) => {
   };
 
   return (
-    <aside className="w-[344px] min-w-[344px] bg-[#1c1c1c] flex flex-col relative">
-      <div className="flex-1 overflow-y-auto flex flex-col gap-5 pt-5">
-        <SubjectSync
-          isScanning={isScanning}
-          disabled={isProcessing}
-          resetSignal={resetSignal}
-          appliedPresets={appliedPresets}
-          onSelectionsChange={setSubjectActive}
-          onStateChange={(s) => { subjectStateRef.current = s; }}
-        />
-        <div className="h-px bg-[#303030]" />
-        <SmartObjectRemoval
-          isScanning={isScanning}
-          disabled={isProcessing}
-          resetSignal={resetSignal}
-          removedItems={removedItems}
-          onResetItem={(label) =>
-            setRemovedItems((prev) => {
-              const next = new Set(prev);
-              next.delete(label);
-              return next;
-            })
-          }
-          onSelectionsChange={setObjectActive}
-          onStateChange={(s) => { objectStateRef.current = s; }}
-        />
+    <aside className="w-[344px] min-w-[344px] bg-[#1c1c1c] flex flex-col relative border-l border-background">
+      <div className="flex-1 overflow-y-auto flex flex-col">
+        <div className="py-5">
+          <SubjectSync
+            isScanning={isScanning}
+            disabled={isProcessing}
+            resetSignal={resetSignal}
+            appliedPresets={appliedPresets}
+            onSelectionsChange={setSubjectActive}
+            onStateChange={(s) => { subjectStateRef.current = s; }}
+          />
+        </div>
+        <div className="h-px bg-background" />
+        <div className="py-5">
+          <SmartObjectRemoval
+            isScanning={isScanning}
+            disabled={isProcessing}
+            resetSignal={resetSignal}
+            removedItems={removedItems}
+            onResetItem={(label) =>
+              setRemovedItems((prev) => {
+                const next = new Set(prev);
+                next.delete(label);
+                return next;
+              })
+            }
+            onResetConfirmed={(label, count) =>
+              setHistory((prev) => [
+                ...prev,
+                {
+                  id: prev.length + 1,
+                  photoCount: count,
+                  presets: [],
+                  objectsRemoved: [],
+                  restoredObjects: [{ label, count }],
+                },
+              ])
+            }
+            onSelectionsChange={setObjectActive}
+            onStateChange={(s) => { objectStateRef.current = s; }}
+          />
+        </div>
         {history.length > 0 && (
           <>
-            <div className="h-px bg-[#303030]" />
-            <RetouchHistory entries={history} />
+            <div className="h-px bg-background" />
+            <div className="py-5">
+              <RetouchHistory entries={history} />
+            </div>
           </>
         )}
       </div>

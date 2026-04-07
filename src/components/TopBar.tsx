@@ -8,7 +8,7 @@ interface TopBarProps {
 
 const TopBar = ({ activeTab }: TopBarProps) => {
   return (
-    <header className="flex items-center justify-between h-11 px-3 bg-[#1c1c1c] shrink-0">
+    <header className="flex items-center justify-between h-11 px-3 bg-[#1c1c1c] shrink-0 border-b border-background">
       {/* Left: Views + Filter + Add */}
       <div className="flex items-center gap-2.5 w-[400px]">
         <div className="flex items-center gap-1">

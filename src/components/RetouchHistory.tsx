@@ -6,6 +6,7 @@ export interface RetouchHistoryEntry {
   photoCount: number;
   presets: { label: string; preset: string }[];
   objectsRemoved: { label: string; count: number }[];
+  restoredObjects?: { label: string; count: number }[];
 }
 
 interface RetouchHistoryProps {
@@ -25,45 +26,78 @@ const RetouchHistory = ({ entries }: RetouchHistoryProps) => {
   };
 
   return (
-    <div className="px-5 pt-5 pb-4 flex flex-col gap-3">
+    <div className="px-5 flex flex-col gap-3">
       <h3 className="text-base font-normal text-[#e2e2e2]">AI Retouch History</h3>
-      <div className="flex flex-col gap-1.5">
+
+      <div className="flex flex-col gap-2">
         {entries.map((entry) => {
           const isOpen = expanded.has(entry.id);
           return (
-            <div key={entry.id} className="flex flex-col gap-3">
+            <div key={entry.id} className="rounded-lg border border-[#2e2e2e] overflow-hidden">
+
+              {/* Card header */}
               <button
                 onClick={() => toggle(entry.id)}
-                className="flex items-center gap-1.5 text-[13px] text-[#e2e2e2] leading-4 w-fit"
+                className="w-full flex items-center justify-between px-3 py-2.5 bg-[#242424] hover:bg-[#282828] transition-colors"
               >
-                <span>Retouch {entry.id} ({entry.photoCount} Photos)</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[13px] font-medium text-[#e2e2e2]">
+                    {entry.restoredObjects?.length ? "Reset" : "Retouch"} {entry.id}
+                  </span>
+                  <span className="text-[11px] text-[#555]">{entry.photoCount} photos</span>
+                </div>
                 <ChevronDown
-                  className={`w-3 h-3 shrink-0 transition-transform ${isOpen ? "" : "-rotate-90"}`}
+                  className={`w-3.5 h-3.5 text-[#555] shrink-0 transition-transform ${isOpen ? "" : "-rotate-90"}`}
                 />
               </button>
 
+              {/* Card body */}
               {isOpen && (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col divide-y divide-[#2e2e2e]">
+
                   {entry.presets.length > 0 && (
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[13px] text-[#ababab] leading-4">Presets:</span>
-                      <div className="flex flex-col pl-4">
+                    <div className="px-3 py-3 flex flex-col gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[#555]">
+                        Presets
+                      </span>
+                      <div className="flex flex-col gap-1.5">
                         {entry.presets.map((p, i) => (
-                          <span key={i} className="text-[13px] text-[#ababab] leading-4">
-                            {p.label}: {p.preset}
-                          </span>
+                          <div key={i} className="flex items-center justify-between gap-3">
+                            <span className="text-[12px] text-[#777] shrink-0">{p.label}</span>
+                            <span className="text-[12px] text-[#ababab] text-right">{p.preset}</span>
+                          </div>
                         ))}
                       </div>
                     </div>
                   )}
+
                   {entry.objectsRemoved.length > 0 && (
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[13px] text-[#ababab] leading-4">Objects Removed:</span>
-                      <div className="flex flex-col pl-4">
+                    <div className="px-3 py-3 flex flex-col gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[#555]">
+                        Objects Removed
+                      </span>
+                      <div className="flex flex-col gap-1.5">
                         {entry.objectsRemoved.map((o, i) => (
-                          <span key={i} className="text-[13px] text-[#ababab] leading-4">
-                            {o.label} ({o.count})
-                          </span>
+                          <div key={i} className="flex items-center justify-between gap-3">
+                            <span className="text-[12px] text-[#777]">{o.label}</span>
+                            <span className="text-[12px] text-[#ababab]">{o.count} photos</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {entry.restoredObjects && entry.restoredObjects.length > 0 && (
+                    <div className="px-3 py-3 flex flex-col gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[#555]">
+                        Objects Restored
+                      </span>
+                      <div className="flex flex-col gap-1.5">
+                        {entry.restoredObjects.map((o, i) => (
+                          <div key={i} className="flex items-center justify-between gap-3">
+                            <span className="text-[12px] text-[#777]">{o.label}</span>
+                            <span className="text-[12px] text-[#ababab]">{o.count} photos</span>
+                          </div>
                         ))}
                       </div>
                     </div>
