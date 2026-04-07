@@ -155,7 +155,7 @@ const SmartObjectRemoval = ({
       {/* Reset confirmation modal */}
       {pendingReset && createPortal(
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-          <div className="bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-5 flex flex-col gap-4 w-80">
+          <div className="bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-5 flex flex-col gap-4 w-[448px]">
             {/* Header */}
             <div className="flex items-start justify-between gap-2">
               <div className="flex flex-col gap-1 pt-0.5">
@@ -163,7 +163,7 @@ const SmartObjectRemoval = ({
                   Reset Object Removal
                 </h3>
                 <p className="text-[14px] font-normal text-[#ababab] leading-5">
-                  This will restore {pendingReset.count} photos affected by "{pendingReset.label}" and will be logged in your retouch history.
+                  This will restore {pendingReset.count} photos affected by "{pendingReset.label}".
                 </p>
               </div>
               <button
