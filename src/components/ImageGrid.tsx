@@ -12,7 +12,7 @@ export interface ImageData {
 }
 
 const sampleModules = import.meta.glob(
-  "../assets/samples/*.jpg",
+  "../assets/samples/*.webp",
   { eager: true }
 ) as Record<string, { default: string }>;
 
