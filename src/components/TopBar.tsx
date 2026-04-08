@@ -4,19 +4,27 @@ const tabs = ["IMPORT", "CULL", "EDIT", "RETOUCH"] as const;
 
 interface TopBarProps {
   activeTab: string;
+  view: "grid" | "loupe";
+  onViewChange: (view: "grid" | "loupe") => void;
 }
 
-const TopBar = ({ activeTab }: TopBarProps) => {
+const TopBar = ({ activeTab, view, onViewChange }: TopBarProps) => {
   return (
     <header className="flex items-center justify-between h-11 px-3 bg-[#1c1c1c] shrink-0 border-b border-background">
       {/* Left: Views + Filter + Add */}
       <div className="flex items-center gap-2.5 w-[400px]">
         <div className="flex items-center gap-1">
-          <button className="flex items-center justify-center w-6 h-6 rounded bg-white/10 border border-[#5e5e5e]">
-            <Grid3X3 className="w-4 h-4 text-[#e2e2e2]" />
+          <button
+            className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${view === "grid" ? "bg-white/10 border border-[#5e5e5e]" : "hover:bg-white/5"}`}
+            onClick={() => onViewChange("grid")}
+          >
+            <Grid3X3 className={`w-4 h-4 ${view === "grid" ? "text-[#e2e2e2]" : "text-[#777]"}`} />
           </button>
-          <button className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/5 transition-colors">
-            <LayoutList className="w-4 h-4 text-[#777]" />
+          <button
+            className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${view === "loupe" ? "bg-white/10 border border-[#5e5e5e]" : "hover:bg-white/5"}`}
+            onClick={() => onViewChange("loupe")}
+          >
+            <LayoutList className={`w-4 h-4 ${view === "loupe" ? "text-[#e2e2e2]" : "text-[#777]"}`} />
           </button>
         </div>
 

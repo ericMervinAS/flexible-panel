@@ -1,43 +1,33 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
-
-interface PresetOption {
-  name: string;
-  tags: string[];
-}
-
-interface PresetSection {
-  title: string;
-  options: PresetOption[];
-}
-
-const presetSections: PresetSection[] = [
-  {
-    title: "Custom Presets",
-    options: [
-      { name: "Custom Preset 1", tags: ["Masculine", "Feminine", "Child"] },
-    ],
-  },
-  {
-    title: "Aftershoot Presets",
-    options: [
-      { name: "Newborn Shoots", tags: ["All Subjects"] },
-      { name: "Student Portraits", tags: ["All Subjects"] },
-      { name: "Face Pop", tags: ["All Subjects"] },
-      { name: "Anti Aging", tags: ["All Subjects"] },
-      { name: "Face Clean Up", tags: ["All Subjects"] },
-    ],
-  },
-];
+import { PRESETS } from "@/data/presetMapping";
 
 interface PresetDropdownProps {
   value: string | null;
   onChange: (preset: string) => void;
+  /**
+   * When set, only presets tagged with "All Subjects" or this specific gender
+   * are shown. Omit (or pass undefined) to show all presets.
+   */
+  genderFilter?: string;
 }
 
-const PresetDropdown = ({ value, onChange }: PresetDropdownProps) => {
+const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  // "All Subjects" context: show all presets (gender-specific ones route via setPresetForChip).
+  // Specific gender context: hide presets that don't match.
+  // No filter (undefined): show everything.
+  const isAllSubjectsCtx = genderFilter === "All Subjects";
+
+  const isVisible = (tags: string[]) =>
+    isAllSubjectsCtx || !genderFilter || tags.includes("All Subjects") || tags.includes(genderFilter);
+
+  const presetSections = [
+    { title: "Custom Presets",     options: PRESETS.filter((p) =>  p.custom && isVisible(p.tags)) },
+    { title: "Aftershoot Presets", options: PRESETS.filter((p) => !p.custom && isVisible(p.tags)) },
+  ].filter((s) => s.options.length > 0);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -82,7 +72,7 @@ const PresetDropdown = ({ value, onChange }: PresetDropdownProps) => {
                     onChange(opt.name);
                     setOpen(false);
                   }}
-                  className="w-full text-left px-2 py-3 rounded flex flex-col gap-1.5 hover:bg-white/5 transition-colors"
+                  className="w-full text-left px-2 py-3 rounded flex flex-col gap-1.5 transition-colors hover:bg-white/5"
                 >
                   <span className="text-[14px] font-medium text-[#ababab] leading-5">
                     {opt.name}

@@ -1,19 +1,18 @@
-import { useState, useEffect } from "react";
-import { Eye, Plus, Check, X } from "lucide-react";
-import subject1 from "@/assets/subject-1.png";
-import subject2 from "@/assets/subject-2.png";
-import subject3 from "@/assets/subject-3.png";
-import subject4 from "@/assets/subject-4.png";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Check, X } from "lucide-react";
 import PresetDropdown from "./PresetDropdown";
+import { subjectPhotoCounts, subjectGender } from "@/data/subjectMapping";
 
 const groups = ["All Subjects", "Masculine", "Feminine", "Elderly", "Child"];
 
-const subjects = [
-  { avatar: subject1, count: 562 },
-  { avatar: subject2, count: 560 },
-  { avatar: subject3, count: 250 },
-  { avatar: subject4, count: 200 },
-];
+const subjectModules = import.meta.glob(
+  "../assets/subjects/*.png",
+  { eager: true }
+) as Record<string, { default: string }>;
+
+const subjects = Object.entries(subjectModules)
+  .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+  .map(([, mod], i) => ({ avatar: mod.default, count: subjectPhotoCounts[i] ?? 0 }));
 
 const groupInitial: Record<string, string> = {
   "All Subjects": "A", "Masculine": "M", "Feminine": "F", "Elderly": "E", "Child": "C",
@@ -102,6 +101,31 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSele
 
   const hasSelections = selectedSubjects.size > 0 || selectedGroups.size > 0;
 
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setPopoverOpen(false);
+      }
+    };
+    if (popoverOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [popoverOpen]);
+
+  // Sort by count descending
+  const sortedIndices = subjects
+    .map((s, i) => ({ i, count: s.count, applied: !!appliedPresets?.[`subject-${i}`] }))
+    .sort((a, b) => b.count - a.count)
+    .map(({ i }) => i);
+
+  const TOP_N = 4;
+  const visibleIndices = sortedIndices.slice(0, TOP_N);
+  const hiddenCount = sortedIndices.length - TOP_N;
+
   return (
     <div className={`px-5 flex flex-col gap-3 transition-opacity ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
       <div className="flex flex-col gap-1.5">
@@ -152,50 +176,100 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSele
           </div>
 
           {/* Subject avatar grid */}
-          <div className="grid grid-cols-5 gap-2">
-            {[
-              ...subjects.map((_, i) => i).filter((i) => !appliedPresets?.[`subject-${i}`]),
-              ...subjects.map((_, i) => i).filter((i) => !!appliedPresets?.[`subject-${i}`]),
-            ].map((i) => {
-              const s = subjects[i];
-              const active = selectedSubjects.has(i);
-              const applied = !!appliedPresets?.[`subject-${i}`];
-              return (
-                <div key={i} className="flex flex-col items-center gap-1 relative">
+          <div ref={popoverRef} className="relative">
+            <div className="grid grid-cols-5 gap-2">
+              {visibleIndices.map((i) => {
+                const s = subjects[i];
+                const active = selectedSubjects.has(i);
+                const applied = !!appliedPresets?.[`subject-${i}`];
+                return (
+                  <div key={i} className="flex flex-col items-center gap-1 relative">
+                    <button
+                      onClick={() => toggleSubject(i)}
+                      className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${
+                        active ? "border-[#2563eb]" : "border-transparent"
+                      }`}
+                    >
+                      <img
+                        src={s.avatar}
+                        alt={`Subject ${i + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                    {active && (
+                      <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#2563eb] flex items-center justify-center">
+                        <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
+                      </div>
+                    )}
+                    {!active && applied && (
+                      <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#16a34a] flex items-center justify-center">
+                        <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
+                      </div>
+                    )}
+                    <span className={`text-[10px] font-medium ${active ? "text-[#e2e2e2]" : "text-[#777]"}`}>
+                      {s.count}
+                    </span>
+                  </div>
+                );
+              })}
+              {/* View More is always the 5th cell when there are hidden subjects */}
+              {hiddenCount > 0 && (
+                <div className="flex flex-col items-center gap-1">
                   <button
-                    onClick={() => toggleSubject(i)}
-                    className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${
-                      active ? "border-[#2563eb]" : "border-transparent"
+                    onClick={() => setPopoverOpen((v) => !v)}
+                    className={`w-14 h-14 rounded-full flex flex-col items-center justify-center gap-0.5 transition-colors ${
+                      popoverOpen ? "bg-white/20 text-[#e2e2e2]" : "bg-white/10 text-[#777] hover:bg-white/20 hover:text-[#ababab]"
                     }`}
                   >
-                    <img
-                      src={s.avatar}
-                      alt={`Subject ${i + 1}`}
-                      className="w-full h-full object-cover"
-                    />
+                    <span className="text-[12px] font-medium leading-none">+{hiddenCount}</span>
                   </button>
-                  {active && (
-                    <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#2563eb] flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
-                    </div>
-                  )}
-                  {!active && applied && (
-                    <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#16a34a] flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
-                    </div>
-                  )}
-                  <span className={`text-[10px] font-medium ${active ? "text-[#e2e2e2]" : "text-[#777]"}`}>
-                    {s.count}
-                  </span>
+                  <span className="text-[10px] font-medium text-[#777]">View More</span>
                 </div>
-              );
-            })}
-            <div className="flex flex-col items-center gap-1">
-              <button className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-[#777] hover:bg-white/20 transition-colors">
-                <Eye className="w-5 h-5" />
-              </button>
-              <span className="text-[10px] font-medium text-[#777]">View More</span>
+              )}
             </div>
+
+            {/* View More popover */}
+            {popoverOpen && (
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 bg-[#242424] border border-[#474747] rounded-lg p-3 flex flex-col gap-3 max-h-72 overflow-y-auto" style={{ scrollbarWidth: "none" }}>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">All Subjects</span>
+                <div className="grid grid-cols-5 gap-2">
+                  {sortedIndices.map((i) => {
+                    const s = subjects[i];
+                    const active = selectedSubjects.has(i);
+                    const applied = !!appliedPresets?.[`subject-${i}`];
+                    return (
+                      <div key={i} className="flex flex-col items-center gap-1 relative">
+                        <button
+                          onClick={() => toggleSubject(i)}
+                          className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${
+                            active ? "border-[#2563eb]" : "border-transparent hover:border-[#5e5e5e]"
+                          }`}
+                        >
+                          <img
+                            src={s.avatar}
+                            alt={`Subject ${i + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </button>
+                        {active && (
+                          <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#2563eb] flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
+                          </div>
+                        )}
+                        {!active && applied && (
+                          <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#16a34a] flex items-center justify-center">
+                            <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
+                          </div>
+                        )}
+                        <span className={`text-[10px] font-medium ${active ? "text-[#e2e2e2]" : "text-[#777]"}`}>
+                          {s.count}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Selected Subjects section */}
@@ -210,6 +284,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSele
                     </div>
                     <PresetDropdown
                       value={presets[`subject-${i}`] ?? null}
+                      genderFilter={subjectGender[i]}
                       onChange={(v) => setPreset(`subject-${i}`, v)}
                     />
                   </div>
@@ -221,6 +296,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSele
                     </div>
                     <PresetDropdown
                       value={presets[`group-${label}`] ?? null}
+                      genderFilter={label}
                       onChange={(v) => setPreset(`group-${label}`, v)}
                     />
                   </div>

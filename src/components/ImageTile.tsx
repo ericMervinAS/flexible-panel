@@ -2,11 +2,21 @@ interface ImageTileProps {
   src: string;
   filename: string;
   isScanning?: boolean;
+  isSelected?: boolean;
+  isPrimary?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
+  onDoubleClick?: () => void;
 }
 
-const ImageTile = ({ src, filename, isScanning = false }: ImageTileProps) => {
+const ImageTile = ({ src, filename, isScanning = false, isSelected = false, isPrimary = false, onClick, onDoubleClick }: ImageTileProps) => {
   return (
-    <div className="flex flex-col gap-2 p-4 bg-[#1c1c1c]">
+    <div className="relative flex flex-col gap-2 p-4 bg-[#1c1c1c]" onClick={onClick} onDoubleClick={onDoubleClick}>
+      {isSelected && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: `rgba(226, 226, 226, ${isPrimary ? 0.2 : 0.1})` }}
+        />
+      )}
       <div className="relative rounded border-2 border-[#15803d] overflow-hidden bg-[#1c1c1c]" style={{ aspectRatio: "332/232" }}>
         <div className="absolute inset-[2px] rounded-[2px] overflow-hidden bg-white/5">
           <img
