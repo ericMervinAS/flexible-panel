@@ -86,7 +86,7 @@ const LoupeView = ({ image, images, currentIndex, totalImages, onSelectImage }: 
                   <img
                     src={img.src}
                     alt={img.filename}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                     loading="lazy"
                   />
                 </div>

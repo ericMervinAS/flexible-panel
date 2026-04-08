@@ -69,13 +69,22 @@ const SliderRow = ({ label, value, min = 0, max = 100, onChange }: SliderRowProp
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
+export interface LoupeRetouchState {
+  sliderLayers: Record<string, (number | null)[][]>;
+  localPresets: Record<string, string | null>;
+  customized: Set<string>;
+}
+
 interface LoupeSubjectPanelProps {
   onScrollChange?: (atBottom: boolean) => void;
   currentImageIndex?: number;
   syncedPresets?: Record<string, string>;
+  onStateChange?: (state: LoupeRetouchState) => void;
+  pasteSignal?: { state: LoupeRetouchState; seq: number } | null;
+  loupeResetSignal?: number;
 }
 
-const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {} }: LoupeSubjectPanelProps) => {
+const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {}, onStateChange, pasteSignal, loupeResetSignal }: LoupeSubjectPanelProps) => {
   const [selectedChip, setSelectedChip] = useState<string | null>("All Subjects");
   const [selectedFaces, setSelectedFaces] = useState<Set<number>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
@@ -328,7 +337,32 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
 
   useEffect(() => {
     setSelectedFaces(new Set());
+    setSliderLayers({});
+    setLocalPresets({});
+    setCustomized(new Set());
   }, [currentImageIndex]);
+
+  // Report state changes to parent
+  useEffect(() => {
+    onStateChange?.({ sliderLayers, localPresets, customized });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliderLayers, localPresets, customized]);
+
+  // Apply paste signal
+  useEffect(() => {
+    if (!pasteSignal) return;
+    setSliderLayers(pasteSignal.state.sliderLayers);
+    setLocalPresets(pasteSignal.state.localPresets);
+    setCustomized(new Set(pasteSignal.state.customized));
+  }, [pasteSignal?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply reset signal
+  useEffect(() => {
+    if (!loupeResetSignal) return;
+    setSliderLayers({});
+    setLocalPresets({});
+    setCustomized(new Set());
+  }, [loupeResetSignal]);
 
   const toggleFace = (i: number) => {
     setSelectedFaces((prev) => {

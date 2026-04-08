@@ -1,9 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { User, Layers, Eraser } from "lucide-react";
 import SubjectSync, { SubjectSyncState } from "./SubjectSync";
 import SmartObjectRemoval, { SmartObjectState } from "./SmartObjectRemoval";
 import RetouchHistory, { RetouchHistoryEntry } from "./RetouchHistory";
-import LoupeSubjectPanel from "./LoupeSubjectPanel";
+import LoupeSubjectPanel, { LoupeRetouchState } from "./LoupeSubjectPanel";
+import LoupePatchPanel from "./LoupePatchPanel";
 
 const LOUPE_TABS = [
   { id: "subject", label: "Subject", Icon: User },
@@ -31,6 +32,37 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0 }: 
   // Live presets from SubjectSync (updated on every change, before Start is clicked)
   const [syncedPresets, setSyncedPresets] = useState<Record<string, string>>({});
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
+
+  // ── Loupe view state ────────────────────────────────────────────────────────
+  const [perImageState, setPerImageState] = useState<Record<number, LoupeRetouchState>>({});
+  const [pasteSourceIndex, setPasteSourceIndex] = useState<number | null>(null);
+  const [loupeResetSignal, setLoupeResetSignal] = useState(0);
+  const [loupePasteSignal, setLoupePasteSignal] = useState<{ state: LoupeRetouchState; seq: number } | null>(null);
+  const prevImageIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!isLoupeView) return;
+    if (prevImageIndexRef.current === null) {
+      prevImageIndexRef.current = currentImageIndex;
+      return;
+    }
+    if (prevImageIndexRef.current !== currentImageIndex) {
+      setPasteSourceIndex(prevImageIndexRef.current);
+      prevImageIndexRef.current = currentImageIndex;
+    }
+  }, [currentImageIndex, isLoupeView]);
+
+  const hasRetouches = (state: LoupeRetouchState | undefined): boolean => {
+    if (!state) return false;
+    const hasSliders = Object.values(state.sliderLayers).some((layer) =>
+      layer.some((row) => row.some((v) => v !== null))
+    );
+    const hasPresets = Object.values(state.localPresets).some((v) => v !== null);
+    return hasSliders || hasPresets || state.customized.size > 0;
+  };
+
+  const canPaste = pasteSourceIndex !== null && hasRetouches(perImageState[pasteSourceIndex]);
+  const canReset = hasRetouches(perImageState[currentImageIndex]);
 
   const subjectStateRef = useRef<SubjectSyncState>({
     selectedSubjects: [],
@@ -130,7 +162,14 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0 }: 
         {isLoupeView ? (
           <>
             {activeTab === "subject" && (
-              <LoupeSubjectPanel onScrollChange={setIsScrolledToBottom} currentImageIndex={currentImageIndex} syncedPresets={syncedPresets} />
+              <LoupeSubjectPanel
+                onScrollChange={setIsScrolledToBottom}
+                currentImageIndex={currentImageIndex}
+                syncedPresets={syncedPresets}
+                onStateChange={(state) => setPerImageState((prev) => ({ ...prev, [currentImageIndex]: state }))}
+                pasteSignal={loupePasteSignal}
+                loupeResetSignal={loupeResetSignal}
+              />
             )}
             {activeTab === "background" && (
               <div className="flex-1 flex items-center justify-center">
@@ -138,9 +177,7 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0 }: 
               </div>
             )}
             {activeTab === "patch" && (
-              <div className="flex-1 flex items-center justify-center">
-                <span className="text-[12px] text-[#474747]">Patch coming soon</span>
-              </div>
+              <LoupePatchPanel onScrollChange={setIsScrolledToBottom} />
             )}
           </>
         ) : (
@@ -235,10 +272,32 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0 }: 
       )}
       {isLoupeView && activeTab === "subject" && (
         <div className="flex gap-3 items-center px-4 py-3 bg-[#1c1c1c] shrink-0">
-          <button className="flex-1 flex items-center justify-center px-3 py-2 bg-[#303030] rounded text-[12px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors">
+          <button
+            disabled={!canPaste}
+            onClick={() => {
+              if (!canPaste || pasteSourceIndex === null) return;
+              setLoupePasteSignal((prev) => ({
+                state: perImageState[pasteSourceIndex],
+                seq: (prev?.seq ?? 0) + 1,
+              }));
+            }}
+            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${
+              canPaste
+                ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
+                : "bg-[#303030] text-[#474747] cursor-not-allowed"
+            }`}
+          >
             Paste
           </button>
-          <button className="flex-1 flex items-center justify-center px-3 py-2 bg-[#303030] rounded text-[12px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors">
+          <button
+            disabled={!canReset}
+            onClick={() => canReset && setLoupeResetSignal((s) => s + 1)}
+            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${
+              canReset
+                ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
+                : "bg-[#303030] text-[#474747] cursor-not-allowed"
+            }`}
+          >
             Reset
           </button>
         </div>
