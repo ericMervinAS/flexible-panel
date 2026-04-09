@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
 
 // ─── Assets ───────────────────────────────────────────────────────────────────
-const imgBrushAdd      = "https://www.figma.com/api/mcp/asset/885c96e9-71ce-4bc5-8e70-d54ee9ca3394";
+const imgBrushAdd = "https://www.figma.com/api/mcp/asset/885c96e9-71ce-4bc5-8e70-d54ee9ca3394";
 const imgBrushSubtract = "https://www.figma.com/api/mcp/asset/daecc64e-be37-4b8f-a3f2-07ebc11720ad";
-const imgSizeCircle    = "https://www.figma.com/api/mcp/asset/c1677c95-5616-4686-8290-250472a22747";
-const imgEraser        = "https://www.figma.com/api/mcp/asset/8cabaae8-d5ed-4029-a3a7-5a4de1c125f8";
-const imgSettingsGear  = "https://www.figma.com/api/mcp/asset/6580a398-ae0b-4365-b6de-e7e714686287";
+const imgSizeCircle = "https://www.figma.com/api/mcp/asset/c1677c95-5616-4686-8290-250472a22747";
+const imgEraser = "https://www.figma.com/api/mcp/asset/8cabaae8-d5ed-4029-a3a7-5a4de1c125f8";
+const imgSettingsGear = "https://www.figma.com/api/mcp/asset/6580a398-ae0b-4365-b6de-e7e714686287";
 
 // ─── Brush slider ─────────────────────────────────────────────────────────────
 interface BrushSliderProps {
@@ -32,12 +32,12 @@ const BrushSlider = ({ label, value, min, max, onChange }: BrushSliderProps) => 
     e.stopPropagation();
     onChange(valueFromX(e.clientX));
     const onMove = (me: MouseEvent) => onChange(valueFromX(me.clientX));
-    const onUp   = () => {
+    const onUp = () => {
       window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup",   onUp);
+      window.removeEventListener("mouseup", onUp);
     };
     window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup",   onUp);
+    window.addEventListener("mouseup", onUp);
   };
 
   return (
@@ -72,10 +72,10 @@ interface BrushToolbarProps {
 }
 
 const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
-  const [brushMode,    setBrushMode]    = useState<"add" | "subtract">("add");
-  const [brushSize,    setBrushSize]    = useState(50);
-  const [softness,     setSoftness]     = useState(50);
-  const [opacity,      setOpacity]      = useState(50);
+  const [brushMode, setBrushMode] = useState<"add" | "subtract">("add");
+  const [brushSize, setBrushSize] = useState(50);
+  const [softness, setSoftness] = useState(50);
+  const [opacity, setOpacity] = useState(50);
   const [showSettings, setShowSettings] = useState(false);
 
   const handleBrushSizeChange = (v: number) => {
@@ -92,9 +92,9 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
       {/* Settings panel — shown to the left of the toolbar */}
       {showSettings && (
         <div className="bg-[#1c1c1c]/95 border border-[#303030] rounded-[8px] p-4 flex flex-col gap-4 w-[188px] backdrop-blur-sm shadow-xl">
-          <BrushSlider label="Brush Size" value={brushSize}  min={1}  max={200} onChange={handleBrushSizeChange} />
-          <BrushSlider label="Softness"   value={softness}   min={0}  max={100} onChange={setSoftness} />
-          <BrushSlider label="Opacity"    value={opacity}    min={0}  max={100} onChange={setOpacity} />
+          <BrushSlider label="Brush Size" value={brushSize} min={1} max={200} onChange={handleBrushSizeChange} />
+          <BrushSlider label="Softness" value={softness} min={0} max={100} onChange={setSoftness} />
+          <BrushSlider label="Opacity" value={opacity} min={0} max={100} onChange={setOpacity} />
         </div>
       )}
 
@@ -106,34 +106,34 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
           <button
             onClick={() => setBrushMode("add")}
             title="Brush Add"
-            className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${
-              brushMode === "add"
+            className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${brushMode === "add"
                 ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
                 : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
-            }`}
+              }`}
           >
             <img src={imgBrushAdd} alt="Brush Add" className="w-5 h-5" draggable={false} />
           </button>
           <button
             onClick={() => setBrushMode("subtract")}
             title="Brush Subtract"
-            className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${
-              brushMode === "subtract"
+            className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${brushMode === "subtract"
                 ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
                 : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
-            }`}
+              }`}
           >
             <img src={imgBrushSubtract} alt="Brush Subtract" className="w-5 h-5" draggable={false} />
           </button>
         </div>
 
         {/* Size preview */}
-        <div className="flex flex-col items-center gap-1 bg-[#27272a] rounded-[6px] px-1.5 py-2">
-          <img src={imgSizeCircle} alt="" className="w-4 h-4" draggable={false} />
-          <span className="text-[10px] font-medium text-[#ababab] leading-none tabular-nums">
-            {brushSize}
-          </span>
-        </div>
+        <button onClick={() => setShowSettings((v) => !v)}>
+          <div className="flex flex-col items-center gap-1 bg-[#27272a] rounded-[6px] px-1.5 py-2">
+            <img src={imgSizeCircle} alt="" className="w-4 h-4" draggable={false} />
+            <span className="text-[10px] font-medium text-[#ababab] leading-none tabular-nums">
+              {brushSize}
+            </span>
+          </div>
+        </button>
 
         {/* Eraser */}
         <button
@@ -148,13 +148,11 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
 
         {/* Settings toggle */}
         <button
-          onClick={() => setShowSettings((v) => !v)}
           title="Brush settings"
-          className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${
-            showSettings
+          className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${showSettings
               ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
               : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
-          }`}
+            }`}
         >
           <img src={imgSettingsGear} alt="Settings" className="w-5 h-5" draggable={false} />
         </button>
