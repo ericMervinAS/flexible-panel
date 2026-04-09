@@ -1,4 +1,4 @@
-import { Eye, Keyboard } from "lucide-react";
+import { Eye, Keyboard } from "@phosphor-icons/react";
 import { useRef, useState, useCallback } from "react";
 
 interface GridSliderProps {

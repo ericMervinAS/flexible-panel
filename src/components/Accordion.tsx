@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, PenLine, RotateCcw } from "lucide-react";
+import { CaretRight, PencilLine, ArrowCounterClockwise } from "@phosphor-icons/react";
 
 interface AccordionProps {
   title: string;
@@ -21,7 +21,7 @@ const Accordion = ({ title, children, defaultOpen = true, onEdit, onReset, actio
           onClick={() => setIsOpen(!isOpen)}
           className="w-3 h-3 flex items-center justify-center text-[#777] hover:text-[#ababab] transition-colors shrink-0"
         >
-          <ChevronRight
+          <CaretRight
             size={12}
             className={`transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
           />
@@ -37,7 +37,7 @@ const Accordion = ({ title, children, defaultOpen = true, onEdit, onReset, actio
                   onClick={onEdit}
                   className="w-4 h-4 flex items-center justify-center text-[#777] hover:text-[#ababab] transition-colors"
                 >
-                  <PenLine size={16} />
+                  <PencilLine size={16} />
                 </button>
               )}
               {onReset && (
@@ -45,7 +45,7 @@ const Accordion = ({ title, children, defaultOpen = true, onEdit, onReset, actio
                   onClick={onReset}
                   className="w-4 h-4 flex items-center justify-center text-[#777] hover:text-[#ababab] transition-colors"
                 >
-                  <RotateCcw size={16} />
+                  <ArrowCounterClockwise size={16} />
                 </button>
               )}
             </>

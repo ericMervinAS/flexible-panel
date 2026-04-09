@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Check, RotateCcw, X } from "lucide-react";
+import { Check, ArrowCounterClockwise, X } from "@phosphor-icons/react";
 
 const distractions = [
   { label: "Exit Signs", count: 30 },
@@ -119,7 +119,7 @@ const SmartObjectRemoval = ({
                     </div>
                     <div className="shrink-0 relative w-3 h-3">
                       <Check className="absolute top-0 left-0 w-3 h-3 text-[#16a34a] transition-opacity group-hover:opacity-0" />
-                      <RotateCcw className="absolute top-0 left-0 w-3 h-3 text-[#555] opacity-0 transition-opacity group-hover:opacity-100" />
+                      <ArrowCounterClockwise className="absolute top-0 left-0 w-3 h-3 text-[#555] opacity-0 transition-opacity group-hover:opacity-100" />
                     </div>
                   </button>
                 );

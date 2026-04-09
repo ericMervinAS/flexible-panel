@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { PlusCircle, AlertTriangle } from "lucide-react";
+import { PlusCircle, Warning } from "@phosphor-icons/react";
 import Accordion from "./Accordion";
 import PresetDropdown from "./PresetDropdown";
 import { getSubjectIndices, subjectGender } from "@/data/subjectMapping";
@@ -453,7 +453,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
       {/* Toast */}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 pl-2 pr-2.5 py-2.5 bg-[#fafafa] rounded shadow-lg whitespace-nowrap">
-          <AlertTriangle className="w-5 h-5 shrink-0 text-[#dc2626]" />
+          <Warning className="w-5 h-5 shrink-0 text-[#dc2626]" />
           <div className="flex items-center gap-1">
             <span className="text-[12px] font-medium text-[#474747] leading-4">{toast}</span>
           </div>

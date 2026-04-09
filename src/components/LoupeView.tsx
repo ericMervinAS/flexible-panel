@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { Star, Flag, Info, Eye, RotateCcw, Columns2, Keyboard, ChevronDown } from "lucide-react";
+import { Star, Flag, Info, Eye, ArrowCounterClockwise, Columns, Keyboard, CaretDown } from "@phosphor-icons/react";
 import type { ImageData, ColorTag } from "./ImageGrid";
 import BrushToolbar from "./BrushToolbar";
 
@@ -740,10 +740,10 @@ const LoupeView = ({
         <div className="flex items-center gap-3 w-[220px] justify-end">
           <div className="flex items-center gap-3">
             <button className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors">
-              <RotateCcw size={16} />
+              <ArrowCounterClockwise size={16} />
             </button>
             <button className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors">
-              <Columns2 size={16} />
+              <Columns size={16} />
             </button>
           </div>
           <div className="w-px h-4 bg-[#303030]" />
@@ -775,7 +775,7 @@ const LoupeView = ({
                 onClick={() => setShowZoomDropdown((v) => !v)}
                 className="text-[#555] hover:text-[#ababab] transition-colors flex items-center"
               >
-                <ChevronDown size={12} />
+                <CaretDown size={12} />
               </button>
 
               {/* Preset dropdown */}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { ChevronDown } from "lucide-react";
+import { CaretDown } from "@phosphor-icons/react";
 import { PRESETS } from "@/data/presetMapping";
 
 interface PresetDropdownProps {
@@ -49,7 +49,7 @@ const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) 
         className={`flex w-full items-center justify-between px-2.5 py-2 bg-[#242424] rounded text-[12px] transition-colors ${value ? "text-[#e2e2e2]" : "text-[#777] hover:text-[#ababab]"}`}
       >
         <span>{value || "Select Preset"}</span>
-        <ChevronDown className="w-4 h-4 shrink-0" />
+        <CaretDown className="w-4 h-4 shrink-0" />
       </button>
 
       {/* Dropdown menu */}

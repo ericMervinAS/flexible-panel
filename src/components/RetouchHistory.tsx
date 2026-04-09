@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { CaretDown } from "@phosphor-icons/react";
 
 export interface RetouchHistoryEntry {
   id: number;
@@ -46,7 +46,7 @@ const RetouchHistory = ({ entries }: RetouchHistoryProps) => {
                   </span>
                   <span className="text-[11px] text-[#555]">{entry.photoCount} photos</span>
                 </div>
-                <ChevronDown
+                <CaretDown
                   className={`w-3.5 h-3.5 text-[#555] shrink-0 transition-transform ${isOpen ? "" : "-rotate-90"}`}
                 />
               </button>

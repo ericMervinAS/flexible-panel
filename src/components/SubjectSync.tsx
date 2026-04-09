@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Check, X } from "lucide-react";
+import { Plus, Check, X } from "@phosphor-icons/react";
 import PresetDropdown from "./PresetDropdown";
 import { subjectPhotoCounts, subjectGender } from "@/data/subjectMapping";
 

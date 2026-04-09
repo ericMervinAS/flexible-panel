@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { User, Layers, Eraser } from "lucide-react";
+import { User, Stack, Eraser } from "@phosphor-icons/react";
 import SubjectSync, { SubjectSyncState } from "./SubjectSync";
 import SmartObjectRemoval, { SmartObjectState } from "./SmartObjectRemoval";
 import RetouchHistory, { RetouchHistoryEntry } from "./RetouchHistory";
@@ -8,7 +8,7 @@ import LoupePatchPanel from "./LoupePatchPanel";
 
 const LOUPE_TABS = [
   { id: "subject", label: "Subject", Icon: User },
-  { id: "background", label: "Background", Icon: Layers },
+  { id: "background", label: "Background", Icon: Stack },
   { id: "patch", label: "Patch", Icon: Eraser },
 ] as const;
 
