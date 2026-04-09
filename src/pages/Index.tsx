@@ -12,6 +12,11 @@ const Index = () => {
   const [view, setView] = useState<"grid" | "loupe">("grid");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [images, setImages] = useState<ImageData[]>([]);
+  const [loupeActiveTab, setLoupeActiveTab] = useState("subject");
+  const [canvasHasStrokes, setCanvasHasStrokes] = useState(false);
+  const [clearCanvasSignal, setClearCanvasSignal] = useState(0);
+  const [autoRemoveAfterStroke, setAutoRemoveAfterStroke] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsScanning(false), 3000);
@@ -53,11 +58,16 @@ const Index = () => {
                   currentIndex={selectedIndex}
                   totalImages={images.length}
                   onSelectImage={setSelectedIndex}
+                  isPatchActive={loupeActiveTab === "patch"}
+                  onHasStrokesChange={setCanvasHasStrokes}
+                  clearCanvasSignal={clearCanvasSignal}
+                  autoRemoveAfterStroke={autoRemoveAfterStroke}
+                  isExternallyRemoving={isRemoving}
                 />
               : null
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} />
+        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} />
       </div>
     </div>
   );

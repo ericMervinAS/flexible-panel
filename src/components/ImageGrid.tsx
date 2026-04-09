@@ -16,11 +16,13 @@ const sampleModules = import.meta.glob(
   { eager: true }
 ) as Record<string, { default: string }>;
 
+const toJpegName = (name: string) => name.replace(/\.[^.]+$/, ".jpeg");
+
 const sampleImages: ImageData[] = Object.entries(sampleModules)
   .sort(([a], [b]) => a.localeCompare(b))
   .map(([path, mod]) => ({
     src: mod.default,
-    filename: path.split("/").pop() ?? path,
+    filename: toJpegName(path.split("/").pop() ?? path),
     stars: 0,
     colorTag: "none" as ColorTag,
   }));
@@ -60,7 +62,7 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange }: 
             stars = Math.min(5, Math.max(0, Math.round(meta.Rating)));
           }
         } catch { /* no metadata */ }
-        return { src, filename: file.name, stars, colorTag: "none" };
+        return { src, filename: toJpegName(file.name), stars, colorTag: "none" };
       })
     );
     setAllImages((prev) => [...prev, ...newImages]);

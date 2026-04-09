@@ -18,9 +18,14 @@ interface RightPanelProps {
   isScanning: boolean;
   isLoupeView?: boolean;
   currentImageIndex?: number;
+  onTabChange?: (tab: string) => void;
+  canvasHasStrokes?: boolean;
+  onClearCanvas?: () => void;
+  onRemoveAfterStrokeChange?: (v: boolean) => void;
+  onRemovingChange?: (v: boolean) => void;
 }
 
-const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0 }: RightPanelProps) => {
+const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [subjectActive, setSubjectActive] = useState(false);
@@ -140,7 +145,7 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0 }: 
               <button
                 key={id}
                 disabled={isDisabled}
-                onClick={() => !isDisabled && setActiveTab(id)}
+                onClick={() => { if (!isDisabled) { setActiveTab(id); onTabChange?.(id); } }}
                 className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${isDisabled
                   ? "border-transparent text-[#474747] cursor-not-allowed"
                   : activeTab === id
@@ -177,7 +182,7 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0 }: 
               </div>
             )}
             {activeTab === "patch" && (
-              <LoupePatchPanel onScrollChange={setIsScrolledToBottom} />
+              <LoupePatchPanel onScrollChange={setIsScrolledToBottom} currentImageIndex={currentImageIndex} canvasHasStrokes={canvasHasStrokes} onClearCanvas={onClearCanvas} onRemoveAfterStrokeChange={onRemoveAfterStrokeChange} onRemovingChange={onRemovingChange} />
             )}
           </>
         ) : (
