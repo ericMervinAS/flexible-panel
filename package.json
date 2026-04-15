@@ -11,8 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "set-code": "node scripts/set-code.mjs",
-    "set-code:deploy": "node scripts/set-code.mjs"
+    "set-code": "node scripts/set-code.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

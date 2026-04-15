@@ -1,14 +1,13 @@
 /**
- * Set the daily access code — locally and/or on Vercel.
+ * Set the daily access code.
  *
- * Usage:
- *   node scripts/set-code.mjs <6-digit-code>            # update .env.local only
- *   node scripts/set-code.mjs <6-digit-code> --deploy   # update Vercel + redeploy
+ * Usage: node scripts/set-code.mjs <6-digit-code>
  *
- * One-time Vercel setup (add these to .env.local — never committed):
- *   VERCEL_TOKEN=<your token from vercel.com/account/tokens>
- *   VERCEL_PROJECT_ID=<from Vercel project Settings → General>
- *   VERCEL_TEAM_ID=<team slug or id — only needed for team projects>
+ * One-time .env.local setup:
+ *   VERCEL_TOKEN=<vercel.com/account/tokens>
+ *   VERCEL_PROJECT_ID=<project Settings → General>
+ *   VERCEL_DEPLOY_HOOK=<project Settings → Git → Deploy Hooks>
+ *   VERCEL_TEAM_ID=<only needed for team projects>
  */
 
 import { pbkdf2 } from "node:crypto";
@@ -22,11 +21,10 @@ const SALT = "aftershoot-arc-v1";
 
 // ── Args ──────────────────────────────────────────────────────────────────────
 const code = process.argv[2];
-const deploy = process.argv.includes("--deploy");
 
 if (!code || !/^\d{6}$/.test(code)) {
-  console.error("\n  Usage:   node scripts/set-code.mjs <6-digit-code> [--deploy]");
-  console.error("  Example: node scripts/set-code.mjs 482910 --deploy\n");
+  console.error("\n  Usage:   node scripts/set-code.mjs <6-digit-code>");
+  console.error("  Example: node scripts/set-code.mjs 482910\n");
   process.exit(1);
 }
 
@@ -34,15 +32,16 @@ if (!code || !/^\d{6}$/.test(code)) {
 const buf = await pbkdf2Async(code, SALT, 100_000, 32, "sha256");
 const hash = buf.toString("hex");
 
-// ── Read .env.local ───────────────────────────────────────────────────────────
+// ── .env.local helpers ────────────────────────────────────────────────────────
 const envPath = ".env.local";
+
 const readEnv = () => {
   if (!existsSync(envPath)) return {};
   return Object.fromEntries(
     readFileSync(envPath, "utf8")
       .split("\n")
       .filter((l) => l.includes("="))
-      .map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)])
+      .map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1).trim()])
   );
 };
 
@@ -60,47 +59,42 @@ const writeEnvKey = (key, value) => {
 // ── Update local .env.local ───────────────────────────────────────────────────
 writeEnvKey("VITE_ACCESS_CODE_HASH", hash);
 console.log("\n  ✓ Local .env.local updated.");
-if (!deploy) {
-  console.log("  Restart the dev server for the change to take effect.\n");
-  process.exit(0);
-}
 
-// ── Deploy to Vercel ──────────────────────────────────────────────────────────
+// ── Read credentials ──────────────────────────────────────────────────────────
 const env = readEnv();
 const VERCEL_TOKEN = env["VERCEL_TOKEN"];
 const VERCEL_PROJECT_ID = env["VERCEL_PROJECT_ID"];
-const VERCEL_TEAM_ID = env["VERCEL_TEAM_ID"]; // optional
+const VERCEL_DEPLOY_HOOK = env["VERCEL_DEPLOY_HOOK"];
+const VERCEL_TEAM_ID = env["VERCEL_TEAM_ID"];
 
-if (!VERCEL_TOKEN || !VERCEL_PROJECT_ID) {
-  console.error("\n  Missing Vercel credentials in .env.local.");
-  console.error("  Add these lines to .env.local:");
-  console.error("    VERCEL_TOKEN=<from vercel.com/account/tokens>");
-  console.error("    VERCEL_PROJECT_ID=<from project Settings → General>\n");
-  process.exit(1);
+if (!VERCEL_TOKEN || !VERCEL_PROJECT_ID || !VERCEL_DEPLOY_HOOK) {
+  console.log("  Skipping Vercel deploy (no credentials in .env.local).");
+  console.log("  Restart the dev server to use the new code locally.\n");
+  process.exit(0);
 }
 
+// ── Update env var on Vercel ──────────────────────────────────────────────────
 const teamQuery = VERCEL_TEAM_ID ? `?teamId=${VERCEL_TEAM_ID}` : "";
 const headers = {
   Authorization: `Bearer ${VERCEL_TOKEN}`,
   "Content-Type": "application/json",
 };
 
-// 1. Fetch existing env vars to find the ID of VITE_ACCESS_CODE_HASH
-console.log("  Fetching Vercel project env vars…");
+console.log("  Updating VITE_ACCESS_CODE_HASH on Vercel…");
+
 const listRes = await fetch(
   `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env${teamQuery}`,
   { headers }
 );
 if (!listRes.ok) {
-  console.error(`\n  Vercel API error: ${listRes.status} ${await listRes.text()}\n`);
+  console.error(`\n  Vercel API error ${listRes.status}: ${await listRes.text()}\n`);
   process.exit(1);
 }
+
 const { envs } = await listRes.json();
 const existing = envs?.find((e) => e.key === "VITE_ACCESS_CODE_HASH");
 
-// 2. Create or update the env var
 if (existing) {
-  console.log("  Updating VITE_ACCESS_CODE_HASH on Vercel…");
   const patchRes = await fetch(
     `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env/${existing.id}${teamQuery}`,
     { method: "PATCH", headers, body: JSON.stringify({ value: hash }) }
@@ -110,7 +104,6 @@ if (existing) {
     process.exit(1);
   }
 } else {
-  console.log("  Creating VITE_ACCESS_CODE_HASH on Vercel…");
   const createRes = await fetch(
     `https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env${teamQuery}`,
     {
@@ -129,42 +122,16 @@ if (existing) {
     process.exit(1);
   }
 }
+
 console.log("  ✓ Vercel env var updated.");
 
-// 3. Trigger a redeployment (redeploy latest production deployment)
-console.log("  Triggering redeployment…");
-const deploysRes = await fetch(
-  `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&target=production&limit=1${VERCEL_TEAM_ID ? `&teamId=${VERCEL_TEAM_ID}` : ""}`,
-  { headers }
-);
-if (!deploysRes.ok) {
-  console.error(`\n  Could not fetch deployments: ${deploysRes.status}\n`);
-  process.exit(1);
-}
-const { deployments } = await deploysRes.json();
-const latest = deployments?.[0];
-if (!latest) {
-  console.error("\n  No existing deployment found to redeploy.\n");
+// ── Trigger fresh build via deploy hook ───────────────────────────────────────
+console.log("  Triggering fresh build…");
+
+const hookRes = await fetch(VERCEL_DEPLOY_HOOK, { method: "POST" });
+if (!hookRes.ok) {
+  console.error(`\n  Deploy hook failed: ${hookRes.status} ${await hookRes.text()}\n`);
   process.exit(1);
 }
 
-const redeployRes = await fetch(
-  `https://api.vercel.com/v13/deployments${teamQuery}`,
-  {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      name: latest.name,
-      deploymentId: latest.uid,
-      target: "production",
-    }),
-  }
-);
-if (!redeployRes.ok) {
-  console.error(`\n  Redeployment failed: ${redeployRes.status} ${await redeployRes.text()}\n`);
-  process.exit(1);
-}
-
-const newDeploy = await redeployRes.json();
-console.log(`  ✓ Redeployment triggered → ${newDeploy.url ?? "check Vercel dashboard"}`);
-console.log("  New code will be live in ~30–60 seconds.\n");
+console.log("  ✓ Build triggered. New code will be live in ~1 minute.\n");
