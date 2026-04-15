@@ -135,7 +135,7 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange }: 
 
   return (
     <div
-      className="relative flex-1 flex flex-col overflow-hidden"
+      className="relative flex-1 min-h-0 flex flex-col overflow-hidden"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -143,7 +143,7 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange }: 
       <div
         tabIndex={0}
         className="grid gap-px flex-1 overflow-y-auto content-start outline-none select-none"
-        style={{ gridTemplateColumns: `repeat(${columns}, 1fr)`, contain: "layout style" }}
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, contain: "layout style" }}
         onKeyDown={handleKeyDown}
       >
         {allImages.map((img, i) => (
