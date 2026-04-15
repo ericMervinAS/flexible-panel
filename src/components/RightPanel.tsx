@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { User, Stack, Eraser } from "@phosphor-icons/react";
 import SubjectSync, { SubjectSyncState } from "./SubjectSync";
 import SmartObjectRemoval, { SmartObjectState } from "./SmartObjectRemoval";
-import RetouchHistory, { RetouchHistoryEntry } from "./RetouchHistory";
+import { RetouchHistoryEntry } from "./RetouchHistory";
 import LoupeSubjectPanel, { LoupeRetouchState } from "./LoupeSubjectPanel";
 import LoupePatchPanel from "./LoupePatchPanel";
 
@@ -237,14 +237,6 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
                 onStateChange={(s) => { objectStateRef.current = s; }}
               />
             </div>
-            {history.length > 0 && (
-              <>
-                <div className="h-px bg-background" />
-                <div className="py-5">
-                  <RetouchHistory entries={history} />
-                </div>
-              </>
-            )}
           </>
         )}
       </div>
@@ -286,22 +278,20 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
                 seq: (prev?.seq ?? 0) + 1,
               }));
             }}
-            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${
-              canPaste
+            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${canPaste
                 ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
                 : "bg-[#303030] text-[#474747] cursor-not-allowed"
-            }`}
+              }`}
           >
             Paste
           </button>
           <button
             disabled={!canReset}
             onClick={() => canReset && setLoupeResetSignal((s) => s + 1)}
-            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${
-              canReset
+            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${canReset
                 ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
                 : "bg-[#303030] text-[#474747] cursor-not-allowed"
-            }`}
+              }`}
           >
             Reset
           </button>

@@ -84,3 +84,18 @@
     background: #474747;
   }
 }
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  12%       { transform: translateX(-7px); }
+  25%       { transform: translateX(6px); }
+  37%       { transform: translateX(-5px); }
+  50%       { transform: translateX(4px); }
+  62%       { transform: translateX(-3px); }
+  75%       { transform: translateX(2px); }
+  87%       { transform: translateX(-1px); }
+}
+
+.animate-shake {
+  animation: shake 0.55s ease-in-out;
+}

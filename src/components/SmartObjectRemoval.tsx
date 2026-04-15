@@ -99,8 +99,9 @@ const SmartObjectRemoval = ({
         {!isScanning && (
           <div className="grid grid-cols-2 gap-1.5">
             {[
-              ...distractions.filter((d) => !(removedItems?.has(d.label))),
+              ...distractions.filter((d) => !removedItems?.has(d.label) && d.count > 0),
               ...distractions.filter((d) => removedItems?.has(d.label)),
+              ...distractions.filter((d) => !removedItems?.has(d.label) && d.count === 0),
             ].map((d) => {
               const isRemoved = removedItems?.has(d.label) ?? false;
               const isSelected = selected.has(d.label);
@@ -114,8 +115,8 @@ const SmartObjectRemoval = ({
                     className="flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] transition-colors text-left cursor-pointer group"
                   >
                     <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-[11px] text-[#555] leading-4 truncate">{d.label}</span>
-                      <span className="text-[10px] font-medium text-[#474747] leading-3 shrink-0">{d.count}</span>
+                      <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">{d.label}</span>
+                      <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">{d.count}</span>
                     </div>
                     <div className="shrink-0 relative w-3 h-3">
                       <Check className="absolute top-0 left-0 w-3 h-3 text-[#16a34a] transition-opacity group-hover:opacity-0" />
