@@ -6,9 +6,11 @@ interface TopBarProps {
   activeTab: string;
   view: "grid" | "loupe";
   onViewChange: (view: "grid" | "loupe") => void;
+  filterOpen?: boolean;
+  onFilterToggle?: () => void;
 }
 
-const TopBar = ({ activeTab, view, onViewChange }: TopBarProps) => {
+const TopBar = ({ activeTab, view, onViewChange, filterOpen, onFilterToggle }: TopBarProps) => {
   return (
     <header className="flex items-center justify-between h-11 px-3 bg-[#1c1c1c] shrink-0 border-b border-background">
       {/* Left: Views + Filter + Add */}
@@ -31,8 +33,11 @@ const TopBar = ({ activeTab, view, onViewChange }: TopBarProps) => {
         <div className="w-px h-4 bg-[#303030]" />
 
         <div className="flex items-center gap-1">
-          <button className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/5 transition-colors">
-            <Funnel className="w-4 h-4 text-[#777]" />
+          <button
+            onClick={onFilterToggle}
+            className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${filterOpen ? "bg-white/10 border border-[#5e5e5e]" : "hover:bg-white/5"}`}
+          >
+            <Funnel className={`w-4 h-4 ${filterOpen ? "text-[#e2e2e2]" : "text-[#777]"}`} />
           </button>
           <button className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/5 transition-colors">
             <SlidersHorizontal className="w-4 h-4 text-[#777]" />

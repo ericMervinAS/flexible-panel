@@ -143,7 +143,7 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange }: 
       <div
         tabIndex={0}
         className="grid gap-px flex-1 overflow-y-auto content-start outline-none select-none"
-        style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
+        style={{ gridTemplateColumns: `repeat(${columns}, 1fr)`, contain: "layout style" }}
         onKeyDown={handleKeyDown}
       >
         {allImages.map((img, i) => (

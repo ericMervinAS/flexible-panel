@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import TopBar from "@/components/TopBar";
+import FilterBar from "@/components/FilterBar";
 import ImageGrid from "@/components/ImageGrid";
 import type { ImageData } from "@/components/ImageGrid";
 import RightPanel from "@/components/RightPanel";
@@ -17,6 +18,7 @@ const Index = () => {
   const [clearCanvasSignal, setClearCanvasSignal] = useState(0);
   const [autoRemoveAfterStroke, setAutoRemoveAfterStroke] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsScanning(false), 3000);
@@ -35,10 +37,15 @@ const Index = () => {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <TopBar activeTab="RETOUCH" view={view} onViewChange={handleViewChange} />
+      <TopBar activeTab="RETOUCH" view={view} onViewChange={handleViewChange} filterOpen={filterOpen} onFilterToggle={() => setFilterOpen((v) => !v)} />
       <div className="flex flex-1 overflow-hidden">
         {/* Left: content area */}
         <div className="flex flex-col flex-1 overflow-hidden">
+          <div style={{ display: "grid", gridTemplateRows: filterOpen ? "1fr" : "0fr", transition: "grid-template-rows 120ms cubic-bezier(0.25, 0, 0.25, 1)", willChange: "grid-template-rows" }}>
+            <div style={{ overflow: "hidden" }}>
+              <FilterBar />
+            </div>
+          </div>
           {view === "grid" ? (
             <>
               <ImageGrid columns={columns} isScanning={isScanning} onImageDoubleClick={handleOpenLoupe} onImagesChange={setImages} />

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Check, X, MagnifyingGlass } from "@phosphor-icons/react";
 import PresetDropdown from "./PresetDropdown";
+import Tooltip from "./Tooltip";
 import { subjectPhotoCounts, subjectGender } from "@/data/subjectMapping";
 
 const groups = ["All Subjects", "Masculine", "Feminine", "Elderly", "Child"];
@@ -113,6 +114,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSele
   const hasSelections = selectedSubjects.size > 0 || selectedGroups.size > 0;
 
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [hoveredSubject, setHoveredSubject] = useState<number | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -201,8 +203,17 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSele
               const s = subjects[i];
               const active = selectedSubjects.has(i);
               const applied = !!appliedPresets?.[`subject-${i}`];
+              const presetLabel = appliedPresets?.[`subject-${i}`];
               return (
-                <div key={i} className="flex flex-col items-center gap-1 relative">
+                <div
+                  key={i}
+                  className="flex flex-col items-center gap-1 relative"
+                  onMouseEnter={() => applied && setHoveredSubject(i)}
+                  onMouseLeave={() => setHoveredSubject(null)}
+                >
+                  {presetLabel && (
+                    <Tooltip label={presetLabel} prefix="Applied:" visible={hoveredSubject === i} />
+                  )}
                   <button
                     onClick={() => toggleSubject(i)}
                     className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${active ? "border-[#2563eb]" : "border-transparent"
@@ -254,8 +265,24 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSele
                   const s = subjects[i];
                   const active = selectedSubjects.has(i);
                   const applied = !!appliedPresets?.[`subject-${i}`];
+                  const presetLabel = appliedPresets?.[`subject-${i}`];
                   return (
-                    <div key={i} className="flex flex-col items-center gap-1 relative">
+                    <div
+                      key={i}
+                      className="flex flex-col items-center gap-1 relative"
+                      onMouseEnter={() => applied && setHoveredSubject(i)}
+                      onMouseLeave={() => setHoveredSubject(null)}
+                    >
+                      {presetLabel && (
+                        <div
+                          className={`absolute bottom-[calc(100%-10px)] left-1/2 -translate-x-1/2 z-10 pointer-events-none transition-all duration-150 ${hoveredSubject === i ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"}`}
+                          style={hoveredSubject === i ? { transitionDelay: "300ms" } : { transitionDelay: "0ms" }}
+                        >
+                          <span className="whitespace-nowrap px-[6px] py-[4px] text-[11px] font-medium text-[#474747] bg-[#f6f6f6] rounded-[4px]">
+                            {presetLabel}
+                          </span>
+                        </div>
+                      )}
                       <button
                         onClick={() => toggleSubject(i)}
                         className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${active ? "border-[#2563eb]" : "border-transparent hover:border-[#5e5e5e]"

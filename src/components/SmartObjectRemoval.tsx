@@ -120,7 +120,7 @@ const SmartObjectRemoval = ({
                     </div>
                     <div className="shrink-0 relative w-3 h-3">
                       <Check className="absolute top-0 left-0 w-3 h-3 text-[#16a34a] transition-opacity group-hover:opacity-0" />
-                      <ArrowCounterClockwise className="absolute top-0 left-0 w-3 h-3 text-[#555] opacity-0 transition-opacity group-hover:opacity-100" />
+                      <ArrowCounterClockwise className="absolute top-0 left-0 w-3 h-3 text-[#e2e2e2] opacity-0 transition-opacity group-hover:opacity-100" />
                     </div>
                   </button>
                 );
@@ -131,18 +131,16 @@ const SmartObjectRemoval = ({
                   key={d.label}
                   disabled={isDisabled}
                   onClick={() => toggle(d.label)}
-                  className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${
-                    isDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-[#2a2a2a] cursor-pointer"
-                  }`}
+                  className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${isDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-[#2a2a2a] cursor-pointer"
+                    }`}
                 >
                   <div className="flex items-center gap-1 min-w-0">
                     <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">{d.label}</span>
                     <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">{d.count}</span>
                   </div>
                   <div
-                    className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
-                      isSelected ? "bg-[#2563eb]" : "border border-[#474747] bg-transparent"
-                    }`}
+                    className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${isSelected ? "bg-[#2563eb]" : "border border-[#474747] bg-transparent"
+                      }`}
                   >
                     {isSelected && <Check className="w-2 h-2 text-white stroke-[3]" />}
                   </div>
@@ -182,9 +180,8 @@ const SmartObjectRemoval = ({
                 onClick={() => setSkipConfirmation((v) => !v)}
                 className="flex items-center gap-1.5 shrink-0"
               >
-                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
-                  skipConfirmation ? "bg-[#2563eb] border-[#2563eb]" : "bg-[#303030] border-[#474747]"
-                }`}>
+                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${skipConfirmation ? "bg-[#2563eb] border-[#2563eb]" : "bg-[#303030] border-[#474747]"
+                  }`}>
                   {skipConfirmation && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
                 </div>
                 <span className="text-[12px] text-[#777]">Don't ask again</span>

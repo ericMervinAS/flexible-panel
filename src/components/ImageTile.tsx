@@ -10,7 +10,7 @@ interface ImageTileProps {
 
 const ImageTile = ({ src, filename, isScanning = false, isSelected = false, isPrimary = false, onClick, onDoubleClick }: ImageTileProps) => {
   return (
-    <div className="relative flex flex-col gap-2 p-4 bg-[#1c1c1c]" onClick={onClick} onDoubleClick={onDoubleClick}>
+    <div className="relative flex flex-col gap-2 p-4 bg-[#1c1c1c]" style={{ contentVisibility: "auto", containIntrinsicSize: "0 220px" }} onClick={onClick} onDoubleClick={onDoubleClick}>
       {isSelected && (
         <div
           className="absolute inset-0 pointer-events-none"

@@ -16,17 +16,17 @@ const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // "All Subjects" context: show all presets (gender-specific ones route via setPresetForChip).
-  // Specific gender context: hide presets that don't match.
-  // No filter (undefined): show everything.
+  // "All Subjects" context: all presets are applicable.
+  // Specific gender context: only presets tagged "All Subjects" or the gender are applicable.
+  // No filter (undefined): everything is applicable.
   const isAllSubjectsCtx = genderFilter === "All Subjects";
 
-  const isVisible = (tags: string[]) =>
+  const isApplicable = (tags: string[]) =>
     isAllSubjectsCtx || !genderFilter || tags.includes("All Subjects") || tags.includes(genderFilter);
 
   const presetSections = [
-    { title: "Custom Presets",     options: PRESETS.filter((p) =>  p.custom && isVisible(p.tags)) },
-    { title: "Aftershoot Presets", options: PRESETS.filter((p) => !p.custom && isVisible(p.tags)) },
+    { title: "Custom Presets",     options: PRESETS.filter((p) =>  p.custom) },
+    { title: "Aftershoot Presets", options: PRESETS.filter((p) => !p.custom) },
   ].filter((s) => s.options.length > 0);
 
   useEffect(() => {
@@ -65,30 +65,34 @@ const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) 
                 </span>
               </div>
               {/* Options */}
-              {section.options.map((opt) => (
-                <button
-                  key={opt.name}
-                  onClick={() => {
-                    onChange(opt.name);
-                    setOpen(false);
-                  }}
-                  className="w-full text-left px-2 py-3 rounded flex flex-col gap-1.5 transition-colors hover:bg-white/5"
-                >
-                  <span className="text-[14px] font-medium text-[#ababab] leading-5">
-                    {opt.name}
-                  </span>
-                  <div className="flex flex-wrap gap-1">
-                    {opt.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="h-5 px-1 py-1 rounded text-[11px] font-medium text-[#e2e2e2] leading-3 bg-[rgba(17,17,17,0.4)] backdrop-blur-[2px]"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </button>
-              ))}
+              {section.options.map((opt) => {
+                const applicable = isApplicable(opt.tags);
+                return (
+                  <button
+                    key={opt.name}
+                    disabled={!applicable}
+                    onClick={() => {
+                      onChange(opt.name);
+                      setOpen(false);
+                    }}
+                    className={`w-full text-left px-2 py-3 rounded flex flex-col gap-1.5 transition-colors ${applicable ? "hover:bg-white/5 cursor-pointer" : "opacity-35 cursor-not-allowed"}`}
+                  >
+                    <span className="text-[14px] font-medium text-[#ababab] leading-5">
+                      {opt.name}
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {opt.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="h-5 px-1 py-1 rounded text-[11px] font-medium text-[#e2e2e2] leading-3 bg-[rgba(17,17,17,0.4)] backdrop-blur-[2px]"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
