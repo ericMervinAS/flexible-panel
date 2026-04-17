@@ -35,7 +35,11 @@ const StarRatingIcon = ({ count }: { count: number }) => (
   <img src={STAR_IMAGES[count]} alt={`${count} stars`} className="w-4 h-4" />
 );
 
-const FilterBar = () => {
+interface FilterBarProps {
+  onPeopleFilter: (subjectIndices: number[]) => void;
+}
+
+const FilterBar = ({ onPeopleFilter }: FilterBarProps) => {
   const [selectedFlags, setSelectedFlags] = useState<Set<string>>(new Set());
   const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
   const [selectedStars, setSelectedStars] = useState<Set<number>>(new Set());
@@ -113,7 +117,7 @@ const FilterBar = () => {
         <Divider />
 
         {/* People */}
-        <PeopleFilterDropdown />
+        <PeopleFilterDropdown onFilterChange={onPeopleFilter} />
       </div>
 
       {/* Right */}

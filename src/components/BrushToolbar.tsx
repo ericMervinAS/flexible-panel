@@ -1,11 +1,5 @@
 import { useRef, useState } from "react";
-
-// ─── Assets ───────────────────────────────────────────────────────────────────
-const imgBrushAdd = "https://www.figma.com/api/mcp/asset/885c96e9-71ce-4bc5-8e70-d54ee9ca3394";
-const imgBrushSubtract = "https://www.figma.com/api/mcp/asset/daecc64e-be37-4b8f-a3f2-07ebc11720ad";
-const imgSizeCircle = "https://www.figma.com/api/mcp/asset/c1677c95-5616-4686-8290-250472a22747";
-const imgEraser = "https://www.figma.com/api/mcp/asset/8cabaae8-d5ed-4029-a3a7-5a4de1c125f8";
-const imgSettingsGear = "https://www.figma.com/api/mcp/asset/6580a398-ae0b-4365-b6de-e7e714686287";
+import { PaintBrush, Circle, Eraser, SlidersHorizontal, Plus, Minus } from "@phosphor-icons/react";
 
 // ─── Brush slider ─────────────────────────────────────────────────────────────
 interface BrushSliderProps {
@@ -111,7 +105,10 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
                 : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
               }`}
           >
-            <img src={imgBrushAdd} alt="Brush Add" className="w-5 h-5" draggable={false} />
+            <div className="relative">
+              <PaintBrush className="w-4 h-4" />
+              <Plus className="absolute -bottom-1 -right-1 w-2.5 h-2.5" weight="bold" />
+            </div>
           </button>
           <button
             onClick={() => setBrushMode("subtract")}
@@ -121,14 +118,17 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
                 : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
               }`}
           >
-            <img src={imgBrushSubtract} alt="Brush Subtract" className="w-5 h-5" draggable={false} />
+            <div className="relative">
+              <PaintBrush className="w-4 h-4" />
+              <Minus className="absolute -bottom-1 -right-1 w-2.5 h-2.5" weight="bold" />
+            </div>
           </button>
         </div>
 
         {/* Size preview */}
         <button onClick={() => setShowSettings((v) => !v)}>
           <div className="flex flex-col items-center gap-1 bg-[#27272a] rounded-[6px] px-1.5 py-2">
-            <img src={imgSizeCircle} alt="" className="w-4 h-4" draggable={false} />
+            <Circle className="w-4 h-4 text-[#ababab]" />
             <span className="text-[10px] font-medium text-[#ababab] leading-none tabular-nums">
               {brushSize}
             </span>
@@ -140,7 +140,7 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
           title="Eraser"
           className="w-8 h-8 flex items-center justify-center rounded-[6px] border border-transparent hover:bg-[rgba(226,226,226,0.05)] transition-colors"
         >
-          <img src={imgEraser} alt="Eraser" className="w-5 h-5" draggable={false} />
+          <Eraser className="w-5 h-5" />
         </button>
 
         {/* Divider */}
@@ -154,7 +154,7 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
               : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
             }`}
         >
-          <img src={imgSettingsGear} alt="Settings" className="w-5 h-5" draggable={false} />
+          <SlidersHorizontal className="w-5 h-5" />
         </button>
       </div>
     </div>

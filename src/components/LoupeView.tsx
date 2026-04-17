@@ -23,6 +23,7 @@ const ZOOM_PRESETS = [25, 50, 75, 100, 150, 200, 400];
 interface LoupeViewProps {
   image: ImageData;
   images: ImageData[];
+  filteredImages?: Array<ImageData & { originalIndex: number }>;
   currentIndex: number;
   totalImages: number;
   onSelectImage: (index: number) => void;
@@ -36,6 +37,7 @@ interface LoupeViewProps {
 const LoupeView = ({
   image,
   images,
+  filteredImages,
   currentIndex,
   totalImages,
   onSelectImage,
@@ -45,6 +47,7 @@ const LoupeView = ({
   autoRemoveAfterStroke = false,
   isExternallyRemoving = false,
 }: LoupeViewProps) => {
+  const stripImages = filteredImages ?? images.map((img, i) => ({ ...img, originalIndex: i }));
   const stripRef      = useRef<HTMLDivElement>(null);
   const tileRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const containerRef  = useRef<HTMLDivElement>(null);
@@ -204,13 +207,14 @@ const LoupeView = ({
   // ── Filmstrip auto-scroll ────────────────────────────────────────────────────
   useEffect(() => {
     const strip = stripRef.current;
-    const tile  = tileRefs.current[currentIndex];
+    const displayPos = stripImages.findIndex((img) => img.originalIndex === currentIndex);
+    const tile = tileRefs.current[displayPos];
     if (!strip || !tile) return;
     strip.scrollTo({
       left: tile.offsetLeft - strip.offsetWidth / 2 + tile.offsetWidth / 2,
       behavior: "smooth",
     });
-  }, [currentIndex]);
+  }, [currentIndex, stripImages]);
 
   // ── Shift key tracking — enables grab-to-pan in patch mode ─────────────────
   useEffect(() => {
@@ -672,16 +676,16 @@ const LoupeView = ({
           className="flex gap-1 h-[87px] items-center px-2 py-1 overflow-x-auto overflow-y-hidden"
           style={{ scrollbarWidth: "none" }}
         >
-          {images.map((img, i) => (
+          {stripImages.map((img, displayPos) => (
             <div
-              key={i}
-              ref={(el) => { tileRefs.current[i] = el; }}
+              key={img.originalIndex}
+              ref={(el) => { tileRefs.current[displayPos] = el; }}
               className="flex flex-col gap-1 items-center shrink-0 cursor-pointer"
-              onClick={() => onSelectImage(i)}
+              onClick={() => onSelectImage(img.originalIndex)}
             >
               <div
                 className={`rounded-md p-[3px] transition-colors ${
-                  i === currentIndex
+                  img.originalIndex === currentIndex
                     ? "border-2 border-white"
                     : "border border-[#303030] hover:border-[#5e5e5e]"
                 }`}

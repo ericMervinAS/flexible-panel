@@ -31,12 +31,13 @@ interface SubjectSyncProps {
   disabled?: boolean;
   resetSignal?: number;
   appliedPresets?: Record<string, string>;
+  visibleSubjectIndices?: Set<number> | null;
   onSelectionsChange?: (hasSelections: boolean) => void;
   onStateChange?: (state: SubjectSyncState) => void;
   onRescan?: () => void;
 }
 
-const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSelectionsChange, onStateChange, onRescan }: SubjectSyncProps) => {
+const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibleSubjectIndices, onSelectionsChange, onStateChange, onRescan }: SubjectSyncProps) => {
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [selectedSubjects, setSelectedSubjects] = useState<Set<number>>(new Set());
   const [presets, setPresets] = useState<Record<string, string | null>>({});
@@ -129,11 +130,12 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, onSele
     }
   }, [popoverOpen]);
 
-  // Sort by count descending
+  // Sort by count descending, then restrict to visible subjects when a filter is active
   const sortedIndices = subjects
     .map((s, i) => ({ i, count: s.count, applied: !!appliedPresets?.[`subject-${i}`] }))
     .sort((a, b) => b.count - a.count)
-    .map(({ i }) => i);
+    .map(({ i }) => i)
+    .filter((i) => !visibleSubjectIndices || visibleSubjectIndices.has(i));
 
   const TOP_N = 4;
   const visibleIndices = sortedIndices.slice(0, TOP_N);

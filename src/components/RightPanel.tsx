@@ -23,9 +23,10 @@ interface RightPanelProps {
   onClearCanvas?: () => void;
   onRemoveAfterStrokeChange?: (v: boolean) => void;
   onRemovingChange?: (v: boolean) => void;
+  visibleSubjectIndices?: Set<number> | null;
 }
 
-const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange }: RightPanelProps) => {
+const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [subjectActive, setSubjectActive] = useState(false);
@@ -193,6 +194,7 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
                 disabled={isProcessing}
                 resetSignal={resetSignal}
                 appliedPresets={appliedPresets}
+                visibleSubjectIndices={visibleSubjectIndices}
                 onSelectionsChange={setSubjectActive}
                 onStateChange={(s) => {
                   subjectStateRef.current = s;

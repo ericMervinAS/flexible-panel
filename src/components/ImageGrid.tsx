@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import exifr from "exifr";
 import ImageTile from "./ImageTile";
+import { getSubjectIndices } from "@/data/subjectMapping";
 
 export type ColorTag = "green" | "yellow" | "red" | "none";
 
@@ -32,9 +33,10 @@ interface ImageGridProps {
   isScanning: boolean;
   onImageDoubleClick: (index: number) => void;
   onImagesChange?: (images: ImageData[]) => void;
+  subjectFilter?: number[];
 }
 
-const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange }: ImageGridProps) => {
+const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter }: ImageGridProps) => {
   const [allImages, setAllImages] = useState<ImageData[]>(sampleImages);
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
@@ -104,22 +106,27 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange }: 
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    const total = allImages.length;
-
     if (e.key === "Enter") {
       if (anchorIndex !== null) onImageDoubleClick(anchorIndex);
       return;
     }
 
-    const cur = focusIndex ?? 0;
-    let next: number;
-    if (e.key === "ArrowRight") next = Math.min(cur + 1, total - 1);
-    else if (e.key === "ArrowLeft") next = Math.max(cur - 1, 0);
-    else if (e.key === "ArrowDown") next = Math.min(cur + columns, total - 1);
-    else if (e.key === "ArrowUp") next = Math.max(cur - columns, 0);
+    const total = displayImages.length;
+    const curDisplayPos = focusIndex !== null
+      ? displayImages.findIndex((img) => img.originalIndex === focusIndex)
+      : 0;
+    const cur = curDisplayPos === -1 ? 0 : curDisplayPos;
+
+    let nextDisplayPos: number;
+    if (e.key === "ArrowRight") nextDisplayPos = Math.min(cur + 1, total - 1);
+    else if (e.key === "ArrowLeft") nextDisplayPos = Math.max(cur - 1, 0);
+    else if (e.key === "ArrowDown") nextDisplayPos = Math.min(cur + columns, total - 1);
+    else if (e.key === "ArrowUp") nextDisplayPos = Math.max(cur - columns, 0);
     else return;
 
     e.preventDefault();
+
+    const next = displayImages[nextDisplayPos].originalIndex;
 
     if (e.shiftKey && anchorIndex !== null) {
       setSelectedIndices(rangeSet(anchorIndex, next));
@@ -130,6 +137,16 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange }: 
       setFocusIndex(next);
     }
   };
+
+  const displayImages = useMemo(() => {
+    const mapped = allImages.map((img, i) => ({ ...img, originalIndex: i }));
+    if (!subjectFilter || subjectFilter.length === 0) return mapped;
+    return mapped.filter(({ originalIndex }) => {
+      const subjects = getSubjectIndices(originalIndex);
+      if (!subjects) return false;
+      return subjectFilter.some((si) => subjects.includes(si));
+    });
+  }, [allImages, subjectFilter]);
 
   const isMultiSelected = selectedIndices.size > 1;
 
@@ -146,16 +163,16 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange }: 
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, contain: "layout style" }}
         onKeyDown={handleKeyDown}
       >
-        {allImages.map((img, i) => (
+        {displayImages.map(({ src, filename, originalIndex }) => (
           <ImageTile
-            key={i}
-            src={img.src}
-            filename={img.filename}
+            key={originalIndex}
+            src={src}
+            filename={filename}
             isScanning={isScanning}
-            isSelected={selectedIndices.has(i)}
-            isPrimary={i === anchorIndex && isMultiSelected}
-            onClick={(e) => handleClick(i, e)}
-            onDoubleClick={() => onImageDoubleClick(i)}
+            isSelected={selectedIndices.has(originalIndex)}
+            isPrimary={originalIndex === anchorIndex && isMultiSelected}
+            onClick={(e) => handleClick(originalIndex, e)}
+            onDoubleClick={() => onImageDoubleClick(originalIndex)}
           />
         ))}
       </div>
