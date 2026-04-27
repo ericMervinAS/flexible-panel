@@ -26,7 +26,7 @@ const SliderRow = ({ label, value, min = 0, max = 100, onChange, pinned, onToggl
   const [badgeHovered, setBadgeHovered] = useState(false);
   return (
     <div className="group flex items-center">
-      {/* {onTogglePin ? (
+      {onTogglePin ? (
         <button
           onClick={onTogglePin}
           className={`mr-1.5 w-4 h-4 flex items-center justify-center transition-colors shrink-0 ${pinned ? "text-[#e2e2e2]" : "text-[#474747] opacity-0 group-hover:opacity-100"}`}
@@ -35,7 +35,7 @@ const SliderRow = ({ label, value, min = 0, max = 100, onChange, pinned, onToggl
         </button>
       ) : (
         <div className="ml-1.5 w-4 shrink-0" />
-      )} */}
+      )}
 
       <div className="w-[106px] shrink-0 flex items-center gap-1">
         <span className="text-[12px] font-medium text-[#777] truncate">

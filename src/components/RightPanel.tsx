@@ -5,6 +5,7 @@ import SmartObjectRemoval, { SmartObjectState } from "./SmartObjectRemoval";
 import { RetouchHistoryEntry } from "./RetouchHistory";
 import LoupeSubjectPanel, { LoupeRetouchState } from "./LoupeSubjectPanel";
 import LoupePatchPanel from "./LoupePatchPanel";
+import type { ModelSubject } from "@/hooks/useFaceDetection";
 
 const LOUPE_TABS = [
   { id: "subject", label: "Subject", Icon: User },
@@ -24,9 +25,13 @@ interface RightPanelProps {
   onRemoveAfterStrokeChange?: (v: boolean) => void;
   onRemovingChange?: (v: boolean) => void;
   visibleSubjectIndices?: Set<number> | null;
+  modelSubjects?: ModelSubject[];
+  modelImageMap?: Map<number, number[]>;
+  isModelDetecting?: boolean;
+  modelStatusMessage?: string;
 }
 
-const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices }: RightPanelProps) => {
+const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [subjectActive, setSubjectActive] = useState(false);
@@ -35,8 +40,6 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
   const [resetSignal, setResetSignal] = useState(0);
   const [history, setHistory] = useState<RetouchHistoryEntry[]>([]);
   const [appliedPresets, setAppliedPresets] = useState<Record<string, string>>({});
-  // Live presets from SubjectSync (updated on every change, before Start is clicked)
-  const [syncedPresets, setSyncedPresets] = useState<Record<string, string>>({});
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
 
   // ── Loupe view state ────────────────────────────────────────────────────────
@@ -75,6 +78,8 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
     selectedGroups: [],
     presets: {},
     subjectCounts: [],
+    selectedModelSubjects: [],
+    modelPresets: {},
   });
   const objectStateRef = useRef<SmartObjectState>({ selectedWithCounts: [] });
 
@@ -91,17 +96,24 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
       ...ss.selectedGroups
         .filter((label) => !!ss.presets[`group-${label}`])
         .map((label) => ({ label, preset: ss.presets[`group-${label}`]! })),
+      ...(ss.selectedModelSubjects ?? [])
+        .filter((id) => !!(ss.modelPresets?.[`model-${id}`]))
+        .map((id) => ({ label: `Person ${id + 1}`, preset: ss.modelPresets![`model-${id}`]! })),
     ];
 
     const subjectPhotoCount = ss.selectedSubjects.reduce(
       (sum, i) => sum + (ss.subjectCounts[i] ?? 0),
       0
     );
+    const modelPhotoCount = (ss.selectedModelSubjects ?? []).reduce(
+      (sum, id) => sum + (modelSubjects?.find((s) => s.id === id)?.photoCount ?? 0),
+      0
+    );
     const objectPhotoCount = os.selectedWithCounts.reduce(
       (sum, o) => sum + o.count,
       0
     );
-    const photoCount = subjectPhotoCount + objectPhotoCount;
+    const photoCount = subjectPhotoCount + modelPhotoCount + objectPhotoCount;
 
     const entry: RetouchHistoryEntry = {
       id: history.length + 1,
@@ -119,6 +131,10 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
     ss.selectedGroups.forEach((label) => {
       const preset = ss.presets[`group-${label}`];
       if (preset) newApplied[`group-${label}`] = preset;
+    });
+    (ss.selectedModelSubjects ?? []).forEach((id) => {
+      const preset = ss.modelPresets?.[`model-${id}`];
+      if (preset) newApplied[`model-${id}`] = preset;
     });
 
     const newRemoved = new Set(removedItems);
@@ -171,10 +187,13 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
               <LoupeSubjectPanel
                 onScrollChange={setIsScrolledToBottom}
                 currentImageIndex={currentImageIndex}
-                syncedPresets={syncedPresets}
+                syncedPresets={appliedPresets}
                 onStateChange={(state) => setPerImageState((prev) => ({ ...prev, [currentImageIndex]: state }))}
                 pasteSignal={loupePasteSignal}
                 loupeResetSignal={loupeResetSignal}
+                modelSubjects={modelSubjects}
+                modelImageMap={modelImageMap}
+                isModelDetecting={isModelDetecting}
               />
             )}
             {activeTab === "background" && (
@@ -196,17 +215,10 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
                 appliedPresets={appliedPresets}
                 visibleSubjectIndices={visibleSubjectIndices}
                 onSelectionsChange={setSubjectActive}
-                onStateChange={(s) => {
-                  subjectStateRef.current = s;
-                  setSyncedPresets((prev) => {
-                    const next = { ...prev };
-                    Object.entries(s.presets).forEach(([k, v]) => {
-                      if (v) next[k] = v;
-                      else delete next[k];
-                    });
-                    return next;
-                  });
-                }}
+                onStateChange={(s) => { subjectStateRef.current = s; }}
+                modelSubjects={modelSubjects}
+                isModelDetecting={isModelDetecting}
+                modelStatusMessage={modelStatusMessage}
               />
             </div>
             <div className="h-px bg-background" />

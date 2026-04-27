@@ -7,6 +7,7 @@ import RightPanel from "@/components/RightPanel";
 import BottomBar from "@/components/BottomBar";
 import LoupeView from "@/components/LoupeView";
 import { getSubjectIndices } from "@/data/subjectMapping";
+import { useFaceDetection } from "@/hooks/useFaceDetection";
 
 const Index = () => {
   const [columns, setColumns] = useState(4);
@@ -21,6 +22,9 @@ const Index = () => {
   const [isRemoving, setIsRemoving] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [subjectFilter, setSubjectFilter] = useState<number[]>([]);
+
+  const { modelSubjects, modelImageMap, isDetecting, isLoadingModel, statusMessage } =
+    useFaceDetection(images);
 
   const filteredImages = useMemo(() => {
     const mapped = images.map((img, i) => ({ ...img, originalIndex: i }));
@@ -97,7 +101,7 @@ const Index = () => {
               : null
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} />
+        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} />
       </div>
     </div>
   );

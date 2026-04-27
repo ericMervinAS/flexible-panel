@@ -9,6 +9,7 @@ import SliderRow from "./SliderRow";
 import SliderSection from "./SliderSection";
 import { getSubjectIndices, subjectGender } from "@/data/subjectMapping";
 import { SECTIONS, findPreset, presetToSectionValues } from "@/data/presetMapping";
+import type { ModelSubject } from "@/hooks/useFaceDetection";
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
@@ -38,11 +39,16 @@ interface LoupeSubjectPanelProps {
   onStateChange?: (state: LoupeRetouchState) => void;
   pasteSignal?: { state: LoupeRetouchState; seq: number } | null;
   loupeResetSignal?: number;
+  modelSubjects?: ModelSubject[];
+  /** Maps imageIndex → array of cluster ids that appear in that image */
+  modelImageMap?: Map<number, number[]>;
+  isModelDetecting?: boolean;
 }
 
-const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {}, onStateChange, pasteSignal, loupeResetSignal }: LoupeSubjectPanelProps) => {
+const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {}, onStateChange, pasteSignal, loupeResetSignal, modelSubjects, modelImageMap, isModelDetecting }: LoupeSubjectPanelProps) => {
   const [selectedChip, setSelectedChip] = useState<string | null>("All Subjects");
   const [selectedFaces, setSelectedFaces] = useState<Set<number>>(new Set());
+  const [selectedModelFace, setSelectedModelFace] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -144,6 +150,12 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
   };
 
   const resolvePreset = (chip: string, faceIndex?: number): string | null => {
+    // Model face selected — no cascade, just its own key
+    if (selectedModelFace !== null) {
+      const v = pick(`model-${selectedModelFace}`);
+      if (v === STOP) return null;
+      return v ?? null;
+    }
     if (chip === "Individual" && faceIndex !== undefined) {
       const v1 = pick(`subject-${faceIndex}`);
       if (v1 === STOP) return null;
@@ -260,16 +272,25 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
   };
 
   const singleFace = selectedFaces.size === 1 ? Array.from(selectedFaces)[0] : undefined;
-  const effectivePreset = selectedChip ? resolvePreset(selectedChip, singleFace) : null;
+  const effectivePreset = selectedModelFace !== null
+    ? resolvePreset("Individual", undefined)
+    : selectedChip ? resolvePreset(selectedChip, singleFace) : null;
 
-  // The context key for the currently active chip + face selection
+  // The context key for the currently active chip + face/model selection
   const currentContextKey =
-    selectedChip === "Individual" && singleFace !== undefined
-      ? `subject-${singleFace}`
-      : `group-${selectedChip ?? "All Subjects"}`;
+    selectedModelFace !== null
+      ? `model-${selectedModelFace}`
+      : selectedChip === "Individual" && singleFace !== undefined
+        ? `subject-${singleFace}`
+        : `group-${selectedChip ?? "All Subjects"}`;
 
   // Walk up the hierarchy to resolve the effective slider value for the current context
   const resolveSliderValue = (sIdx: number, sliderIdx: number): number => {
+    // Model face has no cascade — only its own layer
+    if (selectedModelFace !== null) {
+      const val = sliderLayers[`model-${selectedModelFace}`]?.[sIdx]?.[sliderIdx];
+      return val !== null && val !== undefined ? val : 0;
+    }
     const keys: string[] = [];
     if (selectedChip === "Individual" && singleFace !== undefined) {
       keys.push(`subject-${singleFace}`);
@@ -316,6 +337,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
 
   useEffect(() => {
     setSelectedFaces(new Set());
+    setSelectedModelFace(null);
     setSliderLayers({});
     setLocalPresets({});
     setCustomized(new Set());
@@ -341,14 +363,21 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
     setSliderLayers({});
     setLocalPresets({});
     setCustomized(new Set());
+    setSelectedModelFace(null);
   }, [loupeResetSignal]);
 
   const toggleFace = (i: number) => {
+    setSelectedModelFace(null); // deselect model face when hardcoded face tapped
     setSelectedFaces((prev) => {
       // Always keep at least one face selected — clicking the active face is a no-op
       if (prev.has(i) && prev.size === 1) return prev;
       return new Set([i]);
     });
+  };
+
+  const toggleModelFace = (clusterId: number) => {
+    setSelectedFaces(new Set()); // deselect hardcoded faces when model face tapped
+    setSelectedModelFace((prev) => (prev === clusterId ? null : clusterId));
   };
 
   return (
@@ -384,22 +413,47 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
           })}
         </div>
 
-        {/* Face grid — only when Individual is selected */}
+        {/* Face grid — commented out for model comparison
         {selectedChip === "Individual" && (
           <div className="grid grid-cols-5 gap-2">
-            {visibleSubjects.map((s) => (
-              <div key={s.subjectIndex} className="flex items-center justify-center">
-                <button
-                  onClick={() => toggleFace(s.subjectIndex)}
-                  className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${selectedFaces.has(s.subjectIndex) ? "border-white" : "border-transparent hover:border-[#5e5e5e]"
-                    }`}
-                >
-                  <img src={s.avatar} alt={`Subject ${s.subjectIndex + 1}`} className="w-full h-full object-cover" />
-                </button>
-              </div>
-            ))}
+            ...hardcoded grid...
           </div>
         )}
+        */}
+
+        {selectedChip === "Individual" && isModelDetecting && (
+          <div className="flex items-center justify-center py-4">
+            <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
+          </div>
+        )}
+
+        {selectedChip === "Individual" && !isModelDetecting && (() => {
+          const clusterIds = modelImageMap?.get(currentImageIndex) ?? [];
+          if (!clusterIds.length || !modelSubjects?.length) return null;
+          return (
+            <div className="grid grid-cols-5 gap-2">
+              {clusterIds.map((cid) => {
+                const subject = modelSubjects.find((s) => s.id === cid);
+                if (!subject) return null;
+                const isSelected = selectedModelFace === cid;
+                return (
+                  <div key={cid} className="flex items-center justify-center">
+                    <button
+                      onClick={() => toggleModelFace(cid)}
+                      className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${isSelected ? "border-white" : "border-[#474747] hover:border-[#5e5e5e]"}`}
+                    >
+                      <img
+                        src={subject.keyFaceDataUrl}
+                        alt={`Person ${cid + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* Preset accordion */}
         <Accordion
@@ -413,15 +467,26 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
           <PresetDropdown
             value={effectivePreset}
             genderFilter={
-              !selectedChip
+              selectedModelFace !== null
                 ? undefined
-                : selectedChip === "Individual"
-                  ? (singleFace !== undefined ? subjectGender[singleFace] : undefined)
-                  : selectedChip
+                : !selectedChip
+                  ? undefined
+                  : selectedChip === "Individual"
+                    ? (singleFace !== undefined ? subjectGender[singleFace] : undefined)
+                    : selectedChip
             }
             onChange={(v) => {
-              if (!selectedChip) return;
-              setPresetForChip(selectedChip, v, singleFace);
+              if (selectedModelFace !== null) {
+                // Apply preset to model face context only
+                const preset = findPreset(v);
+                const presetSliders = preset ? presetToSectionValues(preset) : nullLayer();
+                setLocalPresets((prev) => ({ ...prev, [`model-${selectedModelFace}`]: v }));
+                setCustomized((prev) => { const s = new Set(prev); s.delete(`model-${selectedModelFace}`); return s; });
+                setSliderLayers((prev) => ({ ...prev, [`model-${selectedModelFace}`]: presetSliders }));
+              } else {
+                if (!selectedChip) return;
+                setPresetForChip(selectedChip, v, singleFace);
+              }
             }}
           />
         </Accordion>
