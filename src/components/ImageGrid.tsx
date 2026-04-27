@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import exifr from "exifr";
 import ImageTile from "./ImageTile";
 import { getSubjectIndices } from "@/data/subjectMapping";
@@ -34,18 +34,31 @@ interface ImageGridProps {
   onImageDoubleClick: (index: number) => void;
   onImagesChange?: (images: ImageData[]) => void;
   subjectFilter?: number[];
+  initialSelectedIndex?: number;
 }
 
-const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter }: ImageGridProps) => {
+const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter, initialSelectedIndex }: ImageGridProps) => {
   const [allImages, setAllImages] = useState<ImageData[]>(sampleImages);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
-  const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
-  const [focusIndex, setFocusIndex] = useState<number | null>(null);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(
+    initialSelectedIndex != null ? new Set([initialSelectedIndex]) : new Set()
+  );
+  const [anchorIndex, setAnchorIndex] = useState<number | null>(initialSelectedIndex ?? null);
+  const [focusIndex, setFocusIndex] = useState<number | null>(initialSelectedIndex ?? null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     onImagesChange?.(allImages);
   }, [allImages, onImagesChange]);
+
+  useEffect(() => {
+    if (initialSelectedIndex == null || !scrollRef.current) return;
+    const pos = displayImages.findIndex((img) => img.originalIndex === initialSelectedIndex);
+    if (pos === -1) return;
+    const tile = scrollRef.current.children[pos] as HTMLElement | undefined;
+    tile?.scrollIntoView({ block: "center", behavior: "instant" });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // scroll once on mount only
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
@@ -158,6 +171,7 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, su
       onDragLeave={handleDragLeave}
     >
       <div
+        ref={scrollRef}
         tabIndex={0}
         className="grid gap-px flex-1 overflow-y-auto content-start outline-none select-none"
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, contain: "layout style" }}

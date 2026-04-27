@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Copied from node_modules by scripts/copy-ort-runtime.mjs (postinstall)
+models/ort/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+// Copies the onnxruntime-web runtime (JS + WASM) into models/ort/ so the
+// retinaface-eval.html page works as a static, deployable bundle without
+// fetching anything from a CDN at runtime.
+//
+// Run after `npm install` (wired up via package.json `postinstall`).
+
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const root = dirname(__dirname);
+const src = join(root, "node_modules", "onnxruntime-web", "dist");
+const dst = join(root, "models", "ort");
+
+if (!existsSync(src)) {
+  console.error(`[copy-ort-runtime] missing source: ${src}`);
+  console.error("                   run `npm install` first.");
+  process.exit(1);
+}
+
+// Only ship what the page actually loads: the non-threaded JSEP runtime.
+// (Threaded variants need cross-origin isolation headers on the host, which
+// most static hosts don't provide by default.)
+const ALLOW = new Set([
+  "ort.min.js",
+  "ort.min.js.map",
+  "ort-wasm-simd-threaded.jsep.wasm",
+  "ort-wasm-simd-threaded.jsep.mjs",
+  "ort-wasm-simd-threaded.wasm",
+  "ort-wasm-simd-threaded.mjs",
+]);
+
+if (existsSync(dst)) rmSync(dst, { recursive: true, force: true });
+mkdirSync(dst, { recursive: true });
+
+let copied = 0;
+for (const name of readdirSync(src)) {
+  if (!ALLOW.has(name)) continue;
+  copyFileSync(join(src, name), join(dst, name));
+  copied++;
+}
+
+console.log(`[copy-ort-runtime] copied ${copied} files → ${dst}`);

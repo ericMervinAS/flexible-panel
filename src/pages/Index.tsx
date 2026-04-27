@@ -69,7 +69,7 @@ const Index = () => {
           </div>
           {view === "grid" ? (
             <>
-              <ImageGrid columns={columns} isScanning={isScanning} onImageDoubleClick={handleOpenLoupe} onImagesChange={setImages} subjectFilter={subjectFilter} />
+              <ImageGrid columns={columns} isScanning={isScanning} onImageDoubleClick={handleOpenLoupe} onImagesChange={setImages} subjectFilter={subjectFilter} initialSelectedIndex={selectedIndex} />
               <BottomBar
                 columns={columns}
                 onColumnsChange={setColumns}
@@ -87,6 +87,7 @@ const Index = () => {
                   currentIndex={selectedIndex}
                   totalImages={images.length}
                   onSelectImage={setSelectedIndex}
+                  onGoToGrid={() => setView("grid")}
                   isPatchActive={loupeActiveTab === "patch"}
                   onHasStrokesChange={setCanvasHasStrokes}
                   clearCanvasSignal={clearCanvasSignal}

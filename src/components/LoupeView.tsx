@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from "react";
 import type { ImageData } from "./ImageGrid";
 import BrushToolbar from "./BrushToolbar";
 import FilmstripBar from "./FilmstripBar";
-import LoupeBottomBar from "./LoupeBottomBar";
+import BottomBar from "./BottomBar";
 
 
 interface LoupeViewProps {
@@ -12,6 +12,7 @@ interface LoupeViewProps {
   currentIndex: number;
   totalImages: number;
   onSelectImage: (index: number) => void;
+  onGoToGrid?: () => void;
   isPatchActive?: boolean;
   onHasStrokesChange?: (has: boolean) => void;
   clearCanvasSignal?: number;
@@ -26,6 +27,7 @@ const LoupeView = ({
   currentIndex,
   totalImages,
   onSelectImage,
+  onGoToGrid,
   isPatchActive = false,
   onHasStrokesChange,
   clearCanvasSignal = 0,
@@ -220,6 +222,7 @@ const LoupeView = ({
   // ── Keyboard navigation + spacebar zoom toggle ───────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.key === "g" || e.key === "G") && !e.metaKey && !e.ctrlKey) { onGoToGrid?.(); return; }
       if (e.key === "ArrowLeft")  onSelectImage(Math.max(0, currentIndex - 1));
       if (e.key === "ArrowRight") onSelectImage(Math.min(totalImages - 1, currentIndex + 1));
 
@@ -240,7 +243,7 @@ const LoupeView = ({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentIndex, totalImages, onSelectImage]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentIndex, totalImages, onSelectImage, onGoToGrid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Keep canvas pixel dimensions in sync with container ─────────────────────
   useEffect(() => {
@@ -664,7 +667,8 @@ const LoupeView = ({
       />
 
       {/* ── Bottom bar ──────────────────────────────────────────────────────── */}
-      <LoupeBottomBar
+      <BottomBar
+        mode="loupe"
         image={image}
         currentIndex={currentIndex}
         totalImages={totalImages}

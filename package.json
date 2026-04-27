@@ -11,7 +11,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "set-code": "node scripts/set-code.mjs"
+    "set-code": "node scripts/set-code.mjs",
+    "copy-ort": "node scripts/copy-ort-runtime.mjs",
+    "postinstall": "node scripts/copy-ort-runtime.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -58,6 +60,7 @@
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
+    "onnxruntime-web": "^1.24.3",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
