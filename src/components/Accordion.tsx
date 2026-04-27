@@ -8,15 +8,16 @@ interface AccordionProps {
   onEdit?: () => void;
   onReset?: () => void;
   actions?: React.ReactNode;
+  dragHandle?: React.ReactNode;
 }
 
-const Accordion = ({ title, children, defaultOpen = true, onEdit, onReset, actions }: AccordionProps) => {
+const Accordion = ({ title, children, defaultOpen = true, onEdit, onReset, actions, dragHandle }: AccordionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
     <div className="flex flex-col">
-      {/* Header */}
       <div className="flex items-center gap-2 h-6">
+        {dragHandle}
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="w-3 h-3 flex items-center justify-center text-[#777] hover:text-[#ababab] transition-colors shrink-0"
@@ -53,7 +54,6 @@ const Accordion = ({ title, children, defaultOpen = true, onEdit, onReset, actio
         </div>
       </div>
 
-      {/* Body */}
       {isOpen && (
         <div className="pt-2.5 pb-2.5 flex flex-col gap-3">
           {children}

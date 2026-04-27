@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { PlusCircle, Warning } from "@phosphor-icons/react";
+import { PlusCircle, Warning, PushPin } from "@phosphor-icons/react";
+import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import Accordion from "./Accordion";
 import PresetDropdown from "./PresetDropdown";
+import SliderRow from "./SliderRow";
+import SliderSection from "./SliderSection";
 import { getSubjectIndices, subjectGender } from "@/data/subjectMapping";
 import { SECTIONS, findPreset, presetToSectionValues } from "@/data/presetMapping";
 
@@ -17,55 +21,6 @@ const subjectModules = import.meta.glob(
 const subjects = Object.entries(subjectModules)
   .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
   .map(([, mod]) => ({ avatar: mod.default }));
-
-// ─── Slider row ────────────────────────────────────────────────────────────────
-
-interface SliderRowProps {
-  label: string;
-  value: number;
-  min?: number;
-  max?: number;
-  onChange: (value: number) => void;
-}
-
-const SliderRow = ({ label, value, min = 0, max = 100, onChange }: SliderRowProps) => {
-  const pct = ((value - min) / (max - min)) * 100;
-  return (
-    <div className="flex items-center">
-      <span className="w-[106px] text-[12px] font-medium text-[#777] shrink-0 truncate">
-        {label}
-      </span>
-      <div className="flex-1 relative h-3 flex items-center">
-        <div className="w-full h-1 bg-[#474747] rounded-full relative overflow-hidden">
-          <div
-            className="absolute left-0 top-0 h-full rounded-full bg-[#777]"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        {/* Thumb */}
-        <div
-          className="absolute flex items-center justify-center pointer-events-none"
-          style={{ left: `calc(${pct}% - 4px)` }}
-        >
-          <div className="bg-[#1c1c1c] rounded-full p-[2px]">
-            <div className="w-[2px] h-3 bg-[#474747] rounded-full" />
-          </div>
-        </div>
-        <input
-          type="range"
-          min={min}
-          max={max}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="absolute inset-0 w-full opacity-0 cursor-pointer"
-        />
-      </div>
-      <span className="w-[44px] text-[12px] font-medium text-[#777] text-right shrink-0">
-        {value}
-      </span>
-    </div>
-  );
-};
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
@@ -103,7 +58,30 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
   // Tracks contexts where a slider was manually moved. These stop inheritance
   // entirely and show no preset — separate from the cascade bypass above.
   const [customized, setCustomized] = useState<Set<string>>(new Set());
+  const [pinnedSliders, setPinnedSliders] = useState<Set<string>>(new Set());
+  const [sectionOrder, setSectionOrder] = useState<number[]>(() => SECTIONS.map((_, i) => i));
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const togglePin = (sIdx: number, sliderIdx: number) => {
+    const key = `${sIdx}:${sliderIdx}`;
+    setPinnedSliders((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setSectionOrder((prev) => {
+      const oldIdx = prev.indexOf(Number(active.id));
+      const newIdx = prev.indexOf(Number(over.id));
+      return arrayMove(prev, oldIdx, newIdx);
+    });
+  };
 
   // Check if content fits without scrolling (or is scrolled to bottom)
   const checkBottom = () => {
@@ -440,7 +418,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
                 ? undefined
                 : selectedChip === "Individual"
                   ? (singleFace !== undefined ? subjectGender[singleFace] : undefined)
-                  : selectedChip  // "All Subjects" passes through as-is
+                  : selectedChip
             }
             onChange={(v) => {
               if (!selectedChip) return;
@@ -460,30 +438,60 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
         </div>
       )}
 
-      {/* ── Scrollable section: slider accordions ── */}
+      {/* ── Scrollable section: pinned card + section cards ── */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-5 pb-2 flex flex-col gap-4"
         style={{ scrollbarWidth: "none" }}
         onScroll={checkBottom}
       >
-        {SECTIONS.map((section, sIdx) => (
-          <Accordion
-            key={section.title}
-            title={section.title}
-            onEdit={() => {}}
-            onReset={() => resetSection(sIdx)}
-          >
-            {section.sliders.map((label, sliderIdx) => (
-              <SliderRow
-                key={label}
-                label={label}
-                value={effectiveSectionValues[sIdx][sliderIdx]}
-                onChange={(v) => setSlider(sIdx, sliderIdx, v)}
-              />
-            ))}
-          </Accordion>
-        ))}
+        {/* Pinned card */}
+        {pinnedSliders.size > 0 && (
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2 h-6">
+              <PushPin size={13} weight="fill" className="text-[#e2e2e2] shrink-0" />
+              <span className="flex-1 text-[14px] font-normal text-[#e2e2e2]">Pinned</span>
+            </div>
+            <div className="pt-2.5 pb-2.5 flex flex-col gap-3">
+              {Array.from(pinnedSliders).map((key) => {
+                const [sIdx, sliderIdx] = key.split(":").map(Number);
+                return (
+                  <SliderRow
+                    key={key}
+                    label={SECTIONS[sIdx].sliders[sliderIdx]}
+                    value={effectiveSectionValues[sIdx][sliderIdx]}
+                    onChange={(v) => setSlider(sIdx, sliderIdx, v)}
+                    pinned
+                    onTogglePin={() => togglePin(sIdx, sliderIdx)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Sortable section groups */}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sectionOrder.map(String)} strategy={verticalListSortingStrategy}>
+            {sectionOrder.map((sIdx) => {
+              const section = SECTIONS[sIdx];
+              return (
+                <SliderSection
+                  key={sIdx}
+                  id={String(sIdx)}
+                  sectionIdx={sIdx}
+                  title={section.title}
+                  sliders={section.sliders}
+                  values={effectiveSectionValues[sIdx]}
+                  onSliderChange={(sliderIdx, v) => setSlider(sIdx, sliderIdx, v)}
+                  onReset={() => resetSection(sIdx)}
+                  pinnedSliders={pinnedSliders}
+                  onTogglePin={(sliderIdx) => togglePin(sIdx, sliderIdx)}
+                />
+              );
+            })}
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   );
