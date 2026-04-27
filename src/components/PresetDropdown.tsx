@@ -25,7 +25,7 @@ const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) 
     isAllSubjectsCtx || !genderFilter || tags.includes("All Subjects") || tags.includes(genderFilter);
 
   const presetSections = [
-    { title: "Custom Presets",     options: PRESETS.filter((p) =>  p.custom) },
+    { title: "Custom Presets", options: PRESETS.filter((p) => p.custom) },
     { title: "Aftershoot Presets", options: PRESETS.filter((p) => !p.custom) },
   ].filter((s) => s.options.length > 0);
 

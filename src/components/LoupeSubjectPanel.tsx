@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { PlusCircle, Warning, PushPin } from "@phosphor-icons/react";
 import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import Accordion from "./Accordion";
 import PresetDropdown from "./PresetDropdown";
@@ -286,7 +287,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
   };
 
   const effectiveSectionValues = SECTIONS.map((_, sIdx) =>
-    (SECTIONS[sIdx].sliders as readonly string[]).map((_, sliderIdx) =>
+    SECTIONS[sIdx].sliders.map((_, sliderIdx) =>
       resolveSliderValue(sIdx, sliderIdx)
     )
   );
@@ -370,13 +371,12 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
                     setSelectedFaces(new Set([visibleSubjects[0].subjectIndex]));
                   }
                 }}
-                className={`h-6 px-2 text-[13px] leading-4 rounded border transition-colors ${
-                  !enabled
-                    ? "border-transparent bg-[#242424] text-[#474747] cursor-not-allowed"
-                    : selected
+                className={`h-6 px-2 text-[13px] leading-4 rounded border transition-colors ${!enabled
+                  ? "border-transparent bg-[#242424] text-[#474747] cursor-not-allowed"
+                  : selected
                     ? "border-[#777] bg-[#242424] text-[#e2e2e2]"
                     : "border-transparent bg-[#242424] text-[#ababab] hover:text-[#e2e2e2]"
-                }`}
+                  }`}
               >
                 {label}
               </button>
@@ -391,9 +391,8 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
               <div key={s.subjectIndex} className="flex items-center justify-center">
                 <button
                   onClick={() => toggleFace(s.subjectIndex)}
-                  className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${
-                    selectedFaces.has(s.subjectIndex) ? "border-white" : "border-transparent hover:border-[#5e5e5e]"
-                  }`}
+                  className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${selectedFaces.has(s.subjectIndex) ? "border-white" : "border-transparent hover:border-[#5e5e5e]"
+                    }`}
                 >
                   <img src={s.avatar} alt={`Subject ${s.subjectIndex + 1}`} className="w-full h-full object-cover" />
                 </button>
@@ -426,7 +425,10 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
             }}
           />
         </Accordion>
+
+        <div className="h-[1px] mt-[-8px] w-full bg-[#e2e2e20d]" />
       </div>
+
 
       {/* Toast */}
       {toast && (
@@ -449,8 +451,11 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
         {pinnedSliders.size > 0 && (
           <div className="flex flex-col">
             <div className="flex items-center gap-2 h-6">
-              <PushPin size={13} weight="fill" className="text-[#e2e2e2] shrink-0" />
-              <span className="flex-1 text-[14px] font-normal text-[#e2e2e2]">Pinned</span>
+              <div className="w-3 h-3 flex items-center justify-center shrink-0">
+                <PushPin size={12} weight="fill" className="text-[#777]" />
+              </div>
+              {/* <span className="flex-1 text-[14px] font-normal text-[#e2e2e2]">Pinned</span> */}
+              <span className="flex-1 text-[11px] font-semibold text-[#ababab] uppercase tracking-[0.5px]">Pinned</span>
             </div>
             <div className="pt-2.5 pb-2.5 flex flex-col gap-3">
               {Array.from(pinnedSliders).map((key) => {
@@ -458,7 +463,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
                 return (
                   <SliderRow
                     key={key}
-                    label={SECTIONS[sIdx].sliders[sliderIdx]}
+                    label={SECTIONS[sIdx].sliders[sliderIdx].name}
                     value={effectiveSectionValues[sIdx][sliderIdx]}
                     onChange={(v) => setSlider(sIdx, sliderIdx, v)}
                     pinned
@@ -471,7 +476,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
         )}
 
         {/* Sortable section groups */}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
           <SortableContext items={sectionOrder.map(String)} strategy={verticalListSortingStrategy}>
             {sectionOrder.map((sIdx) => {
               const section = SECTIONS[sIdx];

@@ -27,9 +27,10 @@ const Accordion = ({ title, children, defaultOpen = true, onEdit, onReset, actio
             className={`transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
           />
         </button>
-        <span className="flex-1 text-[14px] text-[#e2e2e2] font-normal leading-5">
-          {title}
-        </span>
+        {/* <span className="flex-1 text-[14px] text-[#e2e2e2] font-normal leading-5"> */}
+        <span className="flex-1 text-[11px] font-semibold text-[#ababab] uppercase tracking-[0.5px]">{title}</span>
+        {/* {title}
+        </span> */}
         <div className="flex items-center gap-2 shrink-0">
           {actions ?? (
             <>

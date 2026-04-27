@@ -6,16 +6,25 @@ export type GenderGroup = "All Subjects" | "Masculine" | "Feminine" | "Elderly" 
 // Single source of truth for all slider sections used in Loupe View.
 // Order here matches the order they appear in the panel.
 
-export const SECTIONS = [
-  { title: "Blemish Removal", sliders: ["Acne", "Freckles", "Spots"] },
-  { title: "Wrinkles", sliders: ["Forehead", "Smile Lines"] },
-  { title: "Teeth", sliders: ["Whiten", "Brighten"] },
-  { title: "Face", sliders: ["Brighten", "Smoothen", "Remove Shine"] },
-  { title: "Eyes", sliders: ["Glass Glare", "Eye Brighten", "Eye Bags"] },
-  { title: "Hair", sliders: ["Flyaways"] },
-  { title: "Body", sliders: ["Smoothen", "Blemish"] },
-  { title: "Cloth", sliders: ["Cloth Dewrinkle"] },
-] as const;
+export type BadgeType = "new" | "beta" | "improved";
+
+export interface SliderDef {
+  name: string;
+  badge?: BadgeType;
+  /** Tooltip text shown on hover of the badge icon. */
+  badgeLabel?: string;
+}
+
+export const SECTIONS: { title: string; sliders: SliderDef[] }[] = [
+  { title: "Blemish Removal", sliders: [{ name: "Acne" }, { name: "Freckles" }, { name: "Spots" }] },
+  { title: "Wrinkles", sliders: [{ name: "Forehead", badge: "new", badgeLabel: "Just Launched" }, { name: "Smile Lines" }] },
+  { title: "Teeth", sliders: [{ name: "Whiten" }, { name: "Brighten" }] },
+  { title: "Face", sliders: [{ name: "Brighten" }, { name: "Smoothen", badge: "beta", badgeLabel: "Beta" }, { name: "Remove Shine" }] },
+  { title: "Eyes", sliders: [{ name: "Glass Glare" }, { name: "Eye Brighten" }, { name: "Eye Bags", badge: "improved", badgeLabel: "Improved & Better" }] },
+  { title: "Hair", sliders: [{ name: "Flyaways" }] },
+  { title: "Body", sliders: [{ name: "Smoothen" }, { name: "Blemish" }] },
+  { title: "Cloth", sliders: [{ name: "Cloth Dewrinkle" }] },
+];
 
 // ─── Preset value shape ────────────────────────────────────────────────────────
 // Each key matches a section title; each nested key matches a slider name.
@@ -58,8 +67,8 @@ export function blankSectionValues(): number[][] {
  */
 export function presetToSectionValues(preset: Preset): number[][] {
   return SECTIONS.map(({ title, sliders }) =>
-    (sliders as readonly string[]).map(
-      (slider) => (preset.values as Record<string, Record<string, number>>)[title]?.[slider] ?? 0
+    sliders.map(
+      ({ name }) => (preset.values as unknown as Record<string, Record<string, number>>)[title]?.[name] ?? 0
     )
   );
 }

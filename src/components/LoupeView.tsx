@@ -1,24 +1,9 @@
 import { useRef, useEffect, useState } from "react";
-import { Star, Flag, Info, Eye, ArrowCounterClockwise, Columns, Keyboard, CaretDown } from "@phosphor-icons/react";
-import type { ImageData, ColorTag } from "./ImageGrid";
+import type { ImageData } from "./ImageGrid";
 import BrushToolbar from "./BrushToolbar";
+import FilmstripBar from "./FilmstripBar";
+import LoupeBottomBar from "./LoupeBottomBar";
 
-const colorTagBg: Record<ColorTag, string> = {
-  green: "#15803d",
-  yellow: "#a16207",
-  red: "#b91c1c",
-  none: "transparent",
-};
-
-const filmstripPillBg: Record<ColorTag, string> = {
-  green: "#1f6a46",
-  yellow: "#a16207",
-  red: "#ac3131",
-  none: "#303030",
-};
-
-// Preset zoom levels expressed as percentages of true image size
-const ZOOM_PRESETS = [25, 50, 75, 100, 150, 200, 400];
 
 interface LoupeViewProps {
   image: ImageData;
@@ -670,151 +655,28 @@ const LoupeView = ({
       </div>
 
       {/* ── Filmstrip ───────────────────────────────────────────────────────── */}
-      <div className="bg-[#1c1c1c] shrink-0">
-        <div
-          ref={stripRef}
-          className="flex gap-1 h-[87px] items-center px-2 py-1 overflow-x-auto overflow-y-hidden"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {stripImages.map((img, displayPos) => (
-            <div
-              key={img.originalIndex}
-              ref={(el) => { tileRefs.current[displayPos] = el; }}
-              className="flex flex-col gap-1 items-center shrink-0 cursor-pointer"
-              onClick={() => onSelectImage(img.originalIndex)}
-            >
-              <div
-                className={`rounded-md p-[3px] transition-colors ${
-                  img.originalIndex === currentIndex
-                    ? "border-2 border-white"
-                    : "border border-[#303030] hover:border-[#5e5e5e]"
-                }`}
-              >
-                <div className="w-[96px] h-[64px] overflow-hidden rounded-[2px]">
-                  <img
-                    src={img.src}
-                    alt={img.filename}
-                    className="w-full h-full object-contain"
-                    loading="lazy"
-                  />
-                </div>
-              </div>
-              <div
-                className="h-1 w-6 rounded-full shrink-0"
-                style={{ backgroundColor: filmstripPillBg[img.colorTag] }}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="h-3 px-2 flex items-center">
-          <div className="h-1 w-14 bg-[#777] rounded-full" />
-        </div>
-      </div>
+      <FilmstripBar
+        stripImages={stripImages}
+        currentIndex={currentIndex}
+        onSelectImage={onSelectImage}
+        stripRef={stripRef}
+        tileRefs={tileRefs}
+      />
 
       {/* ── Bottom bar ──────────────────────────────────────────────────────── */}
-      <footer className="flex items-center justify-between h-10 pl-2 pr-4 bg-[#1c1c1c] border-t border-background shrink-0">
-        <div className="flex items-center gap-3 w-[220px]">
-          <div className="flex items-center gap-1 min-w-0">
-            <span className="text-[13px] text-[#e2e2e2] font-normal truncate">{image.filename}</span>
-            <Info className="w-4 h-4 text-[#777] shrink-0" />
-          </div>
-          <div className="w-px h-4 bg-[#303030] shrink-0" />
-          <div className="flex items-center gap-1 text-[#ababab] shrink-0">
-            <Eye className="w-4 h-4" />
-            <span className="text-[12px] font-medium whitespace-nowrap">
-              {currentIndex + 1} / {totalImages}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <div
-            className="flex items-center gap-[2px] px-2 py-1 rounded-md shrink-0"
-            style={{ backgroundColor: image.colorTag !== "none" ? colorTagBg[image.colorTag] : "#303030" }}
-          >
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Star key={i} size={12} fill={i < image.stars ? "white" : "rgba(255,255,255,0.3)"} strokeWidth={0} />
-            ))}
-          </div>
-          <button className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors">
-            <Flag size={16} />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3 w-[220px] justify-end">
-          <div className="flex items-center gap-3">
-            <button className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors">
-              <ArrowCounterClockwise size={16} />
-            </button>
-            <button className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors">
-              <Columns size={16} />
-            </button>
-          </div>
-          <div className="w-px h-4 bg-[#303030]" />
-
-          {/* ── Zoom controls ───────────────────────────────────────────────── */}
-          <div className="flex items-center gap-1.5">
-            {/* Fit button */}
-            <button
-              onClick={goToFit}
-              className={`text-[12px] font-medium transition-colors ${
-                isFit ? "text-[#e2e2e2]" : "text-[#555] hover:text-[#ababab]"
-              }`}
-            >
-              Fit
-            </button>
-
-            {/* Zoom picker: current % + preset dropdown */}
-            <div className="relative flex items-center gap-0.5" ref={zoomDropdownRef}>
-              <button
-                onClick={goToTrueHundred}
-                title="Jump to 100% (actual pixels)"
-                className={`text-[12px] font-medium transition-colors ${
-                  !isFit ? "text-[#e2e2e2]" : "text-[#777] hover:text-[#ababab]"
-                }`}
-              >
-                {displayPct()}%
-              </button>
-              <button
-                onClick={() => setShowZoomDropdown((v) => !v)}
-                className="text-[#555] hover:text-[#ababab] transition-colors flex items-center"
-              >
-                <CaretDown size={12} />
-              </button>
-
-              {/* Preset dropdown */}
-              {showZoomDropdown && (
-                <div className="absolute bottom-full right-0 mb-2 bg-[#242424] border border-[#303030] rounded-[6px] py-1 z-50 min-w-[100px] shadow-lg">
-                  <button
-                    onClick={() => { handleZoomPreset("fit"); setShowZoomDropdown(false); }}
-                    className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${
-                      isFit ? "text-[#e2e2e2]" : "text-[#ababab] hover:text-[#e2e2e2]"
-                    }`}
-                  >
-                    Fit
-                  </button>
-                  {ZOOM_PRESETS.map((pct) => (
-                    <button
-                      key={pct}
-                      onClick={() => { handleZoomPreset(pct); setShowZoomDropdown(false); }}
-                      className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${
-                        !isFit && displayPct() === pct ? "text-[#e2e2e2]" : "text-[#ababab] hover:text-[#e2e2e2]"
-                      }`}
-                    >
-                      {pct}%
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="w-px h-4 bg-[#303030]" />
-          <button className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors">
-            <Keyboard size={16} />
-          </button>
-        </div>
-      </footer>
+      <LoupeBottomBar
+        image={image}
+        currentIndex={currentIndex}
+        totalImages={totalImages}
+        isFit={isFit}
+        displayPct={displayPct}
+        goToFit={goToFit}
+        goToTrueHundred={goToTrueHundred}
+        handleZoomPreset={handleZoomPreset}
+        showZoomDropdown={showZoomDropdown}
+        setShowZoomDropdown={setShowZoomDropdown}
+        zoomDropdownRef={zoomDropdownRef}
+      />
     </div>
   );
 };
