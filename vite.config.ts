@@ -57,27 +57,6 @@ export default defineConfig(({ mode }) => ({
         });
       },
     },
-    // Serve @vladmandic/face-api model weights at /face-api-models/
-    {
-      name: "serve-face-api-models",
-      configureServer(server) {
-        const modelDir = path.resolve(__dirname, "node_modules/@vladmandic/face-api/model");
-        server.middlewares.use("/face-api-models", (req, res, next) => {
-          const urlPath = (req.url ?? "").split("?")[0];
-          const filePath = path.join(modelDir, urlPath);
-          if (!filePath.startsWith(modelDir)) { next(); return; }
-          try {
-            const stat = fs.statSync(filePath);
-            if (!stat.isFile()) { next(); return; }
-            const ext = path.extname(filePath).toLowerCase();
-            res.setHeader("Content-Type", ext === ".json" ? "application/json" : "application/octet-stream");
-            res.setHeader("Content-Length", String(stat.size));
-            res.setHeader("Cache-Control", "public, max-age=604800, immutable");
-            fs.createReadStream(filePath).pipe(res);
-          } catch { next(); }
-        });
-      },
-    },
     // Serve models/ort/ WASM files at /ort/ so onnxruntime-web can find them
     {
       name: "serve-ort-wasm",

@@ -48,17 +48,12 @@ for (const name of readdirSync(src)) {
 
 console.log(`[copy-ort-runtime] copied ${copied} files → ${dst} and ${publicDst}`);
 
-// ── face-api model weights → public/face-api-models/ ──────────────────────────
-const faceApiSrc = join(root, "node_modules", "@vladmandic", "face-api", "model");
-const faceApiDst = join(root, "public", "face-api-models");
-
-if (existsSync(faceApiSrc)) {
-  if (existsSync(faceApiDst)) rmSync(faceApiDst, { recursive: true, force: true });
-  mkdirSync(faceApiDst, { recursive: true });
-  let faCopied = 0;
-  for (const name of readdirSync(faceApiSrc)) {
-    copyFileSync(join(faceApiSrc, name), join(faceApiDst, name));
-    faCopied++;
-  }
-  console.log(`[copy-ort-runtime] copied ${faCopied} face-api model files → ${faceApiDst}`);
+// ── genderage.onnx → public/models/ ───────────────────────────────────────────
+// Small (1.3MB) bundled model, served as a static asset by Vite.
+const gaSrc = join(root, "models", "genderage.onnx");
+const gaDstDir = join(root, "public", "models");
+if (existsSync(gaSrc)) {
+  mkdirSync(gaDstDir, { recursive: true });
+  copyFileSync(gaSrc, join(gaDstDir, "genderage.onnx"));
+  console.log(`[copy-ort-runtime] copied genderage.onnx → ${gaDstDir}`);
 }

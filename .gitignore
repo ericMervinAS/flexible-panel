@@ -12,10 +12,10 @@ dist
 dist-ssr
 *.local
 
-# Copied from node_modules by scripts/copy-ort-runtime.mjs (postinstall)
+# Copied from node_modules / models/ by scripts/copy-ort-runtime.mjs (postinstall)
 models/ort/
 public/ort/
-public/face-api-models/
+public/models/
 
 # Editor directories and files
 .vscode/*

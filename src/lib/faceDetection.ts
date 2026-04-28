@@ -25,10 +25,11 @@ const ARCFACE_TEMPLATE: [number, number][] = [
   [70.7299, 92.2041],
 ];
 
-export const RETINA_MODEL_URL  = '/api/models/retinaface';
-export const ARCFACE_MODEL_URL = '/api/models/arcface';
-// face-api.js AgeGenderNet weights served from the npm package via Vite middleware
-export const FACEAPI_MODELS_URL = '/face-api-models';
+export const RETINA_MODEL_URL    = '/api/models/retinaface';
+export const ARCFACE_MODEL_URL   = '/api/models/arcface';
+// InsightFace genderage.onnx (1.3MB) — bundled as a static asset
+export const GENDERAGE_MODEL_URL = '/models/genderage.onnx';
+const GENDERAGE_SIZE = 96;
 
 // ── Subject category ──────────────────────────────────────────────────────────
 
@@ -246,6 +247,35 @@ function alignFace(img: HTMLImageElement, landmarks: [number, number][]): HTMLCa
   return alignFaceToTemplate(img, landmarks, ARCFACE_TEMPLATE, ARCFACE_SIZE);
 }
 
+// InsightFace genderage crop: square region centred on bbox, side = max(w,h) × 1.5,
+// resized to 96×96. Output tensor is NCHW float32 RGB with raw 0–255 values
+// (the model was exported with mean=0, std=1 in cv2.dnn.blobFromImage).
+function preprocessGenderAge(img: HTMLImageElement, det: Detection): ort.Tensor {
+  const cx = (det.x1 + det.x2) / 2;
+  const cy = (det.y1 + det.y2) / 2;
+  const side = Math.max(det.x2 - det.x1, det.y2 - det.y1) * 1.5;
+  const sx = cx - side / 2;
+  const sy = cy - side / 2;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = GENDERAGE_SIZE;
+  canvas.height = GENDERAGE_SIZE;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, GENDERAGE_SIZE, GENDERAGE_SIZE);
+  ctx.drawImage(img, sx, sy, side, side, 0, 0, GENDERAGE_SIZE, GENDERAGE_SIZE);
+
+  const data = ctx.getImageData(0, 0, GENDERAGE_SIZE, GENDERAGE_SIZE).data;
+  const n = GENDERAGE_SIZE * GENDERAGE_SIZE;
+  const arr = new Float32Array(3 * n);
+  for (let i = 0; i < n; i++) {
+    arr[0 * n + i] = data[i * 4];     // R
+    arr[1 * n + i] = data[i * 4 + 1]; // G
+    arr[2 * n + i] = data[i * 4 + 2]; // B
+  }
+  return new ort.Tensor('float32', arr, [1, 3, GENDERAGE_SIZE, GENDERAGE_SIZE]);
+}
+
 function preprocessArcFace(canvas112: HTMLCanvasElement): ort.Tensor {
   const ctx = canvas112.getContext('2d', { willReadFrequently: true })!;
   const data = ctx.getImageData(0, 0, ARCFACE_SIZE, ARCFACE_SIZE).data;
@@ -342,7 +372,7 @@ function aggregateGenderAge(members: FaceRecord[]): { gender?: 'Female' | 'Male'
 export class FaceDetectionService {
   private detectSession: ort.InferenceSession | null = null;
   private arcSession: ort.InferenceSession | null = null;
-  private faceApiLoaded = false;
+  private gaSession: ort.InferenceSession | null = null;
   private anchors: [number, number, number, number][] | null = null;
 
   // Detection thresholds matching retinaface-eval.html defaults
@@ -354,7 +384,7 @@ export class FaceDetectionService {
 
   get isDetectionReady(): boolean { return this.detectSession !== null; }
   get isRecognitionReady(): boolean { return this.arcSession !== null; }
-  get isGenderAgeReady(): boolean { return this.faceApiLoaded; }
+  get isGenderAgeReady(): boolean { return this.gaSession !== null; }
 
   async loadDetectionModel(
     url = RETINA_MODEL_URL,
@@ -390,14 +420,19 @@ export class FaceDetectionService {
   }
 
   async loadGenderAgeModel(
-    url = FACEAPI_MODELS_URL,
+    url = GENDERAGE_MODEL_URL,
     onStatus?: (msg: string) => void,
   ): Promise<void> {
-    onStatus?.('Loading AgeGender model…');
-    const faceapi = await import('@vladmandic/face-api');
-    await faceapi.nets.ageGenderNet.loadFromUri(url);
-    this.faceApiLoaded = true;
-    onStatus?.('AgeGender ready');
+    onStatus?.('Fetching GenderAge model…');
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching GenderAge`);
+    const buf = await resp.arrayBuffer();
+    onStatus?.(`Compiling GenderAge (${(buf.byteLength / 1024 / 1024).toFixed(1)} MB)…`);
+    this.gaSession = await ort.InferenceSession.create(buf, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+    });
+    onStatus?.('GenderAge ready');
   }
 
   private async runDetection(img: HTMLImageElement): Promise<Detection[]> {
@@ -464,12 +499,13 @@ export class FaceDetectionService {
 
     let gender: 'Female' | 'Male' | undefined;
     let age: number | undefined;
-    if (this.faceApiLoaded) {
-      const faceapi = await import('@vladmandic/face-api');
-      const faceCrop = alignFace(img, landmarks);
-      const result = await faceapi.nets.ageGenderNet.predictAgeAndGender(faceCrop) as { age: number; gender: string };
-      gender = result.gender === 'male' ? 'Male' : 'Female';
-      age = Math.round(result.age);
+    if (this.gaSession) {
+      const tensor = preprocessGenderAge(img, det);
+      const out = await this.gaSession.run({ [this.gaSession.inputNames[0]]: tensor });
+      const pred = out[this.gaSession.outputNames[0]].data as Float32Array;
+      // pred = [female_score, male_score, age_scaled] — see InsightFace genderage
+      gender = pred[1] > pred[0] ? 'Male' : 'Female';
+      age = Math.round(pred[2] * 100);
     }
 
     return { embedding, gender, age };
@@ -554,8 +590,9 @@ export class FaceDetectionService {
   dispose(): void {
     this.detectSession?.release();
     this.arcSession?.release();
+    this.gaSession?.release();
     this.detectSession = null;
     this.arcSession = null;
-    this.faceApiLoaded = false;
+    this.gaSession = null;
   }
 }

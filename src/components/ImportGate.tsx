@@ -41,8 +41,8 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
   return (
     <div className="fixed inset-0 bg-[#141414] flex flex-col items-center justify-center gap-10">
       <div className="flex flex-col items-center gap-1.5">
-        <span className="text-[20px] font-semibold text-[#e8e8e8] tracking-tight">Aftershoot</span>
-        <span className="text-[13px] text-[#666]">Choose how to load your album</span>
+        <div className="flex flex-row"><span className="text-[24px] font-semibold text-[#e8e8e8] ">after</span><span className="text-[24px] font-noral text-[#e8e8e8] ">shoot</span></div>
+        <span className="text-[14px] text-[#666]">Choose how to load your album</span>
       </div>
 
       {isLoading ? (
@@ -54,20 +54,20 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
         <div className="flex gap-4">
           <button
             onClick={() => inputRef.current?.click()}
-            className="group flex flex-col items-center gap-4 w-[168px] py-8 px-5 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
+            className="group flex flex-col items-center gap-4 w-[268px] py-12 px-8 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
           >
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#ababab] transition-colors">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
             </svg>
             <div className="flex flex-col gap-1 text-center">
-              <span className="text-[13px] font-medium text-[#d8d8d8]">Upload Folder</span>
-              <span className="text-[11px] text-[#555] group-hover:text-[#777] transition-colors">Select a folder of JPEGs</span>
+              <span className="text-[18px] font-medium text-[#d8d8d8]">Upload Folder</span>
+              <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">Select a folder of JPEGs</span>
             </div>
           </button>
 
           <button
             onClick={() => onReady("sample")}
-            className="group flex flex-col items-center gap-4 w-[168px] py-8 px-5 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
+            className="group flex flex-col items-center gap-4 w-[268px] py-12 px-8 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
           >
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#ababab] transition-colors">
               <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -75,8 +75,8 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
               <polyline points="21 15 16 10 5 21" />
             </svg>
             <div className="flex flex-col gap-1 text-center">
-              <span className="text-[13px] font-medium text-[#d8d8d8]">Sample Album</span>
-              <span className="text-[11px] text-[#555] group-hover:text-[#777] transition-colors">Juliana Wedding</span>
+              <span className="text-[18px] font-medium text-[#d8d8d8]">Sample Album</span>
+              <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">Juliana Wedding</span>
             </div>
           </button>
         </div>
