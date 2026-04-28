@@ -7,6 +7,7 @@ import LoupeSubjectPanel, { LoupeRetouchState } from "./LoupeSubjectPanel";
 import LoupePatchPanel from "./LoupePatchPanel";
 import RetouchingOpportunityBanner from "./RetouchingOpportunityBanner";
 import type { ModelSubject } from "@/hooks/useFaceDetection";
+import type { DistractionDetection } from "@/lib/distractionDetection";
 
 const LOUPE_TABS = [
   { id: "subject", label: "Subject", Icon: User },
@@ -33,9 +34,12 @@ interface RightPanelProps {
   modelSubjectFilter?: number[];
   tabOverride?: { tab: LoupeTab; seq: number } | null;
   hasRetouchingOpportunity?: boolean;
+  distractionMap?: Map<number, DistractionDetection[]>;
+  isDistractionScanning?: boolean;
+  onDistractionRerun?: () => void;
 }
 
-const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false }: RightPanelProps) => {
+const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false, distractionMap, isDistractionScanning = false, onDistractionRerun }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [subjectActive, setSubjectActive] = useState(false);
@@ -234,7 +238,7 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
               </div>
             )}
             {activeTab === "patch" && (
-              <LoupePatchPanel onScrollChange={setIsScrolledToBottom} currentImageIndex={currentImageIndex} canvasHasStrokes={canvasHasStrokes} onClearCanvas={onClearCanvas} onRemoveAfterStrokeChange={onRemoveAfterStrokeChange} onRemovingChange={onRemovingChange} />
+              <LoupePatchPanel onScrollChange={setIsScrolledToBottom} currentImageIndex={currentImageIndex} canvasHasStrokes={canvasHasStrokes} onClearCanvas={onClearCanvas} onRemoveAfterStrokeChange={onRemoveAfterStrokeChange} onRemovingChange={onRemovingChange} distractionMap={distractionMap} isModelScanning={isDistractionScanning} onRerun={onDistractionRerun} />
             )}
           </>
         ) : (
@@ -257,10 +261,13 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
             <div className="h-px bg-background" />
             <div className="py-5">
               <SmartObjectRemoval
-                isScanning={isScanning}
+                isScanning={isDistractionScanning}
                 disabled={isProcessing}
                 resetSignal={resetSignal}
                 removedItems={removedItems}
+                distractionMap={distractionMap}
+                onRerun={onDistractionRerun}
+                onReport={() => console.log('[DistractionDetection] User reported a missed detection')}
                 onResetItem={(label) =>
                   setRemovedItems((prev) => {
                     const next = new Set(prev);

@@ -1,15 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwise, X } from "@phosphor-icons/react";
+import { Check, ArrowCounterClockwise, X, ArrowClockwise, MagnifyingGlass, Flag } from "@phosphor-icons/react";
+import type { DistractionDetection } from "@/lib/distractionDetection";
 
-const distractions = [
-  { label: "Exit Signs", count: 30 },
-  { label: "Fire Alarms", count: 80 },
-  { label: "Fire Extinguishers", count: 3 },
-  { label: "Electricity Sockets", count: 40 },
-  { label: "Thermostats", count: 8 },
-  { label: "Garbage Cans", count: 0 },
-];
+const UI_LABELS = [
+  "Exit Signs",
+  "Fire Alarms",
+  "Fire Extinguishers",
+  "Electricity Sockets",
+  "Thermostats",
+  "Garbage Cans",
+] as const;
+
+const MODEL_TO_UI: Record<string, string> = {
+  "Exit Sign": "Exit Signs",
+  "Smoke Detector": "Fire Alarms",
+  "Fire Extinguisher": "Fire Extinguishers",
+  "Electrical Outlet": "Electricity Sockets",
+  "Thermostat": "Thermostats",
+  "Trash Can": "Garbage Cans",
+};
 
 export interface SmartObjectState {
   selectedWithCounts: { label: string; count: number }[];
@@ -20,10 +30,13 @@ interface SmartObjectRemovalProps {
   disabled?: boolean;
   resetSignal?: number;
   removedItems?: Set<string>;
+  distractionMap?: Map<number, DistractionDetection[]>;
   onResetItem?: (label: string) => void;
   onResetConfirmed?: (label: string, count: number) => void;
   onSelectionsChange?: (hasSelections: boolean) => void;
   onStateChange?: (state: SmartObjectState) => void;
+  onRerun?: () => void;
+  onReport?: () => void;
 }
 
 const SmartObjectRemoval = ({
@@ -31,12 +44,35 @@ const SmartObjectRemoval = ({
   disabled,
   resetSignal,
   removedItems,
+  distractionMap,
   onResetItem,
   onResetConfirmed,
   onSelectionsChange,
   onStateChange,
+  onRerun,
+  onReport,
 }: SmartObjectRemovalProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const distractions = useMemo(() => {
+    const countMap = new Map<string, number>();
+    if (distractionMap) {
+      for (const dets of distractionMap.values()) {
+        const seen = new Set<string>();
+        for (const det of dets) {
+          const uiLabel = MODEL_TO_UI[det.label];
+          if (uiLabel && !seen.has(uiLabel)) {
+            seen.add(uiLabel);
+            countMap.set(uiLabel, (countMap.get(uiLabel) ?? 0) + 1);
+          }
+        }
+      }
+    }
+    return UI_LABELS.map((label) => ({ label, count: countMap.get(label) ?? 0 }));
+  }, [distractionMap]);
+
+  const hasScanned = distractionMap !== undefined;
+  const noneFound = hasScanned && distractions.every((d) => d.count === 0);
   const [pendingReset, setPendingReset] = useState<{ label: string; count: number } | null>(null);
   const [skipConfirmation, setSkipConfirmation] = useState(false);
 
@@ -48,17 +84,15 @@ const SmartObjectRemoval = ({
   }, [resetSignal]);
 
   const toggle = (label: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      onSelectionsChange?.(next.size > 0);
-      onStateChange?.({
-        selectedWithCounts: distractions
-          .filter((d) => next.has(d.label))
-          .map((d) => ({ label: d.label, count: d.count })),
-      });
-      return next;
+    const next = new Set(selected);
+    if (next.has(label)) next.delete(label);
+    else next.add(label);
+    setSelected(next);
+    onSelectionsChange?.(next.size > 0);
+    onStateChange?.({
+      selectedWithCounts: distractions
+        .filter((d) => next.has(d.label))
+        .map((d) => ({ label: d.label, count: d.count })),
     });
   };
 
@@ -96,7 +130,37 @@ const SmartObjectRemoval = ({
           </p>
         </div>
 
-        {!isScanning && (
+        {!isScanning && noneFound && (
+          <div className="flex flex-col pt-1">
+            <div className="flex flex-col items-center bg-[#d6d6d60a] gap-4 py-4 px-6 rounded-xl">
+              <div className="w-10 h-10 rounded-[10px] border border-[#3a3a3a] flex items-center justify-center">
+                <MagnifyingGlass className="w-[18px] h-[18px] text-[#777]" />
+              </div>
+              <div className="flex flex-col gap-1 text-center">
+                <p className="text-[13px] font-medium text-[#d4d4d4] leading-[18px]">No distractions detected</p>
+                <p className="text-[11px] text-[#555] leading-4">Think we missed something?</p>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 w-full">
+                <button
+                  onClick={onRerun}
+                  className="flex items-center justify-center gap-1.5 h-9 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] border border-[#2e2e2e] transition-colors"
+                >
+                  <ArrowClockwise className="w-3 h-3 text-[#777]" />
+                  <span className="text-[11px] font-medium text-[#c0c0c0]">Rerun scan</span>
+                </button>
+                <button
+                  onClick={onReport}
+                  className="flex items-center justify-center gap-1.5 h-9 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] border border-[#2e2e2e] transition-colors"
+                >
+                  <Flag className="w-3 h-3 text-[#777]" />
+                  <span className="text-[11px] font-medium text-[#c0c0c0]">Report issue</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isScanning && !noneFound && (
           <div className="grid grid-cols-2 gap-1.5">
             {[
               ...distractions.filter((d) => !removedItems?.has(d.label) && d.count > 0),

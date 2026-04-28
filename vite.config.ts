@@ -22,9 +22,10 @@ export default defineConfig(({ mode }) => ({
       configureServer(server) {
         const env = loadEnv(mode, process.cwd(), ""); // load ALL vars, not just VITE_
         const MODEL_URLS: Record<string, string> = {
-          retinaface: env.MODEL_URL_RETINAFACE ?? "",
-          arcface:    env.MODEL_URL_ARCFACE    ?? "",
-          genderage:  env.MODEL_URL_GENDERAGE  ?? "",
+          retinaface:  env.MODEL_URL_RETINAFACE  ?? "",
+          arcface:     env.MODEL_URL_ARCFACE     ?? "",
+          genderage:   env.MODEL_URL_GENDERAGE   ?? "",
+          distraction: env.MODEL_URL_DISTRACTION ?? "",
         };
         server.middlewares.use("/api/models", async (req, res, next) => {
           const name = (req.url ?? "").replace(/^\//, "").split("?")[0];

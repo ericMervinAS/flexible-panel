@@ -1,34 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Check, ArrowCounterClockwiseIcon, X, CubeFocusIcon } from "@phosphor-icons/react";
+import type { DistractionDetection } from "@/lib/distractionDetection";
 
-const imgCubeFocus = "https://www.figma.com/api/mcp/asset/5e3e2d5e-4d6c-4be0-bd7d-2ed9d24a7af2";
-
-// ─── Distraction catalogue ────────────────────────────────────────────────────
-
-const DISTRACTION_TYPES = [
-  "Exit Signs",
-  "Fire Alarms",
-  "Fire Extinguishers",
-  "Electricity Sockets",
-  "Thermostats",
-  "Garbage Cans",
-];
-
-const seededRand = (seed: number): number => {
-  const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
-  return x - Math.floor(x);
-};
-
-const getDetectedDistractions = (imageIndex: number, deep = false) => {
-  const threshold = deep ? 0.20 : 0.42;
-  return DISTRACTION_TYPES
-    .map((label, i) => {
-      if (seededRand(imageIndex * 31 + i * 17) <= threshold) return null;
-      const count = Math.floor(seededRand(imageIndex * 13 + i * 7) * 3) + 1; // 1–3
-      return { label, count };
-    })
-    .filter((d): d is { label: string; count: number } => d !== null);
+const MODEL_TO_UI: Record<string, string> = {
+  "Exit Sign": "Exit Signs",
+  "Smoke Detector": "Fire Alarms",
+  "Fire Extinguisher": "Fire Extinguishers",
+  "Electrical Outlet": "Electricity Sockets",
+  "Thermostat": "Thermostats",
+  "Trash Can": "Garbage Cans",
 };
 
 // ─── Toggle ───────────────────────────────────────────────────────────────────
@@ -60,6 +41,9 @@ interface LoupePatchPanelProps {
   onClearCanvas?: () => void;
   onRemoveAfterStrokeChange?: (v: boolean) => void;
   onRemovingChange?: (v: boolean) => void;
+  distractionMap?: Map<number, DistractionDetection[]>;
+  isModelScanning?: boolean;
+  onRerun?: () => void;
 }
 
 const LoupePatchPanel = ({
@@ -69,9 +53,10 @@ const LoupePatchPanel = ({
   onClearCanvas,
   onRemoveAfterStrokeChange,
   onRemovingChange,
+  distractionMap,
+  isModelScanning = false,
+  onRerun,
 }: LoupePatchPanelProps) => {
-  const [isScanning, setIsScanning] = useState(false);
-  const [deepScan, setDeepScan] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
   const [removeAfterStroke, setRemoveAfterStroke] = useState(false);
@@ -79,7 +64,17 @@ const LoupePatchPanel = ({
   const [pendingReset, setPendingReset] = useState<{ label: string; count: number } | null>(null);
   const [skipConfirmation, setSkipConfirmation] = useState(false);
 
-  const detected = getDetectedDistractions(currentImageIndex, deepScan);
+  const detected = useMemo(() => {
+    const imageDets = distractionMap?.get(currentImageIndex) ?? [];
+    const countMap = new Map<string, number>();
+    for (const det of imageDets) {
+      const uiLabel = MODEL_TO_UI[det.label];
+      if (uiLabel) countMap.set(uiLabel, (countMap.get(uiLabel) ?? 0) + 1);
+    }
+    return Array.from(countMap.entries()).map(([label, count]) => ({ label, count }));
+  }, [distractionMap, currentImageIndex]);
+
+  const hasScanned = distractionMap !== undefined;
 
   // Non-removed first, removed at the bottom — same ordering as SmartObjectRemoval
   const orderedItems = [
@@ -94,23 +89,11 @@ const LoupePatchPanel = ({
 
   // Full reset on image change
   useEffect(() => {
-    setIsScanning(false);
-    setDeepScan(false);
     setSelected(new Set());
     setRemovedItems(new Set());
     setIsRemoving(false);
     setPendingReset(null);
   }, [currentImageIndex]);
-
-  // ── Scan icon ─────────────────────────────────────────────────────────────
-  const handleScanIcon = () => {
-    if (isScanning || deepScan) return;
-    setIsScanning(true);
-    setTimeout(() => {
-      setIsScanning(false);
-      setDeepScan(true);
-    }, 1800);
-  };
 
   // ── Item toggle ───────────────────────────────────────────────────────────
   const toggle = (label: string) => {
@@ -164,7 +147,7 @@ const LoupePatchPanel = ({
     }, 2200);
   };
 
-  const itemsDisabled = isScanning || isRemoving;
+  const itemsDisabled = isModelScanning || isRemoving;
 
   return (
     <div
@@ -185,17 +168,17 @@ const LoupePatchPanel = ({
 
           {/* Scan icon */}
           <button
-            onClick={handleScanIcon}
-            disabled={isScanning || deepScan}
-            title={deepScan ? "Scan complete" : "Scan for more objects"}
-            className={`flex items-center justify-center w-6 h-6 rounded transition-opacity ${deepScan || isRemoving
+            onClick={onRerun}
+            disabled={isModelScanning || isRemoving}
+            title="Rerun object scan"
+            className={`flex items-center justify-center w-6 h-6 rounded transition-opacity ${isRemoving
               ? "opacity-30 cursor-not-allowed"
-              : isScanning
+              : isModelScanning
                 ? "opacity-60 cursor-not-allowed"
                 : "opacity-70 hover:opacity-100 cursor-pointer"
               }`}
           >
-            {isScanning ? (
+            {isModelScanning ? (
               <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
             ) : (
               <CubeFocusIcon className="w-5 h-5 text-[#555]" />
@@ -203,7 +186,15 @@ const LoupePatchPanel = ({
           </button>
         </div>
 
+        {/* Empty state */}
+        {!isModelScanning && hasScanned && detected.length === 0 && (
+          <p className="text-[11px] text-[#4a4a4a] leading-4 py-1">
+            No distractions detected in this photo.
+          </p>
+        )}
+
         {/* Detected items grid */}
+        {(!hasScanned || detected.length > 0) && (
         <div className={`grid grid-cols-2 gap-1.5 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}>
           {orderedItems.map((d) => {
             const isItemRemoved = removedItems.has(d.label);
@@ -249,6 +240,7 @@ const LoupePatchPanel = ({
             );
           })}
         </div>
+        )}
 
         {/* Remove CTA — matches Grid View processing style */}
         <button

@@ -7,6 +7,7 @@ import RightPanel from "@/components/RightPanel";
 import BottomBar from "@/components/BottomBar";
 import LoupeView from "@/components/LoupeView";
 import { useFaceDetection } from "@/hooks/useFaceDetection";
+import { useDistractionDetection } from "@/hooks/useDistractionDetection";
 
 interface IndexProps {
   importSource: "sample" | ImageData[];
@@ -31,6 +32,13 @@ const Index = ({ importSource }: IndexProps) => {
 
   const { modelSubjects, modelImageMap, isDetecting, isLoadingModel, statusMessage, detectionProgress } =
     useFaceDetection(images);
+
+  const {
+    distractionMap,
+    isDetecting: isDistractionDetecting,
+    isLoadingModel: isDistractionModelLoading,
+    rerun: rerunDistractionDetection,
+  } = useDistractionDetection(images);
 
   const filteredImages = useMemo(() => {
     const mapped = images.map((img, i) => ({ ...img, originalIndex: i }));
@@ -105,7 +113,7 @@ const Index = ({ importSource }: IndexProps) => {
               : null
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} />
+        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} />
       </div>
     </div>
   );

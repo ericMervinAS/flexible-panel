@@ -121,15 +121,26 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
     ? rawIndices.filter((i) => i < subjects.length).map((i) => ({ ...subjects[i], subjectIndex: i }))
     : subjects.map((s, i) => ({ ...s, subjectIndex: i }));
 
-  // Gender groups present among subjects in this image
-  const activeGenders = new Set(
-    (rawIndices ?? subjects.map((_, i) => i))
-      .map((i) => subjectGender[i])
-      .filter(Boolean)
-  );
+  const modelClusterIds = modelImageMap?.get(currentImageIndex) ?? [];
 
-  const isChipEnabled = (chip: string) =>
-    chip === "All Subjects" || chip === "Individual" || activeGenders.has(chip as any);
+  // Gender groups present — prefer model-detected categories over hardcoded mapping
+  const activeGenders: Set<string> = modelSubjects?.length && modelImageMap
+    ? new Set(
+        modelClusterIds
+          .map((cid) => modelSubjects.find((s) => s.id === cid)?.category)
+          .filter((c): c is string => !!c)
+      )
+    : new Set(
+        (rawIndices ?? subjects.map((_, i) => i))
+          .map((i) => subjectGender[i])
+          .filter(Boolean)
+      );
+
+  const isChipEnabled = (chip: string) => {
+    if (chip === "All Subjects") return true;
+    if (chip === "Individual") return modelSubjects?.length && modelImageMap ? modelClusterIds.length > 0 : true;
+    return activeGenders.has(chip as any);
+  };
 
   // ── Preset hierarchy helpers ──────────────────────────────────────────────────
   // Hierarchy: subject-N > group-{gender} > group-All Subjects
@@ -412,8 +423,13 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
                 onClick={() => {
                   if (!enabled || selected) return;
                   setSelectedChip(label);
-                  if (label === "Individual" && visibleSubjects.length > 0) {
-                    setSelectedFaces(new Set([visibleSubjects[0].subjectIndex]));
+                  if (label === "Individual") {
+                    if (modelClusterIds.length > 0) {
+                      setSelectedModelFace(modelClusterIds[0]);
+                      setSelectedFaces(new Set());
+                    } else if (visibleSubjects.length > 0) {
+                      setSelectedFaces(new Set([visibleSubjects[0].subjectIndex]));
+                    }
                   }
                 }}
                 className={`h-6 px-2 text-[13px] leading-4 rounded border transition-colors ${!enabled
@@ -444,11 +460,10 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
         )}
 
         {selectedChip === "Individual" && !isModelDetecting && (() => {
-          const clusterIds = modelImageMap?.get(currentImageIndex) ?? [];
-          if (!clusterIds.length || !modelSubjects?.length) return null;
+          if (!modelClusterIds.length || !modelSubjects?.length) return null;
           return (
             <div className="grid grid-cols-5 gap-2">
-              {clusterIds.map((cid) => {
+              {modelClusterIds.map((cid) => {
                 const subject = modelSubjects.find((s) => s.id === cid);
                 if (!subject) return null;
                 const isSelected = selectedModelFace === cid;

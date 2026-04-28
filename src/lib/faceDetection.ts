@@ -25,8 +25,8 @@ const ARCFACE_TEMPLATE: [number, number][] = [
   [70.7299, 92.2041],
 ];
 
-export const RETINA_MODEL_URL    = '/api/models/retinaface';
-export const ARCFACE_MODEL_URL   = '/api/models/arcface';
+export const RETINA_MODEL_URL = '/api/models/retinaface';
+export const ARCFACE_MODEL_URL = '/api/models/arcface';
 // InsightFace genderage.onnx (1.3MB) — bundled as a static asset
 export const GENDERAGE_MODEL_URL = '/models/genderage.onnx';
 const GENDERAGE_SIZE = 96;
@@ -47,7 +47,7 @@ export function getSubjectCategory(
   age?: number,
 ): SubjectCategory | undefined {
   if (age !== undefined) {
-    if (age < 13) return 'Child';
+    if (age < 16) return 'Child';
     if (age >= 60) return 'Elderly';
   }
   if (gender === 'Male') return 'Masculine';
@@ -140,7 +140,7 @@ function iou(
   const inter =
     Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) *
     Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
-  return inter / ((a[2]-a[0])*(a[3]-a[1]) + (b[2]-b[0])*(b[3]-b[1]) - inter + 1e-12);
+  return inter / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter + 1e-12);
 }
 
 function nms(
@@ -181,9 +181,9 @@ function preprocessDetect(img: HTMLImageElement): { tensor: ort.Tensor; scale: n
   const data = ctx.getImageData(0, 0, INPUT_W, INPUT_H).data;
   const arr = new Float32Array(INPUT_H * INPUT_W * 3);
   for (let i = 0, n = INPUT_H * INPUT_W; i < n; i++) {
-    arr[i * 3]     = data[i * 4 + 2] - 104; // B
+    arr[i * 3] = data[i * 4 + 2] - 104; // B
     arr[i * 3 + 1] = data[i * 4 + 1] - 117; // G
-    arr[i * 3 + 2] = data[i * 4]     - 123; // R
+    arr[i * 3 + 2] = data[i * 4] - 123; // R
   }
   return { tensor: new ort.Tensor('float32', arr, [1, INPUT_H, INPUT_W, 3]), scale };
 }
@@ -282,7 +282,7 @@ function preprocessArcFace(canvas112: HTMLCanvasElement): ort.Tensor {
   const n = ARCFACE_SIZE * ARCFACE_SIZE;
   const arr = new Float32Array(3 * n);
   for (let i = 0; i < n; i++) {
-    arr[0 * n + i] = (data[i * 4]     - 127.5) / 127.5; // R
+    arr[0 * n + i] = (data[i * 4] - 127.5) / 127.5; // R
     arr[1 * n + i] = (data[i * 4 + 1] - 127.5) / 127.5; // G
     arr[2 * n + i] = (data[i * 4 + 2] - 127.5) / 127.5; // B
   }
@@ -302,9 +302,9 @@ function computeSharpness(canvas: HTMLCanvasElement): number {
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const lap =
-        -gray[(y-1)*w+(x-1)] - gray[(y-1)*w+x] - gray[(y-1)*w+(x+1)]
-        - gray[y*w+(x-1)] + 8*gray[y*w+x] - gray[y*w+(x+1)]
-        - gray[(y+1)*w+(x-1)] - gray[(y+1)*w+x] - gray[(y+1)*w+(x+1)];
+        -gray[(y - 1) * w + (x - 1)] - gray[(y - 1) * w + x] - gray[(y - 1) * w + (x + 1)]
+        - gray[y * w + (x - 1)] + 8 * gray[y * w + x] - gray[y * w + (x + 1)]
+        - gray[(y + 1) * w + (x - 1)] - gray[(y + 1) * w + x] - gray[(y + 1) * w + (x + 1)];
       sum += lap; sum2 += lap * lap; cnt++;
     }
   }
@@ -345,7 +345,7 @@ function clusterFaces(faces: FaceRecord[], threshold: number): RawCluster[] {
       const cl = clusters[bestC];
       cl.members.push(i);
       const k = cl.members.length;
-      for (let d = 0; d < emb.length; d++) cl.centroid[d] = ((k-1)*cl.centroid[d]+emb[d])/k;
+      for (let d = 0; d < emb.length; d++) cl.centroid[d] = ((k - 1) * cl.centroid[d] + emb[d]) / k;
       cl.centroid = l2normalize(cl.centroid);
     } else {
       clusters.push({ centroid: new Float32Array(emb), members: [i] });
@@ -443,18 +443,18 @@ export class FaceDetectionService {
 
     const N = this.anchors.length;
     const arrays = this.detectSession.outputNames.map((n) => out[n].data as Float32Array);
-    const loc   = arrays.find((a) => a.length === N * 4)!;
-    const conf  = arrays.find((a) => a.length === N * 2)!;
+    const loc = arrays.find((a) => a.length === N * 4)!;
+    const conf = arrays.find((a) => a.length === N * 2)!;
     const landm = arrays.find((a) => a.length === N * 10) ?? null;
 
     if (!loc || !conf) throw new Error('Unexpected model output shapes');
 
-    const boxes     = decodeBoxes(loc, this.anchors);
+    const boxes = decodeBoxes(loc, this.anchors);
     const landmarks = landm ? decodeLandmarks(landm, this.anchors) : null;
 
     const keptScores: number[] = [];
-    const keptBoxes:  [number, number, number, number][] = [];
-    const keptLandm:  [number, number][][] = [];
+    const keptBoxes: [number, number, number, number][] = [];
+    const keptLandm: [number, number][][] = [];
 
     for (let i = 0; i < N; i++) {
       const s = conf[i * 2 + 1]; // face class probability
@@ -473,7 +473,7 @@ export class FaceDetectionService {
       .map((i) => ({
         x1: Math.max(0, keptBoxes[i][0] * sx),
         y1: Math.max(0, keptBoxes[i][1] * sy),
-        x2: Math.min(img.naturalWidth,  keptBoxes[i][2] * sx),
+        x2: Math.min(img.naturalWidth, keptBoxes[i][2] * sx),
         y2: Math.min(img.naturalHeight, keptBoxes[i][3] * sy),
         score: keptScores[i],
         landmarks: keptLandm[i]
@@ -520,7 +520,7 @@ export class FaceDetectionService {
     for (let idx = 0; idx < imageSrcs.length; idx++) {
       onStatus?.(`[${idx + 1}/${imageSrcs.length}] Detecting faces…`, idx, imageSrcs.length);
       try {
-        const img  = await this.loadImg(imageSrcs[idx]);
+        const img = await this.loadImg(imageSrcs[idx]);
         const dets = await this.runDetection(img);
 
         for (const det of dets) {
@@ -581,7 +581,7 @@ export class FaceDetectionService {
   private loadImg(src: string): Promise<HTMLImageElement> {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.onload  = () => resolve(img);
+      img.onload = () => resolve(img);
       img.onerror = reject;
       img.src = src;
     });

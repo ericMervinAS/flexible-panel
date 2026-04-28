@@ -1,7 +1,8 @@
 const MODEL_URLS: Record<string, string | undefined> = {
-  retinaface: process.env.MODEL_URL_RETINAFACE,
-  arcface:    process.env.MODEL_URL_ARCFACE,
-  genderage:  process.env.MODEL_URL_GENDERAGE,
+  retinaface:  process.env.MODEL_URL_RETINAFACE,
+  arcface:     process.env.MODEL_URL_ARCFACE,
+  genderage:   process.env.MODEL_URL_GENDERAGE,
+  distraction: process.env.MODEL_URL_DISTRACTION,
 };
 
 // Redirect rather than proxy — model files (esp. ArcFace at ~13MB) exceed
