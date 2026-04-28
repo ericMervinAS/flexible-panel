@@ -1,24 +1,21 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { CaretDown } from "@phosphor-icons/react";
-import { subjectPhotoCounts } from "@/data/subjectMapping";
-
-const subjectModules = import.meta.glob(
-  "../assets/subjects/*.png",
-  { eager: true }
-) as Record<string, { default: string }>;
-
-// Preserve original subject index for mapping against getSubjectIndices
-const subjects = Object.entries(subjectModules)
-  .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-  .map(([, mod], i) => ({ avatar: mod.default, count: subjectPhotoCounts[i] ?? 0, subjectIndex: i }))
-  .sort((a, b) => b.count - a.count);
+import type { ModelSubject } from "@/hooks/useFaceDetection";
 
 interface PeopleFilterDropdownProps {
-  onFilterChange: (subjectIndices: number[]) => void;
+  onFilterChange: (modelSubjectIds: number[]) => void;
+  modelSubjects?: ModelSubject[];
+  isModelDetecting?: boolean;
+  detectionProgress?: number;
 }
 
-const PeopleFilterDropdown = ({ onFilterChange }: PeopleFilterDropdownProps) => {
+const PeopleFilterDropdown = ({
+  onFilterChange,
+  modelSubjects,
+  isModelDetecting,
+  detectionProgress,
+}: PeopleFilterDropdownProps) => {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -44,16 +41,54 @@ const PeopleFilterDropdown = ({ onFilterChange }: PeopleFilterDropdownProps) => 
     setOpen((o) => !o);
   };
 
-  const toggleSubject = (subjectIndex: number) => {
+  const toggleSubject = (subjectId: number) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(subjectIndex) ? next.delete(subjectIndex) : next.add(subjectIndex);
+      next.has(subjectId) ? next.delete(subjectId) : next.add(subjectId);
       onFilterChange(Array.from(next));
       return next;
     });
   };
 
   const isActive = selected.size > 0;
+  const subjects = modelSubjects ?? [];
+
+  if (isModelDetecting) {
+    return (
+      <div>
+        <button
+          ref={buttonRef}
+          onClick={handleOpen}
+          className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[12px] transition-colors ${
+            open
+              ? "text-white bg-white/10 border-[0.5px] border-[#5e5e5e]"
+              : "text-[#ababab] hover:text-[#e2e2e2] hover:bg-white/5"
+          }`}
+        >
+          <div className="w-3.5 h-3.5 rounded-full border-[1.5px] border-[#ababab] border-t-transparent animate-spin shrink-0" />
+          <span>People{(detectionProgress ?? 0) > 0 ? ` ${detectionProgress}%` : ""}</span>
+        </button>
+
+        {open && createPortal(
+          <div
+            ref={dropdownRef}
+            className="fixed z-[9999] bg-[#242424] border border-[#474747] rounded-xl px-5 py-4 flex flex-col gap-2"
+            style={{ top: pos.top, left: pos.left, width: 340 }}
+          >
+            <span className="text-[15px] font-medium text-[#e2e2e2]">Finding faces across your album</span>
+            <span className="text-[13px] text-[#777] leading-5">People filter will be available once this is done</span>
+            <button
+              onClick={() => setOpen(false)}
+              className="text-[#ef4444] text-[13px] font-medium text-left mt-1 hover:text-[#dc2626] transition-colors"
+            >
+              Cancel
+            </button>
+          </div>,
+          document.body
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -75,7 +110,7 @@ const PeopleFilterDropdown = ({ onFilterChange }: PeopleFilterDropdownProps) => 
         <CaretDown className={`w-3 h-3 shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {open && createPortal(
+      {open && subjects.length > 0 && createPortal(
         <div
           ref={dropdownRef}
           className="fixed z-[9999] flex flex-col gap-4 bg-[#242424] border border-[#474747] rounded-lg px-5 py-4"
@@ -94,29 +129,33 @@ const PeopleFilterDropdown = ({ onFilterChange }: PeopleFilterDropdownProps) => 
                   Clear
                 </button>
               )}
-              <button className="text-[#2563eb] text-[11px] font-medium">
+              <span className="text-[#2563eb] text-[11px] font-medium">
                 View all ({subjects.length})
-              </button>
+              </span>
             </div>
           </div>
 
           <div className="max-h-[376px] overflow-y-auto" style={{ scrollbarWidth: "none" }}>
             <div className="grid grid-cols-6 gap-2">
-              {subjects.map(({ avatar, count, subjectIndex }) => {
-                const active = selected.has(subjectIndex);
+              {subjects.map((subject) => {
+                const active = selected.has(subject.id);
                 return (
                   <button
-                    key={subjectIndex}
-                    onClick={() => toggleSubject(subjectIndex)}
+                    key={subject.id}
+                    onClick={() => toggleSubject(subject.id)}
                     className="flex flex-col items-center gap-1"
                   >
                     <div className={`w-[72px] h-[72px] rounded-full overflow-hidden border-[2px] transition-colors ${
                       active ? "border-[#2563eb]" : "border-transparent"
                     }`}>
-                      <img src={avatar} alt={`Person ${subjectIndex + 1}`} className="w-full h-full object-cover" />
+                      <img
+                        src={subject.keyFaceDataUrl}
+                        alt={`Person ${subject.id + 1}`}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <span className={`text-[11px] font-medium transition-colors ${active ? "text-[#e2e2e2]" : "text-[#777]"}`}>
-                      {count}
+                      {subject.photoCount}
                     </span>
                   </button>
                 );

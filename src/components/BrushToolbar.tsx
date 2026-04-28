@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { PaintBrush, Circle, Eraser, SlidersHorizontal, Plus, Minus } from "@phosphor-icons/react";
+import { PaintBrush, Circle, Eraser, Plus, Minus, ArrowsOutSimpleIcon } from "@phosphor-icons/react";
 
 // ─── Brush slider ─────────────────────────────────────────────────────────────
 interface BrushSliderProps {
@@ -87,8 +87,8 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
       {showSettings && (
         <div className="bg-[#1c1c1c]/95 border border-[#303030] rounded-[8px] p-4 flex flex-col gap-4 w-[188px] backdrop-blur-sm shadow-xl">
           <BrushSlider label="Brush Size" value={brushSize} min={1} max={200} onChange={handleBrushSizeChange} />
-          <BrushSlider label="Softness" value={softness} min={0} max={100} onChange={setSoftness} />
-          <BrushSlider label="Opacity" value={opacity} min={0} max={100} onChange={setOpacity} />
+          {/* <BrushSlider label="Softness" value={softness} min={0} max={100} onChange={setSoftness} />
+          <BrushSlider label="Opacity" value={opacity} min={0} max={100} onChange={setOpacity} /> */}
         </div>
       )}
 
@@ -101,8 +101,8 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
             onClick={() => setBrushMode("add")}
             title="Brush Add"
             className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${brushMode === "add"
-                ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
-                : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
+              ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
+              : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
               }`}
           >
             <div className="relative">
@@ -114,8 +114,8 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
             onClick={() => setBrushMode("subtract")}
             title="Brush Subtract"
             className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${brushMode === "subtract"
-                ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
-                : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
+              ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
+              : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
               }`}
           >
             <div className="relative">
@@ -150,11 +150,11 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
         <button
           title="Brush settings"
           className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${showSettings
-              ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
-              : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
+            ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
+            : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
             }`}
         >
-          <SlidersHorizontal className="w-5 h-5" />
+          <ArrowsOutSimpleIcon className="w-5 h-5" />
         </button>
       </div>
     </div>

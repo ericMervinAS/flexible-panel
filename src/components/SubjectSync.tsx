@@ -41,9 +41,10 @@ interface SubjectSyncProps {
   modelSubjects?: ModelSubject[];
   isModelDetecting?: boolean;
   modelStatusMessage?: string;
+  modelSubjectFilter?: number[];
 }
 
-const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibleSubjectIndices, onSelectionsChange, onStateChange, onRescan, modelSubjects, isModelDetecting, modelStatusMessage }: SubjectSyncProps) => {
+const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibleSubjectIndices, onSelectionsChange, onStateChange, onRescan, modelSubjects, isModelDetecting, modelStatusMessage, modelSubjectFilter }: SubjectSyncProps) => {
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [selectedSubjects, setSelectedSubjects] = useState<Set<number>>(new Set());
   const [presets, setPresets] = useState<Record<string, string | null>>({});
@@ -199,9 +200,13 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
   // const visibleIndices = sortedIndices.slice(0, TOP_N);
   // const hiddenCount = sortedIndices.length - TOP_N;
 
+  const displayedModelSubjects = modelSubjectFilter && modelSubjectFilter.length > 0
+    ? (modelSubjects ?? []).filter((s) => modelSubjectFilter.includes(s.id))
+    : (modelSubjects ?? []);
+
   const MODEL_TOP_N = 4;
-  const visibleModelSubjects = (modelSubjects ?? []).slice(0, MODEL_TOP_N);
-  const modelHiddenCount = (modelSubjects?.length ?? 0) - MODEL_TOP_N;
+  const visibleModelSubjects = displayedModelSubjects.slice(0, MODEL_TOP_N);
+  const modelHiddenCount = displayedModelSubjects.length - MODEL_TOP_N;
 
   return (
     <div className={`px-5 flex flex-col gap-3 transition-opacity ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
@@ -266,7 +271,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
         </div>
         */}
 
-        {modelSubjects && modelSubjects.length > 0 && (
+        {displayedModelSubjects.length > 0 && (
           <div className="flex flex-col gap-3">
             <div ref={modelPopoverRef} className="relative">
               <div className="grid grid-cols-5 gap-2">
@@ -329,7 +334,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
                 <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 bg-[#242424] border border-[#474747] rounded-lg p-3 flex flex-col gap-3 max-h-72 overflow-y-auto" style={{ scrollbarWidth: "none" }}>
                   <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">All Subjects</span>
                   <div className="grid grid-cols-5 gap-2">
-                    {modelSubjects.map((subject) => {
+                    {displayedModelSubjects.map((subject) => {
                       const active = selectedModelSubjects.has(subject.id);
                       const applied = !!appliedPresets?.[`model-${subject.id}`];
                       const presetLabel = appliedPresets?.[`model-${subject.id}`];
@@ -383,51 +388,54 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
           </div>
         )}
 
-        {/* Selected Subjects section */}
+        {/* Selected Subjects section — newest selection at top, scrollable after 5 */}
         {hasSelections && (
           <div className="flex flex-col gap-2">
             <span className="text-[12px] text-[#ababab] leading-4">Selected Subjects</span>
-            <div className="flex flex-col gap-2">
-              {Array.from(selectedSubjects).map((i) => (
-                <div key={`subject-${i}`} className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded shrink-0 overflow-hidden">
-                    <img src={subjects[i].avatar} alt={`Subject ${i + 1}`} className="w-full h-full object-cover" />
-                  </div>
-                  <PresetDropdown
-                    value={presets[`subject-${i}`] ?? null}
-                    genderFilter={subjectGender[i]}
-                    onChange={(v) => setPreset(`subject-${i}`, v)}
-                  />
-                </div>
-              ))}
-              {Array.from(selectedGroups).map((label) => (
-                <div key={`group-${label}`} className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded shrink-0 bg-white/5 flex items-center justify-center">
-                    <span className="text-white text-[20px] font-medium">{groupInitial[label]}</span>
-                  </div>
-                  <PresetDropdown
-                    value={presets[`group-${label}`] ?? null}
-                    genderFilter={label}
-                    onChange={(v) => setPreset(`group-${label}`, v)}
-                  />
-                </div>
-              ))}
-              {Array.from(selectedModelSubjects).map((id) => {
-                const subject = modelSubjects?.find((s) => s.id === id);
-                if (!subject) return null;
-                return (
-                  <div key={`model-${id}`} className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded shrink-0 overflow-hidden">
-                      <img src={subject.keyFaceDataUrl} alt={`Person ${id + 1}`} className="w-full h-full object-cover" />
+            {/* Portal-rendered dropdown escapes overflow, so scrolling doesn't clip menus */}
+            <div className="flex flex-col gap-2 max-h-[272px] overflow-y-auto" style={{ scrollbarWidth: "none" }}>
+              {[
+                ...[...Array.from(selectedModelSubjects)].reverse().map((id) => {
+                  const subject = modelSubjects?.find((s) => s.id === id);
+                  if (!subject) return null;
+                  return (
+                    <div key={`model-${id}`} className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded shrink-0 overflow-hidden">
+                        <img src={subject.keyFaceDataUrl} alt={`Person ${id + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                      <PresetDropdown
+                        value={modelPresets[`model-${id}`] ?? null}
+                        genderFilter={subject.category}
+                        onChange={(v) => setModelPreset(`model-${id}`, v)}
+                      />
+                    </div>
+                  );
+                }),
+                ...[...Array.from(selectedGroups)].reverse().map((label) => (
+                  <div key={`group-${label}`} className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded shrink-0 bg-white/5 flex items-center justify-center">
+                      <span className="text-white text-[20px] font-medium">{groupInitial[label]}</span>
                     </div>
                     <PresetDropdown
-                      value={modelPresets[`model-${id}`] ?? null}
-                      genderFilter={undefined}
-                      onChange={(v) => setModelPreset(`model-${id}`, v)}
+                      value={presets[`group-${label}`] ?? null}
+                      genderFilter={label}
+                      onChange={(v) => setPreset(`group-${label}`, v)}
                     />
                   </div>
-                );
-              })}
+                )),
+                ...[...Array.from(selectedSubjects)].reverse().map((i) => (
+                  <div key={`subject-${i}`} className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded shrink-0 overflow-hidden">
+                      <img src={subjects[i].avatar} alt={`Subject ${i + 1}`} className="w-full h-full object-cover" />
+                    </div>
+                    <PresetDropdown
+                      value={presets[`subject-${i}`] ?? null}
+                      genderFilter={subjectGender[i]}
+                      onChange={(v) => setPreset(`subject-${i}`, v)}
+                    />
+                  </div>
+                )),
+              ].filter(Boolean)}
             </div>
           </div>
         )}

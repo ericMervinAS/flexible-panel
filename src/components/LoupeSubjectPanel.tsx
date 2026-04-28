@@ -150,11 +150,20 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
   };
 
   const resolvePreset = (chip: string, faceIndex?: number): string | null => {
-    // Model face selected — no cascade, just its own key
+    // Model face: model-specific → category group (Feminine/Masculine/etc.) → All Subjects
     if (selectedModelFace !== null) {
       const v = pick(`model-${selectedModelFace}`);
       if (v === STOP) return null;
-      return v ?? null;
+      if (v !== undefined) return v;
+      const category = modelSubjects?.find((s) => s.id === selectedModelFace)?.category;
+      if (category) {
+        const v2 = pick(`group-${category}`);
+        if (v2 === STOP) return null;
+        if (v2 !== undefined) return v2;
+      }
+      const v3 = pick('group-All Subjects');
+      if (v3 === STOP) return null;
+      return v3 ?? null;
     }
     if (chip === "Individual" && faceIndex !== undefined) {
       const v1 = pick(`subject-${faceIndex}`);
@@ -286,10 +295,17 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
 
   // Walk up the hierarchy to resolve the effective slider value for the current context
   const resolveSliderValue = (sIdx: number, sliderIdx: number): number => {
-    // Model face has no cascade — only its own layer
+    // Model face: model-specific → category group → All Subjects
     if (selectedModelFace !== null) {
       const val = sliderLayers[`model-${selectedModelFace}`]?.[sIdx]?.[sliderIdx];
-      return val !== null && val !== undefined ? val : 0;
+      if (val !== null && val !== undefined) return val;
+      const category = modelSubjects?.find((s) => s.id === selectedModelFace)?.category;
+      if (category) {
+        const v2 = sliderLayers[`group-${category}`]?.[sIdx]?.[sliderIdx];
+        if (v2 !== null && v2 !== undefined) return v2;
+      }
+      const v3 = sliderLayers['group-All Subjects']?.[sIdx]?.[sliderIdx];
+      return v3 !== null && v3 !== undefined ? v3 : 0;
     }
     const keys: string[] = [];
     if (selectedChip === "Individual" && singleFace !== undefined) {
@@ -437,10 +453,10 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
                 if (!subject) return null;
                 const isSelected = selectedModelFace === cid;
                 return (
-                  <div key={cid} className="flex items-center justify-center">
+                  <div key={cid} className="flex flex-col items-center gap-0.5">
                     <button
                       onClick={() => toggleModelFace(cid)}
-                      className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${isSelected ? "border-white" : "border-[#474747] hover:border-[#5e5e5e]"}`}
+                      className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${isSelected ? "border-white" : "border-[#47474700] hover:border-[#5e5e5e]"}`}
                     >
                       <img
                         src={subject.keyFaceDataUrl}
@@ -468,7 +484,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
             value={effectivePreset}
             genderFilter={
               selectedModelFace !== null
-                ? undefined
+                ? modelSubjects?.find((s) => s.id === selectedModelFace)?.category
                 : !selectedChip
                   ? undefined
                   : selectedChip === "Individual"

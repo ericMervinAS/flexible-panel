@@ -5,6 +5,7 @@ import SmartObjectRemoval, { SmartObjectState } from "./SmartObjectRemoval";
 import { RetouchHistoryEntry } from "./RetouchHistory";
 import LoupeSubjectPanel, { LoupeRetouchState } from "./LoupeSubjectPanel";
 import LoupePatchPanel from "./LoupePatchPanel";
+import RetouchingOpportunityBanner from "./RetouchingOpportunityBanner";
 import type { ModelSubject } from "@/hooks/useFaceDetection";
 
 const LOUPE_TABS = [
@@ -29,9 +30,12 @@ interface RightPanelProps {
   modelImageMap?: Map<number, number[]>;
   isModelDetecting?: boolean;
   modelStatusMessage?: string;
+  modelSubjectFilter?: number[];
+  tabOverride?: { tab: LoupeTab; seq: number } | null;
+  hasRetouchingOpportunity?: boolean;
 }
 
-const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage }: RightPanelProps) => {
+const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [subjectActive, setSubjectActive] = useState(false);
@@ -41,6 +45,22 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
   const [history, setHistory] = useState<RetouchHistoryEntry[]>([]);
   const [appliedPresets, setAppliedPresets] = useState<Record<string, string>>({});
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
+
+  // ── Retouching opportunity overlay ──────────────────────────────────────────
+  const [opportunityDismissed, setOpportunityDismissed] = useState(false);
+  const [overlayVisible, setOverlayVisible] = useState(false);
+
+  useEffect(() => {
+    setOpportunityDismissed(false);
+  }, [currentImageIndex]);
+
+  useEffect(() => {
+    if (hasRetouchingOpportunity && !opportunityDismissed && isLoupeView) {
+      const t = setTimeout(() => setOverlayVisible(true), 80);
+      return () => clearTimeout(t);
+    }
+    setOverlayVisible(false);
+  }, [hasRetouchingOpportunity, opportunityDismissed, isLoupeView]);
 
   // ── Loupe view state ────────────────────────────────────────────────────────
   const [perImageState, setPerImageState] = useState<Record<number, LoupeRetouchState>>({});
@@ -60,6 +80,12 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
       prevImageIndexRef.current = currentImageIndex;
     }
   }, [currentImageIndex, isLoupeView]);
+
+  useEffect(() => {
+    if (!tabOverride) return;
+    setActiveTab(tabOverride.tab);
+    onTabChange?.(tabOverride.tab);
+  }, [tabOverride]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasRetouches = (state: LoupeRetouchState | undefined): boolean => {
     if (!state) return false;
@@ -180,7 +206,13 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
         </div>
       )}
 
-      <div className={`flex-1 flex flex-col${isLoupeView ? " overflow-hidden" : " overflow-y-auto"}`}>
+      {/* ── Retouching opportunity banner ──────────────────────────────────── */}
+      <RetouchingOpportunityBanner
+        visible={overlayVisible}
+        onRetouch={() => { setActiveTab("subject"); onTabChange?.("subject"); setOpportunityDismissed(true); }}
+      />
+
+      <div className={`flex-1 flex flex-col relative${isLoupeView ? " overflow-hidden" : " overflow-y-auto"}`}>
         {isLoupeView ? (
           <>
             {activeTab === "subject" && (
@@ -219,6 +251,7 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
                 modelSubjects={modelSubjects}
                 isModelDetecting={isModelDetecting}
                 modelStatusMessage={modelStatusMessage}
+                modelSubjectFilter={modelSubjectFilter}
               />
             </div>
             <div className="h-px bg-background" />
@@ -293,8 +326,8 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
               }));
             }}
             className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${canPaste
-                ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
-                : "bg-[#303030] text-[#474747] cursor-not-allowed"
+              ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
+              : "bg-[#303030] text-[#474747] cursor-not-allowed"
               }`}
           >
             Paste
@@ -303,8 +336,8 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
             disabled={!canReset}
             onClick={() => canReset && setLoupeResetSignal((s) => s + 1)}
             className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${canReset
-                ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
-                : "bg-[#303030] text-[#474747] cursor-not-allowed"
+              ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
+              : "bg-[#303030] text-[#474747] cursor-not-allowed"
               }`}
           >
             Reset

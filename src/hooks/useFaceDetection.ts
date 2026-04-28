@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FaceDetectionService, FaceCluster } from '@/lib/faceDetection';
+import { FaceDetectionService, FaceCluster, SubjectCategory } from '@/lib/faceDetection';
 import type { ImageData } from '@/components/ImageGrid';
 
 export interface ModelSubject {
@@ -7,6 +7,9 @@ export interface ModelSubject {
   keyFaceDataUrl: string;
   photoCount: number;
   appearances: Array<{ imageIndex: number; score: number }>;
+  gender?: 'Female' | 'Male';
+  age?: number;
+  category?: SubjectCategory;
 }
 
 export interface UseFaceDetectionResult {
@@ -16,6 +19,8 @@ export interface UseFaceDetectionResult {
   isDetecting: boolean;
   isLoadingModel: boolean;
   statusMessage: string;
+  /** 0–100 progress through the current detection run; 0 while loading models */
+  detectionProgress: number;
 }
 
 export function useFaceDetection(images: ImageData[]): UseFaceDetectionResult {
@@ -24,6 +29,7 @@ export function useFaceDetection(images: ImageData[]): UseFaceDetectionResult {
   const [isDetecting, setIsDetecting] = useState(false);
   const [isLoadingModel, setIsLoadingModel] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [detectionProgress, setDetectionProgress] = useState(0);
 
   const serviceRef = useRef<FaceDetectionService | null>(null);
   const abortRef = useRef(false);
@@ -58,17 +64,29 @@ export function useFaceDetection(images: ImageData[]): UseFaceDetectionResult {
           if (abortRef.current) return;
           await svc.loadRecognitionModel(undefined, setStatusMessage);
           if (abortRef.current) return;
+          try {
+            await svc.loadGenderAgeModel(undefined, setStatusMessage);
+          } catch (e) {
+            console.warn('GenderAge model failed to load, skipping:', e);
+          }
+          if (abortRef.current) return;
           setIsLoadingModel(false);
         }
 
         setIsDetecting(true);
+        setDetectionProgress(0);
         const srcs = images.map((img) => img.src);
         const totalImages = srcs.length;
         const MIN_PRESENCE_RATIO = 0.03;
 
         const raw: FaceCluster[] = await svc.processImages(
           srcs,
-          (msg) => { if (!abortRef.current) setStatusMessage(msg); },
+          (msg, idx, total) => {
+            if (!abortRef.current) {
+              setStatusMessage(msg);
+              if (total > 0) setDetectionProgress(Math.round((idx + 1) / total * 100));
+            }
+          },
         );
 
         if (abortRef.current) return;
@@ -110,5 +128,5 @@ export function useFaceDetection(images: ImageData[]): UseFaceDetectionResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [images.length]);
 
-  return { modelSubjects, modelImageMap, isDetecting, isLoadingModel, statusMessage };
+  return { modelSubjects, modelImageMap, isDetecting, isLoadingModel, statusMessage, detectionProgress };
 }

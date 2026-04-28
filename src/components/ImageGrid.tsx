@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import exifr from "exifr";
 import ImageTile from "./ImageTile";
-import { getSubjectIndices } from "@/data/subjectMapping";
 
 export type ColorTag = "green" | "yellow" | "red" | "none";
 
@@ -34,11 +33,15 @@ interface ImageGridProps {
   onImageDoubleClick: (index: number) => void;
   onImagesChange?: (images: ImageData[]) => void;
   subjectFilter?: number[];
+  modelImageMap?: Map<number, number[]>;
   initialSelectedIndex?: number;
+  importSource?: "sample" | ImageData[];
 }
 
-const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter, initialSelectedIndex }: ImageGridProps) => {
-  const [allImages, setAllImages] = useState<ImageData[]>(sampleImages);
+const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter, modelImageMap, initialSelectedIndex, importSource }: ImageGridProps) => {
+  const [allImages, setAllImages] = useState<ImageData[]>(
+    Array.isArray(importSource) ? importSource : sampleImages
+  );
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(
     initialSelectedIndex != null ? new Set([initialSelectedIndex]) : new Set()
@@ -153,13 +156,13 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, su
 
   const displayImages = useMemo(() => {
     const mapped = allImages.map((img, i) => ({ ...img, originalIndex: i }));
-    if (!subjectFilter || subjectFilter.length === 0) return mapped;
+    if (!subjectFilter || subjectFilter.length === 0 || !modelImageMap) return mapped;
     return mapped.filter(({ originalIndex }) => {
-      const subjects = getSubjectIndices(originalIndex);
-      if (!subjects) return false;
-      return subjectFilter.some((si) => subjects.includes(si));
+      const clusters = modelImageMap.get(originalIndex);
+      if (!clusters) return false;
+      return subjectFilter.some((id) => clusters.includes(id));
     });
-  }, [allImages, subjectFilter]);
+  }, [allImages, subjectFilter, modelImageMap]);
 
   const isMultiSelected = selectedIndices.size > 1;
 

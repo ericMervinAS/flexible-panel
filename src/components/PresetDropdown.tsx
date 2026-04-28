@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { CaretDown } from "@phosphor-icons/react";
 import { PRESETS } from "@/data/presetMapping";
 
@@ -14,13 +15,11 @@ interface PresetDropdownProps {
 
 const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) => {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // "All Subjects" context: all presets are applicable.
-  // Specific gender context: only presets tagged "All Subjects" or the gender are applicable.
-  // No filter (undefined): everything is applicable.
   const isAllSubjectsCtx = genderFilter === "All Subjects";
-
   const isApplicable = (tags: string[]) =>
     isAllSubjectsCtx || !genderFilter || tags.includes("All Subjects") || tags.includes(genderFilter);
 
@@ -29,22 +28,43 @@ const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) 
     { title: "Aftershoot Presets", options: PRESETS.filter((p) => !p.custom) },
   ].filter((s) => s.options.length > 0);
 
+  const updatePosition = () => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setMenuStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    });
+  };
+
   useEffect(() => {
+    if (!open) return;
+    updatePosition();
     const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (
+        !triggerRef.current?.contains(e.target as Node) &&
+        !menuRef.current?.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     };
-    if (open) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
+    // Reposition on scroll so the menu follows its trigger
+    const handleScroll = () => updatePosition();
+    document.addEventListener("mousedown", handleClickOutside);
+    window.addEventListener("scroll", handleScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
   }, [open]);
 
   return (
-    <div ref={ref} className="relative flex-1">
-      {/* Trigger */}
+    <div className="relative flex-1">
       <button
+        ref={triggerRef}
         onClick={() => setOpen((prev) => !prev)}
         className={`flex w-full items-center justify-between px-2.5 py-2 bg-[#242424] rounded text-[12px] transition-colors ${value ? "text-[#e2e2e2]" : "text-[#777] hover:text-[#ababab]"}`}
       >
@@ -52,19 +72,20 @@ const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) 
         <CaretDown className="w-4 h-4 shrink-0" />
       </button>
 
-      {/* Dropdown menu */}
-      {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-50 bg-[#242424] border border-[#474747] rounded-lg p-1 flex flex-col gap-0.5 max-h-96 overflow-y-auto">
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          style={menuStyle}
+          className="bg-[#242424] border border-[#474747] rounded-lg p-1 flex flex-col gap-0.5 max-h-96 overflow-y-auto"
+        >
           {presetSections.map((section, si) => (
             <div key={section.title}>
               {si > 0 && <div className="h-px bg-[#474747] mx-1 my-0.5" />}
-              {/* Section title */}
               <div className="px-2 py-2">
                 <span className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#777] leading-4">
                   {section.title}
                 </span>
               </div>
-              {/* Options */}
               {section.options.map((opt) => {
                 const applicable = isApplicable(opt.tags);
                 return (
@@ -95,7 +116,8 @@ const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) 
               })}
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -39,6 +39,7 @@ const LoupeView = ({
   const tileRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const containerRef  = useRef<HTMLDivElement>(null);
   const canvasRef     = useRef<HTMLCanvasElement>(null);
+  const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const imgRef        = useRef<HTMLImageElement>(null);
   const zoomDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -85,9 +86,13 @@ const LoupeView = ({
   const autoRemoveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isAutoRemoving, setIsAutoRemoving] = useState(false);
+  const [showStrokeHint, setShowStrokeHint] = useState(false);
+  const [hintPos, setHintPos] = useState<{ x: number; y: number } | null>(null);
 
   // ── Brush size (controlled by BrushToolbar) ──────────────────────────────────
   const [brushSize, setBrushSize] = useState(50);
+  const brushSizeRef = useRef(brushSize);
+  brushSizeRef.current = brushSize;
 
   // Prop refs — keep global listeners free from stale closures
   const autoRemoveAfterStrokeRef = useRef(autoRemoveAfterStroke);
@@ -173,15 +178,41 @@ const LoupeView = ({
     applyZoomAndPan(newZoom, { x: 0, y: 0 });
   };
 
+  // Computes hint position (container px) from the current stroke bounding box
+  const computeHintPos = (): { x: number; y: number } | null => {
+    const points = currentStrokeRef.current;
+    const container = containerRef.current;
+    if (!points.length || !container) return null;
+    const cW = container.clientWidth, cH = container.clientHeight;
+    let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const midX = (minX + maxX) / 2;
+    const z = zoomRef.current, pan = panRef.current;
+    const cx = (midX - cW / 2) * z + cW / 2 + pan.x;
+    const cy = (maxY - cH / 2) * z + cH / 2 + pan.y + (brushSizeRef.current * z) / 2 + 10;
+    return {
+      x: Math.max(52, Math.min(cW - 52, cx)),
+      y: Math.min(cH - 40, Math.max(10, cy)),
+    };
+  };
+
   // ── Auto-remove timer ────────────────────────────────────────────────────────
   const clearAutoRemove = () => {
     const canvas = canvasRef.current;
+    const maskCanvas = maskCanvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    maskCanvas?.getContext("2d")?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     hasStrokesRef.current          = false;
     committedHasStrokesRef.current = false;
     committedSnapshotRef.current   = null;
     onHasStrokesChangeRef.current?.(false);
     setIsAutoRemoving(false);
+    setShowStrokeHint(false);
+    setHintPos(null);
     autoRemoveTimerRef.current = null;
   };
 
@@ -251,7 +282,10 @@ const LoupeView = ({
     const container = containerRef.current;
     if (!canvas || !container) return;
 
+    maskCanvasRef.current = document.createElement("canvas");
+
     const sync = () => {
+      // Preserve visible canvas content
       const tmp = document.createElement("canvas");
       tmp.width  = canvas.width;
       tmp.height = canvas.height;
@@ -259,6 +293,23 @@ const LoupeView = ({
       canvas.width  = container.clientWidth;
       canvas.height = container.clientHeight;
       canvas.getContext("2d")?.drawImage(tmp, 0, 0);
+
+      // Preserve mask canvas content
+      const maskCanvas = maskCanvasRef.current;
+      if (maskCanvas) {
+        const maskTmp = document.createElement("canvas");
+        maskTmp.width  = maskCanvas.width;
+        maskTmp.height = maskCanvas.height;
+        maskTmp.getContext("2d")?.drawImage(maskCanvas, 0, 0);
+        maskCanvas.width  = container.clientWidth;
+        maskCanvas.height = container.clientHeight;
+        maskCanvas.getContext("2d")?.drawImage(maskTmp, 0, 0);
+        // Invalidate snapshot — dimensions changed, stored ImageData no longer matches
+        committedSnapshotRef.current   = null;
+        committedHasStrokesRef.current = false;
+        hasStrokesRef.current          = false;
+      }
+
       computeImageBounds();
     };
 
@@ -275,6 +326,8 @@ const LoupeView = ({
       autoRemoveTimerRef.current = null;
     }
     setIsAutoRemoving(false);
+    setShowStrokeHint(false);
+    setHintPos(null);
     // Reset zoom / pan / true-100 / image bounds (recomputed on image load)
     zoomRef.current            = 1;
     panRef.current             = { x: 0, y: 0 };
@@ -283,9 +336,10 @@ const LoupeView = ({
     imageBoundsRef.current     = null;
     setZoom(1);
     setPan({ x: 0, y: 0 });
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    const canvas     = canvasRef.current;
+    const maskCanvas = maskCanvasRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    maskCanvas?.getContext("2d")?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     hasStrokesRef.current          = false;
     committedHasStrokesRef.current = false;
     committedSnapshotRef.current   = null;
@@ -323,13 +377,16 @@ const LoupeView = ({
   // ── Clear canvas on demand (e.g. after patch removal) ────────────────────────
   useEffect(() => {
     if (!clearCanvasSignal) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    const canvas     = canvasRef.current;
+    const maskCanvas = maskCanvasRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    maskCanvas?.getContext("2d")?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     hasStrokesRef.current          = false;
     committedHasStrokesRef.current = false;
     committedSnapshotRef.current   = null;
     onHasStrokesChange?.(false);
+    setShowStrokeHint(false);
+    setHintPos(null);
   }, [clearCanvasSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Close zoom dropdown on outside click ─────────────────────────────────────
@@ -346,21 +403,67 @@ const LoupeView = ({
 
   // ── Global mouseup / checkBounds ─────────────────────────────────────────────
   useEffect(() => {
+    const snapshotMask = () => {
+      const maskCanvas = maskCanvasRef.current;
+      const maskCtx    = maskCanvas?.getContext("2d");
+      if (maskCtx && maskCanvas) {
+        committedSnapshotRef.current   = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+        committedHasStrokesRef.current = true;
+      }
+    };
+
+    const restoreMask = () => {
+      const maskCanvas = maskCanvasRef.current;
+      const maskCtx    = maskCanvas?.getContext("2d");
+      const canvas     = canvasRef.current;
+      const ctx        = canvas?.getContext("2d");
+      if (maskCtx && maskCanvas) {
+        if (committedSnapshotRef.current) maskCtx.putImageData(committedSnapshotRef.current, 0, 0);
+        else maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+      }
+      if (ctx && canvas) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (committedSnapshotRef.current && maskCanvas) {
+          ctx.globalAlpha = 0.35;
+          ctx.drawImage(maskCanvas, 0, 0);
+          ctx.globalAlpha = 1;
+        }
+      }
+    };
+
+    const showHint = () => {
+      // Compute bounding box of current stroke in canvas space → container space
+      const points    = currentStrokeRef.current;
+      const container = containerRef.current;
+      if (points.length && container) {
+        const cW = container.clientWidth, cH = container.clientHeight;
+        let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of points) {
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y > maxY) maxY = p.y;
+        }
+        const midX = (minX + maxX) / 2;
+        const z = zoomRef.current, pan = panRef.current;
+        const cx = (midX - cW / 2) * z + cW / 2 + pan.x;
+        const cy = (maxY - cH / 2) * z + cH / 2 + pan.y + (brushSizeRef.current * z) / 2 + 10;
+        setHintPos({
+          x: Math.max(52, Math.min(cW - 52, cx)),
+          y: Math.min(cH - 40, Math.max(10, cy)),
+        });
+      }
+      setShowStrokeHint(true);
+    };
+
     const stop = (e: MouseEvent) => {
-      // Stop panning
       if (isPanningRef.current) {
         isPanningRef.current = false;
         setIsPanning(false);
-        // If this was a click (no drag), treat as no-op
         void e;
       }
-      // Stop drawing
       if (!isDrawingRef.current) return;
-      const canvas = canvasRef.current;
-      const ctx    = canvas?.getContext("2d");
-      if (ctx && canvas) {
-        committedSnapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      }
+      snapshotMask();
+      showHint();
       currentStrokeRef.current = [];
       isDrawingRef.current     = false;
       lastPosRef.current       = null;
@@ -377,29 +480,18 @@ const LoupeView = ({
 
       setBrushPos(null);
       if (autoRemoveAfterStrokeRef.current) {
-        const canvas = canvasRef.current;
-        const ctx    = canvas?.getContext("2d");
-        if (ctx && canvas && committedSnapshotRef.current) {
-          ctx.putImageData(committedSnapshotRef.current, 0, 0);
-        }
+        restoreMask();
         if (!committedHasStrokesRef.current) {
           hasStrokesRef.current = false;
           onHasStrokesChangeRef.current?.(false);
         }
-        currentStrokeRef.current = [];
-        isDrawingRef.current     = false;
-        lastPosRef.current       = null;
       } else {
-        const canvas = canvasRef.current;
-        const ctx    = canvas?.getContext("2d");
-        if (ctx && canvas) {
-          committedSnapshotRef.current   = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          committedHasStrokesRef.current = true;
-        }
-        currentStrokeRef.current = [];
-        isDrawingRef.current     = false;
-        lastPosRef.current       = null;
+        snapshotMask();
+        showHint();
       }
+      currentStrokeRef.current = [];
+      isDrawingRef.current     = false;
+      lastPosRef.current       = null;
     };
 
     window.addEventListener("mouseup",   stop);
@@ -412,33 +504,42 @@ const LoupeView = ({
 
   // ── Drawing ──────────────────────────────────────────────────────────────────
   const redrawCurrentStroke = () => {
-    const canvas = canvasRef.current;
-    const ctx    = canvas?.getContext("2d");
-    if (!ctx || !canvas) return;
+    const canvas      = canvasRef.current;
+    const maskCanvas  = maskCanvasRef.current;
+    const ctx         = canvas?.getContext("2d");
+    const maskCtx     = maskCanvas?.getContext("2d");
+    if (!ctx || !canvas || !maskCtx || !maskCanvas) return;
 
     const points = currentStrokeRef.current;
     if (points.length === 0) return;
 
+    // Restore committed strokes to mask canvas (full opacity)
     if (committedSnapshotRef.current) {
-      ctx.putImageData(committedSnapshotRef.current, 0, 0);
+      maskCtx.putImageData(committedSnapshotRef.current, 0, 0);
+    } else {
+      maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     }
 
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
+    // Draw current stroke at full opacity on mask canvas
+    maskCtx.beginPath();
+    maskCtx.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length - 1; i++) {
       const mx = (points[i].x + points[i + 1].x) / 2;
       const my = (points[i].y + points[i + 1].y) / 2;
-      ctx.quadraticCurveTo(points[i].x, points[i].y, mx, my);
+      maskCtx.quadraticCurveTo(points[i].x, points[i].y, mx, my);
     }
-    const last = points[points.length - 1];
-    ctx.lineTo(last.x, last.y);
+    maskCtx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+    maskCtx.strokeStyle  = "rgb(59, 130, 246)";
+    maskCtx.lineWidth    = brushSize;
+    maskCtx.lineCap      = "round";
+    maskCtx.lineJoin     = "round";
+    maskCtx.globalAlpha  = 1;
+    maskCtx.stroke();
 
+    // Blit mask → visible canvas at uniform 0.35 opacity
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = "rgb(59, 130, 246)";
-    ctx.lineWidth   = brushSize;
-    ctx.lineCap     = "round";
-    ctx.lineJoin    = "round";
-    ctx.stroke();
+    ctx.drawImage(maskCanvas, 0, 0);
     ctx.globalAlpha = 1;
   };
 
@@ -456,10 +557,10 @@ const LoupeView = ({
   };
 
   const commitStroke = () => {
-    const canvas = canvasRef.current;
-    const ctx    = canvas?.getContext("2d");
-    if (ctx && canvas) {
-      committedSnapshotRef.current   = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const maskCanvas = maskCanvasRef.current;
+    const maskCtx    = maskCanvas?.getContext("2d");
+    if (maskCtx && maskCanvas) {
+      committedSnapshotRef.current   = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
       committedHasStrokesRef.current = true;
     }
     currentStrokeRef.current = [];
@@ -468,10 +569,21 @@ const LoupeView = ({
   };
 
   const discardStroke = () => {
-    const canvas = canvasRef.current;
-    const ctx    = canvas?.getContext("2d");
-    if (ctx && canvas && committedSnapshotRef.current) {
-      ctx.putImageData(committedSnapshotRef.current, 0, 0);
+    const maskCanvas = maskCanvasRef.current;
+    const maskCtx    = maskCanvas?.getContext("2d");
+    const canvas     = canvasRef.current;
+    const ctx        = canvas?.getContext("2d");
+    if (maskCtx && maskCanvas) {
+      if (committedSnapshotRef.current) maskCtx.putImageData(committedSnapshotRef.current, 0, 0);
+      else maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    }
+    if (ctx && canvas) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (committedSnapshotRef.current && maskCanvas) {
+        ctx.globalAlpha = 0.35;
+        ctx.drawImage(maskCanvas, 0, 0);
+        ctx.globalAlpha = 1;
+      }
     }
     if (!committedHasStrokesRef.current) {
       hasStrokesRef.current = false;
@@ -480,6 +592,18 @@ const LoupeView = ({
     currentStrokeRef.current = [];
     isDrawingRef.current     = false;
     lastPosRef.current       = null;
+  };
+
+  // ── Stroke hint handlers ─────────────────────────────────────────────────────
+  const handleHintRemove = () => {
+    setShowStrokeHint(false);
+    setHintPos(null);
+    startAutoRemoveTimer();
+  };
+
+  const handleHintCancel = () => {
+    setShowStrokeHint(false);
+    clearAutoRemove();
   };
 
   // ── Mouse handlers ───────────────────────────────────────────────────────────
@@ -501,14 +625,17 @@ const LoupeView = ({
     const canvasPos = posFromEvent(e);
     if (!isInsideImage(canvasPos)) return;
 
-    const canvas = canvasRef.current;
-    const ctx    = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
+    const canvas     = canvasRef.current;
+    const maskCanvas = maskCanvasRef.current;
+    const ctx        = canvas?.getContext("2d");
+    const maskCtx    = maskCanvas?.getContext("2d");
+    if (!canvas || !ctx || !maskCanvas || !maskCtx) return;
 
     if (autoRemoveTimerRef.current) {
       clearTimeout(autoRemoveTimerRef.current);
       autoRemoveTimerRef.current = null;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
       hasStrokesRef.current          = false;
       committedHasStrokesRef.current = false;
       committedSnapshotRef.current   = null;
@@ -516,7 +643,10 @@ const LoupeView = ({
       setIsAutoRemoving(false);
     }
 
-    committedSnapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    setShowStrokeHint(false);
+    setHintPos(null);
+
+    committedSnapshotRef.current = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
     currentStrokeRef.current     = [canvasPos];
     isDrawingRef.current         = true;
     lastPosRef.current           = canvasPos;
@@ -574,8 +704,10 @@ const LoupeView = ({
       return;
     }
     if (!isDrawingRef.current) return;
+    const pos = computeHintPos();
     commitStroke();
-    if (autoRemoveAfterStrokeRef.current) startAutoRemoveTimer();
+    if (pos) setHintPos(pos);
+    setShowStrokeHint(true);
   };
 
   const handleMouseLeave = () => {
@@ -583,7 +715,14 @@ const LoupeView = ({
     // Keep panning across boundary (global mouseup stops it)
     if (isPanningRef.current) return;
     if (isDrawingRef.current) {
-      autoRemoveAfterStrokeRef.current ? discardStroke() : commitStroke();
+      if (autoRemoveAfterStrokeRef.current) {
+        discardStroke();
+      } else {
+        const pos = computeHintPos();
+        commitStroke();
+        if (pos) setHintPos(pos);
+        setShowStrokeHint(true);
+      }
     }
   };
 
@@ -643,6 +782,28 @@ const LoupeView = ({
               boxShadow: "0 0 0 1px rgba(0,0,0,0.5)",
             }}
           />
+        )}
+
+        {/* Stroke action hint — positioned just below the drawn mask area */}
+        {showStrokeHint && !isAutoRemoving && !isExternallyRemoving && hintPos && (
+          <div
+            className="absolute flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-full px-1 py-1 z-10"
+            style={{ left: hintPos.x, top: hintPos.y, transform: "translateX(-50%)" }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={handleHintCancel}
+              className="text-[12px] text-[#ababab] hover:text-white px-2.5 py-1 rounded-full hover:bg-white/10 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleHintRemove}
+              className="text-[12px] text-white font-medium px-2.5 py-1 rounded-full bg-blue-500/80 hover:bg-blue-500 transition-colors"
+            >
+              Remove
+            </button>
+          </div>
         )}
 
         {/* Canvas removal loader */}

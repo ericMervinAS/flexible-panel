@@ -25,10 +25,34 @@ const ARCFACE_TEMPLATE: [number, number][] = [
   [70.7299, 92.2041],
 ];
 
-export const RETINA_MODEL_URL =
-  'https://huggingface.co/amd/retinaface/resolve/main/weights/RetinaFace_int.onnx';
-export const ARCFACE_MODEL_URL =
-  'https://huggingface.co/immich-app/buffalo_s/resolve/main/recognition/model.onnx';
+export const RETINA_MODEL_URL  = '/api/models/retinaface';
+export const ARCFACE_MODEL_URL = '/api/models/arcface';
+// face-api.js AgeGenderNet weights served from the npm package via Vite middleware
+export const FACEAPI_MODELS_URL = '/face-api-models';
+
+// ── Subject category ──────────────────────────────────────────────────────────
+
+export type SubjectCategory = 'Masculine' | 'Feminine' | 'Elderly' | 'Child';
+
+/**
+ * Maps gender+age to one of the four UI chip categories.
+ *   Child     — age < 13 (any gender)
+ *   Elderly   — age >= 60 (any gender)
+ *   Masculine — male, age 13-59 (or male when age unknown)
+ *   Feminine  — female, age 13-59 (or female when age unknown)
+ */
+export function getSubjectCategory(
+  gender?: 'Female' | 'Male',
+  age?: number,
+): SubjectCategory | undefined {
+  if (age !== undefined) {
+    if (age < 13) return 'Child';
+    if (age >= 60) return 'Elderly';
+  }
+  if (gender === 'Male') return 'Masculine';
+  if (gender === 'Female') return 'Feminine';
+  return undefined;
+}
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -43,6 +67,8 @@ export interface FaceRecord {
   detection: Detection;
   cropDataUrl: string;
   embedding: Float32Array | null;
+  gender?: 'Female' | 'Male';
+  age?: number;
 }
 
 export interface FaceCluster {
@@ -50,6 +76,9 @@ export interface FaceCluster {
   keyFaceDataUrl: string; // crop from the highest-score detection in this cluster
   photoCount: number;
   appearances: Array<{ imageIndex: number; score: number }>;
+  gender?: 'Female' | 'Male';
+  age?: number;
+  category?: SubjectCategory;
 }
 
 // ── Anchor generation ──────────────────────────────────────────────────────────
@@ -173,6 +202,7 @@ function cropFace(img: HTMLImageElement, det: Detection, size = 96): string {
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 
+
 // ── Face alignment ─────────────────────────────────────────────────────────────
 
 function similarityTransform(
@@ -193,18 +223,27 @@ function similarityTransform(
   return { a, b, tx: dxm - (a * sxm - b * sym), ty: dym - (b * sxm + a * sym) };
 }
 
-function alignFace(img: HTMLImageElement, landmarks: [number, number][]): HTMLCanvasElement {
-  const { a, b, tx, ty } = similarityTransform(landmarks, ARCFACE_TEMPLATE);
+function alignFaceToTemplate(
+  img: HTMLImageElement,
+  landmarks: [number, number][],
+  template: [number, number][],
+  size: number,
+): HTMLCanvasElement {
+  const { a, b, tx, ty } = similarityTransform(landmarks, template);
   const canvas = document.createElement('canvas');
-  canvas.width = ARCFACE_SIZE;
-  canvas.height = ARCFACE_SIZE;
+  canvas.width = size;
+  canvas.height = size;
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, ARCFACE_SIZE, ARCFACE_SIZE);
+  ctx.fillRect(0, 0, size, size);
   ctx.setTransform(a, b, -b, a, tx, ty);
   ctx.drawImage(img, 0, 0);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   return canvas;
+}
+
+function alignFace(img: HTMLImageElement, landmarks: [number, number][]): HTMLCanvasElement {
+  return alignFaceToTemplate(img, landmarks, ARCFACE_TEMPLATE, ARCFACE_SIZE);
 }
 
 function preprocessArcFace(canvas112: HTMLCanvasElement): ort.Tensor {
@@ -219,6 +258,7 @@ function preprocessArcFace(canvas112: HTMLCanvasElement): ort.Tensor {
   }
   return new ort.Tensor('float32', arr, [1, 3, ARCFACE_SIZE, ARCFACE_SIZE]);
 }
+
 
 function computeSharpness(canvas: HTMLCanvasElement): number {
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
@@ -285,11 +325,24 @@ function clusterFaces(faces: FaceRecord[], threshold: number): RawCluster[] {
   return clusters;
 }
 
+function aggregateGenderAge(members: FaceRecord[]): { gender?: 'Female' | 'Male'; age?: number; category?: SubjectCategory } {
+  const genders = members.map((f) => f.gender).filter((g): g is 'Female' | 'Male' => g !== undefined);
+  const ages = members.map((f) => f.age).filter((a): a is number => a !== undefined);
+  const gender: 'Female' | 'Male' | undefined = genders.length
+    ? genders.filter((g) => g === 'Female').length > genders.length / 2 ? 'Female' : 'Male'
+    : undefined;
+  const age: number | undefined = ages.length
+    ? Math.round(ages.reduce((s, a) => s + a, 0) / ages.length)
+    : undefined;
+  return { gender, age, category: getSubjectCategory(gender, age) };
+}
+
 // ── Main service class ─────────────────────────────────────────────────────────
 
 export class FaceDetectionService {
   private detectSession: ort.InferenceSession | null = null;
   private arcSession: ort.InferenceSession | null = null;
+  private faceApiLoaded = false;
   private anchors: [number, number, number, number][] | null = null;
 
   // Detection thresholds matching retinaface-eval.html defaults
@@ -301,6 +354,7 @@ export class FaceDetectionService {
 
   get isDetectionReady(): boolean { return this.detectSession !== null; }
   get isRecognitionReady(): boolean { return this.arcSession !== null; }
+  get isGenderAgeReady(): boolean { return this.faceApiLoaded; }
 
   async loadDetectionModel(
     url = RETINA_MODEL_URL,
@@ -333,6 +387,17 @@ export class FaceDetectionService {
       graphOptimizationLevel: 'all',
     });
     onStatus?.('ArcFace ready');
+  }
+
+  async loadGenderAgeModel(
+    url = FACEAPI_MODELS_URL,
+    onStatus?: (msg: string) => void,
+  ): Promise<void> {
+    onStatus?.('Loading AgeGender model…');
+    const faceapi = await import('@vladmandic/face-api');
+    await faceapi.nets.ageGenderNet.loadFromUri(url);
+    this.faceApiLoaded = true;
+    onStatus?.('AgeGender ready');
   }
 
   private async runDetection(img: HTMLImageElement): Promise<Detection[]> {
@@ -382,16 +447,32 @@ export class FaceDetectionService {
       }));
   }
 
-  private async runEmbedding(
+  private async runFaceAnalysis(
     img: HTMLImageElement,
+    det: Detection,
     landmarks: [number, number][],
-  ): Promise<Float32Array | null> {
-    if (!this.arcSession) return null;
+  ): Promise<{ embedding: Float32Array | null; gender?: 'Female' | 'Male'; age?: number }> {
     const aligned = alignFace(img, landmarks);
-    if (computeSharpness(aligned) < this.MIN_SHARPNESS) return null;
-    const tensor = preprocessArcFace(aligned);
-    const out = await this.arcSession.run({ [this.arcSession.inputNames[0]]: tensor });
-    return l2normalize(out[this.arcSession.outputNames[0]].data as Float32Array);
+    if (computeSharpness(aligned) < this.MIN_SHARPNESS) return { embedding: null };
+
+    let embedding: Float32Array | null = null;
+    if (this.arcSession) {
+      const tensor = preprocessArcFace(aligned);
+      const out = await this.arcSession.run({ [this.arcSession.inputNames[0]]: tensor });
+      embedding = l2normalize(out[this.arcSession.outputNames[0]].data as Float32Array);
+    }
+
+    let gender: 'Female' | 'Male' | undefined;
+    let age: number | undefined;
+    if (this.faceApiLoaded) {
+      const faceapi = await import('@vladmandic/face-api');
+      const faceCrop = alignFace(img, landmarks);
+      const result = await faceapi.nets.ageGenderNet.predictAgeAndGender(faceCrop) as { age: number; gender: string };
+      gender = result.gender === 'male' ? 'Male' : 'Female';
+      age = Math.round(result.age);
+    }
+
+    return { embedding, gender, age };
   }
 
   async processImages(
@@ -408,11 +489,17 @@ export class FaceDetectionService {
 
         for (const det of dets) {
           let embedding: Float32Array | null = null;
-          if (this.arcSession && det.landmarks) {
-            try { embedding = await this.runEmbedding(img, det.landmarks); }
-            catch (e) { console.warn('embed failed:', e); }
+          let gender: 'Female' | 'Male' | undefined;
+          let age: number | undefined;
+          if (det.landmarks) {
+            try {
+              const analysis = await this.runFaceAnalysis(img, det, det.landmarks);
+              embedding = analysis.embedding;
+              gender = analysis.gender;
+              age = analysis.age;
+            } catch (e) { console.warn('face analysis failed:', e); }
           }
-          faces.push({ imageIndex: idx, detection: det, cropDataUrl: cropFace(img, det), embedding });
+          faces.push({ imageIndex: idx, detection: det, cropDataUrl: cropFace(img, det), embedding, gender, age });
         }
       } catch (e) {
         console.error(`Failed on image ${idx}:`, e);
@@ -428,6 +515,9 @@ export class FaceDetectionService {
         keyFaceDataUrl: f.cropDataUrl,
         photoCount: 1,
         appearances: [{ imageIndex: f.imageIndex, score: f.detection.score }],
+        gender: f.gender,
+        age: f.age,
+        category: getSubjectCategory(f.gender, f.age),
       }));
     }
 
@@ -439,11 +529,15 @@ export class FaceDetectionService {
         f.detection.score > best.detection.score ? f : best,
       );
       const imageSet = new Set(members.map((f) => f.imageIndex));
+      const { gender, age, category } = aggregateGenderAge(members);
       return {
         id,
         keyFaceDataUrl: keyFace.cropDataUrl,
         photoCount: imageSet.size,
         appearances: members.map((f) => ({ imageIndex: f.imageIndex, score: f.detection.score })),
+        gender,
+        age,
+        category,
       };
     });
   }
@@ -461,6 +555,7 @@ export class FaceDetectionService {
     this.detectSession?.release();
     this.arcSession?.release();
     this.detectSession = null;
-    this.arcSession    = null;
+    this.arcSession = null;
+    this.faceApiLoaded = false;
   }
 }

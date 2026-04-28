@@ -6,10 +6,13 @@ import type { ImageData } from "@/components/ImageGrid";
 import RightPanel from "@/components/RightPanel";
 import BottomBar from "@/components/BottomBar";
 import LoupeView from "@/components/LoupeView";
-import { getSubjectIndices } from "@/data/subjectMapping";
 import { useFaceDetection } from "@/hooks/useFaceDetection";
 
-const Index = () => {
+interface IndexProps {
+  importSource: "sample" | ImageData[];
+}
+
+const Index = ({ importSource }: IndexProps) => {
   const [columns, setColumns] = useState(4);
   const [isScanning, setIsScanning] = useState(true);
   const [view, setView] = useState<"grid" | "loupe">("grid");
@@ -23,27 +26,23 @@ const Index = () => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [subjectFilter, setSubjectFilter] = useState<number[]>([]);
 
-  const { modelSubjects, modelImageMap, isDetecting, isLoadingModel, statusMessage } =
+  // Hardcoded manual set — swap for real detection output when ready
+  const retouchOpportunities = new Set([0, 2, 4]);
+
+  const { modelSubjects, modelImageMap, isDetecting, isLoadingModel, statusMessage, detectionProgress } =
     useFaceDetection(images);
 
   const filteredImages = useMemo(() => {
     const mapped = images.map((img, i) => ({ ...img, originalIndex: i }));
     if (!subjectFilter.length) return mapped;
     return mapped.filter(({ originalIndex }) => {
-      const subjects = getSubjectIndices(originalIndex);
-      if (!subjects) return false;
-      return subjectFilter.some((si) => subjects.includes(si));
+      const clusters = modelImageMap.get(originalIndex);
+      if (!clusters) return false;
+      return subjectFilter.some((id) => clusters.includes(id));
     });
-  }, [images, subjectFilter]);
+  }, [images, subjectFilter, modelImageMap]);
 
-  const visibleSubjectIndices = useMemo(() => {
-    if (!subjectFilter.length) return null; // no filter → show all subjects
-    const set = new Set<number>();
-    filteredImages.forEach(({ originalIndex }) => {
-      getSubjectIndices(originalIndex)?.forEach((si) => set.add(si));
-    });
-    return set;
-  }, [filteredImages, subjectFilter]);
+  const visibleSubjectIndices = null;
 
   useEffect(() => {
     const timer = setTimeout(() => setIsScanning(false), 3000);
@@ -68,12 +67,17 @@ const Index = () => {
         <div className="flex flex-col flex-1 overflow-hidden">
           <div style={{ display: "grid", gridTemplateRows: filterOpen ? "1fr" : "0fr", transition: "grid-template-rows 120ms cubic-bezier(0.25, 0, 0.25, 1)", willChange: "grid-template-rows" }}>
             <div style={{ overflow: "hidden" }}>
-              <FilterBar onPeopleFilter={setSubjectFilter} />
+              <FilterBar
+                onPeopleFilter={setSubjectFilter}
+                modelSubjects={modelSubjects}
+                isModelDetecting={isDetecting || isLoadingModel}
+                detectionProgress={detectionProgress}
+              />
             </div>
           </div>
           {view === "grid" ? (
             <>
-              <ImageGrid columns={columns} isScanning={isScanning} onImageDoubleClick={handleOpenLoupe} onImagesChange={setImages} subjectFilter={subjectFilter} initialSelectedIndex={selectedIndex} />
+              <ImageGrid columns={columns} isScanning={isScanning} onImageDoubleClick={handleOpenLoupe} onImagesChange={setImages} subjectFilter={subjectFilter} modelImageMap={modelImageMap} initialSelectedIndex={selectedIndex} importSource={importSource} />
               <BottomBar
                 columns={columns}
                 onColumnsChange={setColumns}
@@ -101,7 +105,7 @@ const Index = () => {
               : null
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} />
+        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} />
       </div>
     </div>
   );
