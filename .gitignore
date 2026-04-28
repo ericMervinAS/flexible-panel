@@ -14,6 +14,7 @@ dist-ssr
 
 # Copied from node_modules by scripts/copy-ort-runtime.mjs (postinstall)
 models/ort/
+public/ort/
 
 # Editor directories and files
 .vscode/*

@@ -13,6 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = dirname(__dirname);
 const src = join(root, "node_modules", "onnxruntime-web", "dist");
 const dst = join(root, "models", "ort");
+const publicDst = join(root, "public", "ort");
 
 if (!existsSync(src)) {
   console.error(`[copy-ort-runtime] missing source: ${src}`);
@@ -32,14 +33,17 @@ const ALLOW = new Set([
   "ort-wasm-simd-threaded.mjs",
 ]);
 
-if (existsSync(dst)) rmSync(dst, { recursive: true, force: true });
-mkdirSync(dst, { recursive: true });
+for (const dir of [dst, publicDst]) {
+  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+}
 
 let copied = 0;
 for (const name of readdirSync(src)) {
   if (!ALLOW.has(name)) continue;
   copyFileSync(join(src, name), join(dst, name));
+  copyFileSync(join(src, name), join(publicDst, name));
   copied++;
 }
 
-console.log(`[copy-ort-runtime] copied ${copied} files → ${dst}`);
+console.log(`[copy-ort-runtime] copied ${copied} files → ${dst} and ${publicDst}`);
