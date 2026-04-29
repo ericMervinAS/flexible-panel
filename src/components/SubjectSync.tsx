@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Check, X, MagnifyingGlass } from "@phosphor-icons/react";
+import { Plus, Check, X, MinusCircle, MagnifyingGlass } from "@phosphor-icons/react";
 import PresetDropdown from "./PresetDropdown";
 import Tooltip from "./Tooltip";
 import { subjectPhotoCounts, subjectGender } from "@/data/subjectMapping";
@@ -19,6 +19,35 @@ const subjects = Object.entries(subjectModules)
 const groupInitial: Record<string, string> = {
   "All Subjects": "A", "Masculine": "M", "Feminine": "F", "Elderly": "E", "Child": "C",
 };
+
+const SelectionThumbnail = ({
+  children,
+  retouched,
+  onRemove,
+  ariaLabel,
+}: {
+  children: React.ReactNode;
+  retouched: boolean;
+  onRemove: () => void;
+  ariaLabel: string;
+}) => (
+  <div className="relative w-11 h-11 shrink-0 group/thumb rounded overflow-hidden">
+    <div className="w-full h-full">{children}</div>
+    {retouched && (
+      <div className="absolute bottom-[2px] right-[2px] w-[14px] h-[14px] rounded-[2px] bg-[#16a34a] flex items-center justify-center pointer-events-none z-10">
+        <Check className="w-[10px] h-[10px] text-white" weight="bold" />
+      </div>
+    )}
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onClick={onRemove}
+      className="absolute inset-0 z-10 bg-black/75 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100"
+    >
+      <MinusCircle className="w-4 h-4 text-white" />
+    </button>
+  </div>
+);
 
 export interface SubjectSyncState {
   selectedSubjects: number[];
@@ -54,6 +83,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
   const [hoveredModelSubject, setHoveredModelSubject] = useState<number | null>(null);
   const [modelPopoverOpen, setModelPopoverOpen] = useState(false);
   const modelPopoverRef = useRef<HTMLDivElement>(null);
+  const [dismissedSelections, setDismissedSelections] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!resetSignal) return;
@@ -62,6 +92,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
     setPresets({});
     setSelectedModelSubjects(new Set());
     setModelPresets({});
+    setDismissedSelections(new Set());
     onSelectionsChange?.(false);
     onStateChange?.({ selectedSubjects: [], selectedGroups: [], presets: {}, subjectCounts: subjects.map((s) => s.count), selectedModelSubjects: [], modelPresets: {} });
   }, [resetSignal]);
@@ -98,6 +129,45 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
     });
   };
 
+  const undismiss = (key: string) => {
+    if (!dismissedSelections.has(key)) return;
+    const next = new Set(dismissedSelections);
+    next.delete(key);
+    setDismissedSelections(next);
+  };
+
+  const dismissSelection = (key: string) => {
+    const nextDismissed = new Set(dismissedSelections);
+    nextDismissed.add(key);
+    setDismissedSelections(nextDismissed);
+
+    if (key.startsWith("model-")) {
+      const id = parseInt(key.slice("model-".length), 10);
+      if (selectedModelSubjects.has(id)) {
+        const next = new Set(selectedModelSubjects);
+        next.delete(id);
+        setSelectedModelSubjects(next);
+        notify(selectedGroups, selectedSubjects, presets, next, modelPresets);
+      }
+    } else if (key.startsWith("group-")) {
+      const label = key.slice("group-".length);
+      if (selectedGroups.has(label)) {
+        const next = new Set(selectedGroups);
+        next.delete(label);
+        setSelectedGroups(next);
+        notify(next, selectedSubjects, presets, selectedModelSubjects, modelPresets);
+      }
+    } else if (key.startsWith("subject-")) {
+      const i = parseInt(key.slice("subject-".length), 10);
+      if (selectedSubjects.has(i)) {
+        const next = new Set(selectedSubjects);
+        next.delete(i);
+        setSelectedSubjects(next);
+        notify(selectedGroups, next, presets, selectedModelSubjects, modelPresets);
+      }
+    }
+  };
+
   const toggleGroup = (label: string) => {
     const isAdding = !selectedGroups.has(label);
     const next = new Set(selectedGroups);
@@ -109,6 +179,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
       setPresets(currentPresets);
     }
 
+    if (isAdding) undismiss(`group-${label}`);
     setSelectedGroups(next);
     notify(next, selectedSubjects, currentPresets, selectedModelSubjects, modelPresets);
   };
@@ -124,6 +195,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
       setPresets(currentPresets);
     }
 
+    if (isAdding) undismiss(`subject-${i}`);
     setSelectedSubjects(next);
     notify(selectedGroups, next, currentPresets, selectedModelSubjects, modelPresets);
   };
@@ -147,6 +219,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
       setModelPresets(currentModelPresets);
     }
 
+    if (isAdding) undismiss(`model-${id}`);
     setSelectedModelSubjects(next);
     notify(selectedGroups, selectedSubjects, presets, next, currentModelPresets);
   };
@@ -159,7 +232,32 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
     });
   };
 
-  const hasSelections = selectedSubjects.size > 0 || selectedGroups.size > 0 || selectedModelSubjects.size > 0;
+  const visibleSelectedModelIds = (() => {
+    const retouchedExtra = (modelSubjects ?? [])
+      .filter((s) => appliedPresets?.[`model-${s.id}`] && !selectedModelSubjects.has(s.id))
+      .map((s) => s.id);
+    return [...[...Array.from(selectedModelSubjects)].reverse(), ...retouchedExtra]
+      .filter((id) => !dismissedSelections.has(`model-${id}`));
+  })();
+
+  const visibleSelectedGroups = (() => {
+    const retouchedExtra = groups.filter((l) => appliedPresets?.[`group-${l}`] && !selectedGroups.has(l));
+    return [...[...Array.from(selectedGroups)].reverse(), ...retouchedExtra]
+      .filter((l) => !dismissedSelections.has(`group-${l}`));
+  })();
+
+  const visibleSelectedSubjectIndices = (() => {
+    const retouchedExtra = subjects
+      .map((_, i) => i)
+      .filter((i) => appliedPresets?.[`subject-${i}`] && !selectedSubjects.has(i));
+    return [...[...Array.from(selectedSubjects)].reverse(), ...retouchedExtra]
+      .filter((i) => !dismissedSelections.has(`subject-${i}`));
+  })();
+
+  const hasSelections =
+    visibleSelectedModelIds.length > 0 ||
+    visibleSelectedGroups.length > 0 ||
+    visibleSelectedSubjectIndices.length > 0;
 
   // const [popoverOpen, setPopoverOpen] = useState(false);
   // const [hoveredSubject, setHoveredSubject] = useState<number | null>(null);
@@ -395,46 +493,67 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
             {/* Portal-rendered dropdown escapes overflow, so scrolling doesn't clip menus */}
             <div className="flex flex-col gap-2 max-h-[272px] overflow-y-auto" style={{ scrollbarWidth: "none" }}>
               {[
-                ...[...Array.from(selectedModelSubjects)].reverse().map((id) => {
+                ...visibleSelectedModelIds.map((id) => {
                   const subject = modelSubjects?.find((s) => s.id === id);
                   if (!subject) return null;
+                  const key = `model-${id}`;
                   return (
-                    <div key={`model-${id}`} className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded shrink-0 overflow-hidden">
+                    <div key={key} className="flex items-center gap-3">
+                      <SelectionThumbnail
+                        retouched={!!appliedPresets?.[key]}
+                        onRemove={() => dismissSelection(key)}
+                        ariaLabel={`Remove Person ${id + 1}`}
+                      >
                         <img src={subject.keyFaceDataUrl} alt={`Person ${id + 1}`} className="w-full h-full object-cover" />
-                      </div>
+                      </SelectionThumbnail>
                       <PresetDropdown
-                        value={modelPresets[`model-${id}`] ?? null}
+                        value={modelPresets[key] ?? null}
                         genderFilter={subject.category}
-                        onChange={(v) => setModelPreset(`model-${id}`, v)}
+                        onChange={(v) => setModelPreset(key, v)}
                       />
                     </div>
                   );
                 }),
-                ...[...Array.from(selectedGroups)].reverse().map((label) => (
-                  <div key={`group-${label}`} className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded shrink-0 bg-white/5 flex items-center justify-center">
-                      <span className="text-white text-[20px] font-medium">{groupInitial[label]}</span>
+                ...visibleSelectedGroups.map((label) => {
+                  const key = `group-${label}`;
+                  return (
+                    <div key={key} className="flex items-center gap-3">
+                      <SelectionThumbnail
+                        retouched={!!appliedPresets?.[key]}
+                        onRemove={() => dismissSelection(key)}
+                        ariaLabel={`Remove ${label}`}
+                      >
+                        <div className="w-full h-full bg-white/5 flex items-center justify-center">
+                          <span className="text-white text-[20px] font-medium">{groupInitial[label]}</span>
+                        </div>
+                      </SelectionThumbnail>
+                      <PresetDropdown
+                        value={presets[key] ?? null}
+                        genderFilter={label}
+                        onChange={(v) => setPreset(key, v)}
+                      />
                     </div>
-                    <PresetDropdown
-                      value={presets[`group-${label}`] ?? null}
-                      genderFilter={label}
-                      onChange={(v) => setPreset(`group-${label}`, v)}
-                    />
-                  </div>
-                )),
-                ...[...Array.from(selectedSubjects)].reverse().map((i) => (
-                  <div key={`subject-${i}`} className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded shrink-0 overflow-hidden">
-                      <img src={subjects[i].avatar} alt={`Subject ${i + 1}`} className="w-full h-full object-cover" />
+                  );
+                }),
+                ...visibleSelectedSubjectIndices.map((i) => {
+                  const key = `subject-${i}`;
+                  return (
+                    <div key={key} className="flex items-center gap-3">
+                      <SelectionThumbnail
+                        retouched={!!appliedPresets?.[key]}
+                        onRemove={() => dismissSelection(key)}
+                        ariaLabel={`Remove Subject ${i + 1}`}
+                      >
+                        <img src={subjects[i].avatar} alt={`Subject ${i + 1}`} className="w-full h-full object-cover" />
+                      </SelectionThumbnail>
+                      <PresetDropdown
+                        value={presets[key] ?? null}
+                        genderFilter={subjectGender[i]}
+                        onChange={(v) => setPreset(key, v)}
+                      />
                     </div>
-                    <PresetDropdown
-                      value={presets[`subject-${i}`] ?? null}
-                      genderFilter={subjectGender[i]}
-                      onChange={(v) => setPreset(`subject-${i}`, v)}
-                    />
-                  </div>
-                )),
+                  );
+                }),
               ].filter(Boolean)}
             </div>
           </div>

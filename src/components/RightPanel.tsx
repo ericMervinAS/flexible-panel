@@ -37,12 +37,14 @@ interface RightPanelProps {
   distractionMap?: Map<number, DistractionDetection[]>;
   isDistractionScanning?: boolean;
   onDistractionRerun?: () => void;
+  onDistractionRerunCurrent?: () => void;
   onDistractionSelectionChange?: (labels: Set<string>) => void;
+  onDistractionHoverChange?: (label: string | null) => void;
   onDistractionRemoveSuccess?: (count: number, brushOnly: boolean) => void;
   onSuggestObject?: (suggestion: string) => void;
 }
 
-const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false, distractionMap, isDistractionScanning = false, onDistractionRerun, onDistractionSelectionChange, onDistractionRemoveSuccess, onSuggestObject }: RightPanelProps) => {
+const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false, distractionMap, isDistractionScanning = false, onDistractionRerun, onDistractionRerunCurrent, onDistractionSelectionChange, onDistractionHoverChange, onDistractionRemoveSuccess, onSuggestObject }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [subjectActive, setSubjectActive] = useState(false);
@@ -250,7 +252,7 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
                 onRemovingChange={onRemovingChange}
                 distractionMap={distractionMap}
                 isModelScanning={isDistractionScanning}
-                onRerun={onDistractionRerun}
+                onRerun={onDistractionRerunCurrent}
                 onReport={() => console.log('[DistractionDetection] User reported a missed detection')}
                 removedItems={removedItems}
                 onRemove={(labels) =>
@@ -268,6 +270,7 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
                   })
                 }
                 onSelectedLabelsChange={onDistractionSelectionChange}
+                onHoveredLabelChange={onDistractionHoverChange}
                 onRemoveSuccess={onDistractionRemoveSuccess}
                 onSuggestSubmit={onSuggestObject}
               />

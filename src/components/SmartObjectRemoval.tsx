@@ -125,14 +125,25 @@ const SmartObjectRemoval = ({
     <>
       <div className={`px-5 flex flex-col gap-3 transition-opacity ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-1.5">
-            <h3 className="text-base font-normal text-[#e2e2e2]">Smart Object Removal</h3>
-            <span className="px-1 py-0.5 text-[11px] font-medium leading-[12px] rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
-              Beta
-            </span>
-            {isScanning && (
-              <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
-            )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-base font-normal text-[#e2e2e2]">Smart Object Removal</h3>
+              <span className="px-1 py-0.5 text-[11px] font-medium leading-[12px] rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
+                Beta
+              </span>
+              {isScanning && (
+                <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
+              )}
+            </div>
+            <button
+              onClick={onRerun}
+              disabled={isScanning}
+              title="Rescan album"
+              className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${isScanning ? "text-[#474747] cursor-not-allowed" : "text-[#777] hover:text-[#e2e2e2] hover:bg-white/5"
+                }`}
+            >
+              <MagnifyingGlass className="w-4 h-4" />
+            </button>
           </div>
           <p className="text-[12px] text-[#ababab] leading-4">
             Smart object detection will automatically identify and remove distractions you select
@@ -168,10 +179,12 @@ const SmartObjectRemoval = ({
             </div>
             <button
               onClick={() => setShowSuggestModal(true)}
-              className="self-center mt-3 flex items-center gap-1 text-[#ababab] hover:text-[#e2e2e2] transition-colors cursor-pointer"
+              className="group relative mt-2 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
             >
-              <Plus className="w-3 h-3" weight="bold" />
-              <span className="text-[11px] font-medium leading-4">Suggest a new object</span>
+              <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
+                <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
+              </div>
+              <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
             </button>
           </div>
         )}
@@ -233,10 +246,12 @@ const SmartObjectRemoval = ({
         {!isScanning && !noneFound && (
           <button
             onClick={() => setShowSuggestModal(true)}
-            className="self-start flex items-center gap-1 mt-1 text-[#ababab] hover:text-[#e2e2e2] transition-colors cursor-pointer"
+            className="group relative mt-1 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
           >
-            <Plus className="w-3 h-3" weight="bold" />
-            <span className="text-[11px] font-medium leading-4">Suggest a new object</span>
+            <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
+              <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
+            </div>
+            <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
           </button>
         )}
       </div>

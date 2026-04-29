@@ -21,6 +21,7 @@ interface LoupeViewProps {
   autoRemoveAfterStroke?: boolean;
   isExternallyRemoving?: boolean;
   highlightedDetections?: DistractionDetection[];
+  hoveredDetections?: DistractionDetection[];
   /** Fired after a canvas-side brush removal completes (timer-driven). */
   onCanvasRemoveSuccess?: () => void;
 }
@@ -39,6 +40,7 @@ const LoupeView = ({
   autoRemoveAfterStroke = false,
   isExternallyRemoving = false,
   highlightedDetections = [],
+  hoveredDetections = [],
   onCanvasRemoveSuccess,
 }: LoupeViewProps) => {
   const stripImages = filteredImages ?? images.map((img, i) => ({ ...img, originalIndex: i }));
@@ -508,7 +510,7 @@ const LoupeView = ({
         }
       } else {
         snapshotMask();
-        showHint();
+        finalizeStroke();
       }
       currentStrokeRef.current = [];
       isDrawingRef.current = false;
@@ -847,6 +849,34 @@ const LoupeView = ({
             ref={canvasRef}
             className={`absolute inset-0 pointer-events-none transition-opacity duration-150 ${isPatchActive ? "opacity-100" : "opacity-0"}`}
           />
+
+          {/* Hover hint — slim frame, no label, for the patch panel item under the cursor */}
+          {isPatchActive && imageBounds && hoveredDetections.length > 0 && (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+              {hoveredDetections.map((det, i) => {
+                const imgW = imgRef.current?.naturalWidth ?? 1;
+                const imgH = imgRef.current?.naturalHeight ?? 1;
+                const rW = imageBounds.right - imageBounds.left;
+                const rH = imageBounds.bottom - imageBounds.top;
+                const PAD = 14;
+                const x = imageBounds.left + (det.x1 / imgW) * rW - PAD;
+                const y = imageBounds.top + (det.y1 / imgH) * rH - PAD;
+                const w = ((det.x2 - det.x1) / imgW) * rW + PAD * 2;
+                const h = ((det.y2 - det.y1) / imgH) * rH + PAD * 2;
+                return (
+                  <rect
+                    key={i}
+                    x={x} y={y} width={w} height={h}
+                    fill="rgba(59,130,246,0.02)"
+                    stroke="rgba(59,130,246,0.55)"
+                    strokeWidth={1.5 / zoom}
+                    // strokeDasharray={`${4 / zoom} ${3 / zoom}`}
+                    rx={3 / zoom}
+                  />
+                );
+              })}
+            </svg>
+          )}
 
           {/* Bounding box overlay for selected distraction objects */}
           {isPatchActive && imageBounds && highlightedDetections.length > 0 && (

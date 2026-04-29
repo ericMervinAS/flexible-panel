@@ -65,9 +65,8 @@ const GridSlider = ({ value, min, max, step, onChange }: GridSliderProps) => {
         style={{ left: `${pct}%` }}
       >
         <div
-          className={`rounded-[8px] transition-all ${
-            grabbed ? "bg-[#ababab] w-[4px] h-[14px]" : "bg-[#474747] w-[2px] h-[12px]"
-          }`}
+          className={`rounded-[8px] transition-all ${grabbed ? "bg-[#ababab] w-[4px] h-[14px]" : "bg-[#474747] w-[2px] h-[12px]"
+            }`}
         />
       </div>
     </div>
@@ -77,10 +76,10 @@ const GridSlider = ({ value, min, max, step, onChange }: GridSliderProps) => {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const colorTagBg: Record<ColorTag, string> = {
-  green:  "#15803d",
+  green: "#15803d",
   yellow: "#a16207",
-  red:    "#b91c1c",
-  none:   "transparent",
+  red: "#b91c1c",
+  none: "transparent",
 };
 
 const ZOOM_PRESETS = [25, 50, 75, 100, 150, 200, 400];
@@ -151,9 +150,8 @@ const BottomBar = (props: BottomBarProps) => {
 
       {/* Center ─ stars + flag (loupe only) */}
       <div
-        className={`flex items-center gap-1 transition-all duration-200 ${
-          isLoupe ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
+        className={`flex items-center gap-1 transition-all duration-200 ${isLoupe ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
       >
         {isLoupe && (
           <>
@@ -209,9 +207,8 @@ const BottomBar = (props: BottomBarProps) => {
           <div className="flex items-center gap-1.5">
             <button
               onClick={props.goToFit}
-              className={`text-[12px] font-medium transition-colors ${
-                props.isFit ? "text-[#e2e2e2]" : "text-[#555] hover:text-[#ababab]"
-              }`}
+              className={`text-[12px] font-medium transition-colors ${props.isFit ? "text-[#e2e2e2]" : "text-[#555] hover:text-[#ababab]"
+                }`}
             >
               Fit
             </button>
@@ -220,9 +217,8 @@ const BottomBar = (props: BottomBarProps) => {
               <button
                 onClick={props.goToTrueHundred}
                 title="Jump to 100%"
-                className={`text-[12px] font-medium transition-colors ${
-                  !props.isFit ? "text-[#e2e2e2]" : "text-[#777] hover:text-[#ababab]"
-                }`}
+                className={`text-[12px] font-medium transition-colors ${!props.isFit ? "text-[#e2e2e2]" : "text-[#777] hover:text-[#ababab]"
+                  }`}
               >
                 {props.displayPct()}%
               </button>
@@ -237,9 +233,8 @@ const BottomBar = (props: BottomBarProps) => {
                 <div className="absolute bottom-full right-0 mb-2 bg-[#242424] border border-[#303030] rounded-[6px] py-1 z-50 min-w-[100px] shadow-lg">
                   <button
                     onClick={() => { props.handleZoomPreset("fit"); props.setShowZoomDropdown(false); }}
-                    className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${
-                      props.isFit ? "text-[#e2e2e2]" : "text-[#ababab] hover:text-[#e2e2e2]"
-                    }`}
+                    className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${props.isFit ? "text-[#e2e2e2]" : "text-[#ababab] hover:text-[#e2e2e2]"
+                      }`}
                   >
                     Fit
                   </button>
@@ -247,11 +242,10 @@ const BottomBar = (props: BottomBarProps) => {
                     <button
                       key={pct}
                       onClick={() => { props.handleZoomPreset(pct); props.setShowZoomDropdown(false); }}
-                      className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${
-                        !props.isFit && props.displayPct() === pct
+                      className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${!props.isFit && props.displayPct() === pct
                           ? "text-[#e2e2e2]"
                           : "text-[#ababab] hover:text-[#e2e2e2]"
-                      }`}
+                        }`}
                     >
                       {pct}%
                     </button>

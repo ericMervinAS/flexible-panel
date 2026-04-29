@@ -51,6 +51,7 @@ interface LoupePatchPanelProps {
   onRemove?: (labels: Set<string>) => void;
   onResetItem?: (label: string) => void;
   onSelectedLabelsChange?: (labels: Set<string>) => void;
+  onHoveredLabelChange?: (label: string | null) => void;
   onRemoveSuccess?: (count: number, brushOnly: boolean) => void;
 }
 
@@ -70,6 +71,7 @@ const LoupePatchPanel = ({
   onRemove,
   onResetItem,
   onSelectedLabelsChange,
+  onHoveredLabelChange,
   onRemoveSuccess,
 }: LoupePatchPanelProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -115,6 +117,7 @@ const LoupePatchPanel = ({
     onSelectedLabelsChange?.(empty);
     setIsRemoving(false);
     setPendingReset(null);
+    onHoveredLabelChange?.(null);
   }, [currentImageIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Item toggle ───────────────────────────────────────────────────────────
@@ -242,10 +245,12 @@ const LoupePatchPanel = ({
             </div>
             <button
               onClick={() => setShowSuggestModal(true)}
-              className="flex items-center gap-1 text-[#ababab] hover:text-[#e2e2e2] transition-colors cursor-pointer"
+              className="group relative flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
             >
-              <Plus className="w-3 h-3" weight="bold" />
-              <span className="text-[11px] font-medium leading-4">Suggest a new object</span>
+              <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
+                <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
+              </div>
+              <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
             </button>
           </div>
         )}
@@ -280,6 +285,8 @@ const LoupePatchPanel = ({
               <button
                 key={d.label}
                 onClick={() => toggle(d.label)}
+                onMouseEnter={() => !itemsDisabled && onHoveredLabelChange?.(d.label)}
+                onMouseLeave={() => !itemsDisabled && onHoveredLabelChange?.(null)}
                 className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${itemsDisabled ? "cursor-not-allowed" : "hover:bg-[#2a2a2a] cursor-pointer"
                   }`}
               >
@@ -302,10 +309,12 @@ const LoupePatchPanel = ({
         {detected.length > 0 && (
           <button
             onClick={() => setShowSuggestModal(true)}
-            className="self-start flex items-center gap-1 mt-1 text-[#ababab] hover:text-[#e2e2e2] transition-colors cursor-pointer"
+            className="group relative mt-1 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
           >
-            <Plus className="w-3 h-3" weight="bold" />
-            <span className="text-[11px] font-medium leading-4">Suggest a new object</span>
+            <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
+              <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
+            </div>
+            <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
           </button>
         )}
 

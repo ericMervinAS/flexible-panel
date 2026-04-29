@@ -10,6 +10,7 @@ export interface UseDistractionDetectionResult {
   statusMessage: string;
   detectionProgress: number;
   rerun: () => void;
+  rerunSingle: (index: number) => void;
 }
 
 export function useDistractionDetection(images: ImageData[]): UseDistractionDetectionResult {
@@ -30,6 +31,35 @@ export function useDistractionDetection(images: ImageData[]): UseDistractionDete
     setRerunKey((k) => k + 1);
     console.log('[DistractionDetection] Rerun requested');
   }, []);
+
+  const rerunSingle = useCallback(async (index: number) => {
+    const svc = serviceRef.current;
+    const img = images[index];
+    if (!svc || !img) return;
+
+    try {
+      if (!svc.isReady) {
+        setIsLoadingModel(true);
+        await svc.loadModel(undefined, (msg) => setStatusMessage(msg));
+        setIsLoadingModel(false);
+      }
+      setIsDetecting(true);
+      console.log(`[DistractionDetection] Rerunning image ${index}`);
+      const result = await svc.processImages([img.src]);
+      const dets = result.get(0) ?? [];
+      setDistractionMap((prev) => {
+        const next = new Map(prev ?? []);
+        if (dets.length > 0) next.set(index, dets);
+        else next.delete(index);
+        return next;
+      });
+    } catch (e) {
+      console.error('[DistractionDetection] Single-image rerun failed:', e);
+    } finally {
+      setIsDetecting(false);
+      setIsLoadingModel(false);
+    }
+  }, [images]);
 
   useEffect(() => {
     serviceRef.current = new DistractionDetectionService();
@@ -113,5 +143,5 @@ export function useDistractionDetection(images: ImageData[]): UseDistractionDete
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [images.length, rerunKey]);
 
-  return { distractionMap, isDetecting, isLoadingModel, statusMessage, detectionProgress, rerun };
+  return { distractionMap, isDetecting, isLoadingModel, statusMessage, detectionProgress, rerun, rerunSingle };
 }

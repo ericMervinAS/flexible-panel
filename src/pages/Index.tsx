@@ -29,6 +29,7 @@ const Index = ({ importSource }: IndexProps) => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [subjectFilter, setSubjectFilter] = useState<number[]>([]);
   const [highlightedLabels, setHighlightedLabels] = useState<Set<string>>(new Set());
+  const [hoveredLabel, setHoveredLabel] = useState<string | null>(null);
   const [removeToast, setRemoveToast] = useState<{ message: string; key: number; ctaLabel?: string } | null>(null);
 
   const handleRemoveSuccess = (count: number, brushOnly: boolean) => {
@@ -53,6 +54,7 @@ const Index = ({ importSource }: IndexProps) => {
     isDetecting: isDistractionDetecting,
     isLoadingModel: isDistractionModelLoading,
     rerun: rerunDistractionDetection,
+    rerunSingle: rerunDistractionDetectionForImage,
   } = useDistractionDetection(images);
 
   const filteredImages = useMemo(() => {
@@ -70,6 +72,12 @@ const Index = ({ importSource }: IndexProps) => {
     const imageDets = distractionMap?.get(selectedIndex) ?? [];
     return imageDets.filter((det) => highlightedLabels.has(MODEL_TO_UI[det.label]));
   }, [distractionMap, selectedIndex, highlightedLabels]);
+
+  const hoveredDetections = useMemo(() => {
+    if (!hoveredLabel || highlightedLabels.has(hoveredLabel)) return [];
+    const imageDets = distractionMap?.get(selectedIndex) ?? [];
+    return imageDets.filter((det) => MODEL_TO_UI[det.label] === hoveredLabel);
+  }, [distractionMap, selectedIndex, hoveredLabel, highlightedLabels]);
 
   const visibleSubjectIndices = null;
 
@@ -108,6 +116,7 @@ const Index = ({ importSource }: IndexProps) => {
             <>
               <ImageGrid columns={columns} isScanning={isScanning} onImageDoubleClick={handleOpenLoupe} onImagesChange={setImages} subjectFilter={subjectFilter} modelImageMap={modelImageMap} initialSelectedIndex={selectedIndex} importSource={importSource} />
               <BottomBar
+                mode="grid"
                 columns={columns}
                 onColumnsChange={setColumns}
                 totalPhotos={1562}
@@ -131,12 +140,13 @@ const Index = ({ importSource }: IndexProps) => {
                 autoRemoveAfterStroke={autoRemoveAfterStroke}
                 isExternallyRemoving={isRemoving}
                 highlightedDetections={highlightedDetections}
+                hoveredDetections={hoveredDetections}
                 onCanvasRemoveSuccess={() => handleRemoveSuccess(1, true)}
               />
               : null
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionSelectionChange={setHighlightedLabels} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} />
+        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionRerunCurrent={() => rerunDistractionDetectionForImage(selectedIndex)} onDistractionSelectionChange={setHighlightedLabels} onDistractionHoverChange={setHoveredLabel} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} />
       </div>
       {removeToast && (
         <Toast
