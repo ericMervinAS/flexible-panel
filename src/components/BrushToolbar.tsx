@@ -1,6 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { PaintBrush, Circle, ArrowCounterClockwiseIcon, Plus, Minus, ArrowsOutSimpleIcon } from "@phosphor-icons/react";
+import { PaintBrush, Circle, ArrowCounterClockwiseIcon, Plus, Minus, ArrowsOutSimpleIcon, ArrowsInSimpleIcon } from "@phosphor-icons/react";
+
+const makeBrushCursor = (size: number) => {
+  const visual = Math.max(8, Math.min(128, size));
+  const half = visual / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${visual}" height="${visual}" viewBox="0 0 ${visual} ${visual}"><circle cx="${half}" cy="${half}" r="${half - 1}" fill="none" stroke="white" stroke-width="1.5"/><circle cx="${half}" cy="${half}" r="${half - 0.25}" fill="none" stroke="black" stroke-width="0.5"/></svg>`;
+  const url = `data:image/svg+xml;base64,${btoa(svg)}`;
+  return `url("${url}") ${half} ${half}, crosshair`;
+};
 
 // ─── Brush slider ─────────────────────────────────────────────────────────────
 interface BrushSliderProps {
@@ -12,10 +19,9 @@ interface BrushSliderProps {
   showBrushCursor?: boolean;
 }
 
-const BrushSlider = ({ label, value, min, max, onChange, showBrushCursor }: BrushSliderProps) => {
+export const BrushSlider = ({ label, value, min, max, onChange, showBrushCursor }: BrushSliderProps) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const pct = ((value - min) / (max - min)) * 100;
-  const [preview, setPreview] = useState<{ x: number; y: number; size: number } | null>(null);
 
   const valueFromX = (clientX: number) => {
     if (!trackRef.current) return value;
@@ -30,14 +36,13 @@ const BrushSlider = ({ label, value, min, max, onChange, showBrushCursor }: Brus
     const initial = valueFromX(e.clientX);
     onChange(initial);
     if (showBrushCursor) {
-      document.body.style.cursor = "none";
-      setPreview({ x: e.clientX, y: e.clientY, size: initial });
+      document.body.style.cursor = makeBrushCursor(initial);
     }
     const onMove = (me: MouseEvent) => {
       const v = valueFromX(me.clientX);
       onChange(v);
       if (showBrushCursor) {
-        setPreview({ x: me.clientX, y: me.clientY, size: v });
+        document.body.style.cursor = makeBrushCursor(v);
       }
     };
     const onUp = () => {
@@ -45,7 +50,6 @@ const BrushSlider = ({ label, value, min, max, onChange, showBrushCursor }: Brus
       window.removeEventListener("mouseup", onUp);
       if (showBrushCursor) {
         document.body.style.cursor = "";
-        setPreview(null);
       }
     };
     window.addEventListener("mousemove", onMove);
@@ -74,41 +78,31 @@ const BrushSlider = ({ label, value, min, max, onChange, showBrushCursor }: Brus
           style={{ left: `${pct}%` }}
         />
       </div>
-      {preview && createPortal(
-        <div
-          className="fixed pointer-events-none rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
-          style={{
-            left: preview.x - preview.size / 2,
-            top: preview.y - preview.size / 2,
-            width: preview.size,
-            height: preview.size,
-            zIndex: 9999,
-          }}
-        />,
-        document.body,
-      )}
     </div>
   );
 };
 
 // ─── Brush toolbar ────────────────────────────────────────────────────────────
 interface BrushToolbarProps {
-  onBrushSizeChange?: (size: number) => void;
+  brushSize: number;
+  onBrushSizeChange: (size: number) => void;
+  onBrushModeChange?: (mode: "add" | "subtract") => void;
+  onClear?: () => void;
 }
 
-const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
+const BrushToolbar = ({ brushSize, onBrushSizeChange, onBrushModeChange, onClear }: BrushToolbarProps) => {
   const [brushMode, setBrushMode] = useState<"add" | "subtract">("add");
-  const [brushSize, setBrushSize] = useState(50);
   const [softness, setSoftness] = useState(50);
   const [opacity, setOpacity] = useState(50);
   const [showSettings, setShowSettings] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const circleRef = useRef<HTMLButtonElement>(null);
   const [panelTop, setPanelTop] = useState(0);
 
-  const handleBrushSizeChange = (v: number) => {
-    setBrushSize(v);
-    onBrushSizeChange?.(v);
+  const handleBrushModeChange = (mode: "add" | "subtract") => {
+    setBrushMode(mode);
+    onBrushModeChange?.(mode);
   };
 
   useLayoutEffect(() => {
@@ -142,7 +136,7 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
           className="bg-[#1c1c1c]/95 border border-[#303030] rounded-[8px] p-4 flex flex-col gap-4 w-[220px] backdrop-blur-sm shadow-xl"
           style={{ marginTop: panelTop }}
         >
-          <BrushSlider label="Brush Size" value={brushSize} min={1} max={200} onChange={handleBrushSizeChange} showBrushCursor />
+          <BrushSlider label="Brush Size" value={brushSize} min={1} max={200} onChange={onBrushSizeChange} showBrushCursor />
           {/* <BrushSlider label="Softness" value={softness} min={0} max={100} onChange={setSoftness} />
           <BrushSlider label="Opacity" value={opacity} min={0} max={100} onChange={setOpacity} /> */}
         </div>
@@ -154,7 +148,7 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
         {/* Brush mode buttons */}
         <div className="flex flex-col gap-0.5">
           <button
-            onClick={() => setBrushMode("add")}
+            onClick={() => handleBrushModeChange("add")}
             title="Brush Add"
             className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${brushMode === "add"
               ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
@@ -167,8 +161,8 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
             </div>
           </button>
           <button
-            onClick={() => setBrushMode("subtract")}
-            title="Brush Subtract"
+            onClick={() => handleBrushModeChange("subtract")}
+            title="Brush Subtract (eraser)"
             className={`w-8 h-8 flex items-center justify-center rounded-[6px] border transition-colors ${brushMode === "subtract"
               ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
               : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
@@ -181,38 +175,49 @@ const BrushToolbar = ({ onBrushSizeChange }: BrushToolbarProps) => {
           </button>
         </div>
 
-        {/* Size preview */}
-        <button ref={circleRef} onClick={() => setShowSettings((v) => !v)} title="Brush size">
-          <div
-            className={`flex flex-col items-center gap-1 rounded-[6px] px-1.5 py-2 border transition-colors ${showSettings
-              ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
-              : "bg-[#27272a] border-transparent hover:bg-[rgba(226,226,226,0.05)]"
-              }`}
-          >
-            <Circle className="w-4 h-4 text-[#ababab]" />
-            <span className="text-[10px] font-medium text-[#ababab] leading-none tabular-nums">
-              {brushSize}
-            </span>
-          </div>
-        </button>
+        {!collapsed && (
+          <>
+            {/* Size preview */}
+            <button ref={circleRef} onClick={() => setShowSettings((v) => !v)} title="Brush size">
+              <div
+                className={`flex flex-col items-center gap-1 rounded-[6px] px-1.5 py-2 border transition-colors ${showSettings
+                  ? "bg-[rgba(226,226,226,0.10)] border-[#5e5e5e]"
+                  : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
+                  }`}
+              >
+                <Circle className="w-4 h-4 text-[#ababab]" />
+                <span className="text-[10px] font-medium text-[#ababab] leading-none tabular-nums">
+                  {brushSize}
+                </span>
+              </div>
+            </button>
 
-        {/* Eraser */}
+            {/* Reset all strokes */}
+            <button
+              onClick={() => onClear?.()}
+              title="Reset"
+              className="w-8 h-8 flex items-center justify-center rounded-[6px] border border-transparent hover:bg-[rgba(226,226,226,0.05)] transition-colors"
+            >
+              <ArrowCounterClockwiseIcon className="w-5 h-5" />
+            </button>
+
+            {/* Divider */}
+            <div className="h-px bg-[#303030] mx-1" />
+          </>
+        )}
+
+        {/* Collapse toggle */}
         <button
-          title="Eraser"
-          className="w-8 h-8 flex items-center justify-center rounded-[6px] border border-transparent hover:bg-[rgba(226,226,226,0.05)] transition-colors"
-        >
-          <ArrowCounterClockwiseIcon className="w-5 h-5" />
-        </button>
-
-        {/* Divider */}
-        <div className="h-px bg-[#303030] mx-1" />
-
-        {/* Settings toggle */}
-        <button
-          title="Brush settings"
+          onClick={() => {
+            setCollapsed((v) => !v);
+            if (!collapsed) setShowSettings(false);
+          }}
+          title={collapsed ? "Expand toolbar" : "Collapse toolbar"}
           className="w-8 h-8 flex items-center justify-center rounded-[6px] border border-transparent bg-transparent hover:bg-[rgba(226,226,226,0.05)] transition-colors"
         >
-          <ArrowsOutSimpleIcon className="w-5 h-5" />
+          {collapsed
+            ? <ArrowsOutSimpleIcon className="w-5 h-5" />
+            : <ArrowsInSimpleIcon className="w-5 h-5" />}
         </button>
       </div>
     </div>

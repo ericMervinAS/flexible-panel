@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwiseIcon, X, CubeFocusIcon, ArrowClockwise, MagnifyingGlass, Flag } from "@phosphor-icons/react";
+import { Check, ArrowCounterClockwiseIcon, X, CubeFocusIcon, ArrowClockwise, MagnifyingGlass, Flag, Plus } from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
+import SuggestObjectModal from "./SuggestObjectModal";
 
 const MODEL_TO_UI: Record<string, string> = {
   "Exit Sign": "Exit Signs",
@@ -45,10 +46,12 @@ interface LoupePatchPanelProps {
   isModelScanning?: boolean;
   onRerun?: () => void;
   onReport?: () => void;
+  onSuggestSubmit?: (suggestion: string) => void;
   removedItems?: Set<string>;
   onRemove?: (labels: Set<string>) => void;
   onResetItem?: (label: string) => void;
   onSelectedLabelsChange?: (labels: Set<string>) => void;
+  onRemoveSuccess?: (count: number, brushOnly: boolean) => void;
 }
 
 const LoupePatchPanel = ({
@@ -62,16 +65,24 @@ const LoupePatchPanel = ({
   isModelScanning = false,
   onRerun,
   onReport,
+  onSuggestSubmit,
   removedItems = new Set(),
   onRemove,
   onResetItem,
   onSelectedLabelsChange,
+  onRemoveSuccess,
 }: LoupePatchPanelProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [removeAfterStroke, setRemoveAfterStroke] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const [pendingReset, setPendingReset] = useState<{ label: string; count: number } | null>(null);
   const [skipConfirmation, setSkipConfirmation] = useState(false);
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+
+  const handleSuggestSubmit = (suggestion: string) => {
+    onSuggestSubmit?.(suggestion);
+    setShowSuggestModal(false);
+  };
 
 
   const detected = useMemo(() => {
@@ -146,12 +157,19 @@ const LoupePatchPanel = ({
   const handleRemove = () => {
     if (!canRemove) return;
     const toRemove = new Set(selected);
+    const removedCount = detected
+      .filter((d) => toRemove.has(d.label))
+      .reduce((sum, d) => sum + d.count, 0);
+    const brushOnly = toRemove.size === 0 && canvasHasStrokes;
     setIsRemoving(true);
     setTimeout(() => {
       onClearCanvas?.();
       onRemove?.(toRemove);
-      setSelected(new Set());
+      const empty = new Set<string>();
+      setSelected(empty);
+      onSelectedLabelsChange?.(empty);
       setIsRemoving(false);
+      onRemoveSuccess?.(removedCount, brushOnly);
     }, 2200);
   };
 
@@ -196,30 +214,39 @@ const LoupePatchPanel = ({
 
         {/* Empty state */}
         {!isModelScanning && hasScanned && detected.length === 0 && (
-          <div className="flex flex-col items-center bg-[#d6d6d60a] gap-3 py-4 px-4 rounded-xl mt-1">
-            <div className="w-9 h-9 rounded-[8px] border border-[#3a3a3a] flex items-center justify-center">
-              <MagnifyingGlass className="w-4 h-4 text-[#777]" />
+          <div className="flex flex-col items-center gap-3 mt-1">
+            <div className="flex flex-col items-center bg-[#d6d6d60a] gap-3 py-4 px-4 rounded-xl w-full">
+              <div className="w-9 h-9 rounded-[8px] border border-[#3a3a3a] flex items-center justify-center">
+                <MagnifyingGlass className="w-4 h-4 text-[#777]" />
+              </div>
+              <div className="flex flex-col gap-0.5 text-center">
+                <p className="text-[12px] font-medium text-[#d4d4d4] leading-[18px]">No distractions detected</p>
+                <p className="text-[11px] text-[#555] leading-4">Think we missed something?</p>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 w-full">
+                <button
+                  onClick={onRerun}
+                  className="flex items-center justify-center gap-1.5 h-8 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] border border-[#2e2e2e] transition-colors"
+                >
+                  <ArrowClockwise className="w-3 h-3 text-[#777]" />
+                  <span className="text-[11px] font-medium text-[#c0c0c0]">Rerun scan</span>
+                </button>
+                <button
+                  onClick={onReport}
+                  className="flex items-center justify-center gap-1.5 h-8 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] border border-[#2e2e2e] transition-colors"
+                >
+                  <Flag className="w-3 h-3 text-[#777]" />
+                  <span className="text-[11px] font-medium text-[#c0c0c0]">Report issue</span>
+                </button>
+              </div>
             </div>
-            <div className="flex flex-col gap-0.5 text-center">
-              <p className="text-[12px] font-medium text-[#d4d4d4] leading-[18px]">No distractions detected</p>
-              <p className="text-[11px] text-[#555] leading-4">Think we missed something?</p>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5 w-full">
-              <button
-                onClick={onRerun}
-                className="flex items-center justify-center gap-1.5 h-8 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] border border-[#2e2e2e] transition-colors"
-              >
-                <ArrowClockwise className="w-3 h-3 text-[#777]" />
-                <span className="text-[11px] font-medium text-[#c0c0c0]">Rerun scan</span>
-              </button>
-              <button
-                onClick={onReport}
-                className="flex items-center justify-center gap-1.5 h-8 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] border border-[#2e2e2e] transition-colors"
-              >
-                <Flag className="w-3 h-3 text-[#777]" />
-                <span className="text-[11px] font-medium text-[#c0c0c0]">Report issue</span>
-              </button>
-            </div>
+            <button
+              onClick={() => setShowSuggestModal(true)}
+              className="flex items-center gap-1 text-[#ababab] hover:text-[#e2e2e2] transition-colors cursor-pointer"
+            >
+              <Plus className="w-3 h-3" weight="bold" />
+              <span className="text-[11px] font-medium leading-4">Suggest a new object</span>
+            </button>
           </div>
         )}
 
@@ -270,6 +297,16 @@ const LoupePatchPanel = ({
             );
           })}
         </div>
+        )}
+
+        {detected.length > 0 && (
+          <button
+            onClick={() => setShowSuggestModal(true)}
+            className="self-start flex items-center gap-1 mt-1 text-[#ababab] hover:text-[#e2e2e2] transition-colors cursor-pointer"
+          >
+            <Plus className="w-3 h-3" weight="bold" />
+            <span className="text-[11px] font-medium leading-4">Suggest a new object</span>
+          </button>
         )}
 
         {/* Remove CTA — matches Grid View processing style */}
@@ -364,6 +401,13 @@ const LoupePatchPanel = ({
           </div>
         </div>,
         document.body
+      )}
+
+      {showSuggestModal && (
+        <SuggestObjectModal
+          onClose={() => setShowSuggestModal(false)}
+          onSubmit={handleSuggestSubmit}
+        />
       )}
     </div>
   );

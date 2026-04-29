@@ -38,9 +38,11 @@ interface RightPanelProps {
   isDistractionScanning?: boolean;
   onDistractionRerun?: () => void;
   onDistractionSelectionChange?: (labels: Set<string>) => void;
+  onDistractionRemoveSuccess?: (count: number, brushOnly: boolean) => void;
+  onSuggestObject?: (suggestion: string) => void;
 }
 
-const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false, distractionMap, isDistractionScanning = false, onDistractionRerun, onDistractionSelectionChange }: RightPanelProps) => {
+const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false, distractionMap, isDistractionScanning = false, onDistractionRerun, onDistractionSelectionChange, onDistractionRemoveSuccess, onSuggestObject }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [subjectActive, setSubjectActive] = useState(false);
@@ -266,6 +268,8 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
                   })
                 }
                 onSelectedLabelsChange={onDistractionSelectionChange}
+                onRemoveSuccess={onDistractionRemoveSuccess}
+                onSuggestSubmit={onSuggestObject}
               />
             )}
           </>

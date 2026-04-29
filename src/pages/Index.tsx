@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import TopBar from "@/components/TopBar";
+import Toast from "@/components/Toast";
 import FilterBar from "@/components/FilterBar";
 import ImageGrid from "@/components/ImageGrid";
 import type { ImageData } from "@/components/ImageGrid";
@@ -28,6 +29,14 @@ const Index = ({ importSource }: IndexProps) => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [subjectFilter, setSubjectFilter] = useState<number[]>([]);
   const [highlightedLabels, setHighlightedLabels] = useState<Set<string>>(new Set());
+  const [removeToast, setRemoveToast] = useState<{ message: string; key: number } | null>(null);
+
+  const handleRemoveSuccess = (count: number, brushOnly: boolean) => {
+    const message = brushOnly
+      ? "Object Removed Successfully"
+      : `${count} Object${count === 1 ? "" : "s"} Removed Successfully`;
+    setRemoveToast({ message, key: Date.now() });
+  };
 
   // Hardcoded manual set — swap for real detection output when ready
   const retouchOpportunities = new Set([0, 2, 4]);
@@ -105,25 +114,34 @@ const Index = ({ importSource }: IndexProps) => {
           ) : (
             images[selectedIndex]
               ? <LoupeView
-                  image={images[selectedIndex]}
-                  images={images}
-                  filteredImages={filteredImages}
-                  currentIndex={selectedIndex}
-                  totalImages={images.length}
-                  onSelectImage={setSelectedIndex}
-                  onGoToGrid={() => setView("grid")}
-                  isPatchActive={loupeActiveTab === "patch"}
-                  onHasStrokesChange={setCanvasHasStrokes}
-                  clearCanvasSignal={clearCanvasSignal}
-                  autoRemoveAfterStroke={autoRemoveAfterStroke}
-                  isExternallyRemoving={isRemoving}
-                  highlightedDetections={highlightedDetections}
-                />
+                image={images[selectedIndex]}
+                images={images}
+                filteredImages={filteredImages}
+                currentIndex={selectedIndex}
+                totalImages={images.length}
+                onSelectImage={setSelectedIndex}
+                onGoToGrid={() => setView("grid")}
+                isPatchActive={loupeActiveTab === "patch"}
+                onHasStrokesChange={setCanvasHasStrokes}
+                clearCanvasSignal={clearCanvasSignal}
+                autoRemoveAfterStroke={autoRemoveAfterStroke}
+                isExternallyRemoving={isRemoving}
+                highlightedDetections={highlightedDetections}
+                onCanvasRemoveSuccess={() => handleRemoveSuccess(1, true)}
+              />
               : null
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionSelectionChange={setHighlightedLabels} />
+        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionSelectionChange={setHighlightedLabels} onDistractionRemoveSuccess={handleRemoveSuccess} />
       </div>
+      {removeToast && (
+        <Toast
+          key={removeToast.key}
+          message={removeToast.message}
+          ctaLabel="Undo"
+          onDismiss={() => setRemoveToast(null)}
+        />
+      )}
     </div>
   );
 };

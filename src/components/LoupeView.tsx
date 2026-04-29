@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import type { ImageData } from "./ImageGrid";
-import BrushToolbar from "./BrushToolbar";
+import BrushToolbar, { BrushSlider } from "./BrushToolbar";
 import FilmstripBar from "./FilmstripBar";
 import BottomBar from "./BottomBar";
 import type { DistractionDetection } from "@/lib/distractionDetection";
@@ -21,6 +21,8 @@ interface LoupeViewProps {
   autoRemoveAfterStroke?: boolean;
   isExternallyRemoving?: boolean;
   highlightedDetections?: DistractionDetection[];
+  /** Fired after a canvas-side brush removal completes (timer-driven). */
+  onCanvasRemoveSuccess?: () => void;
 }
 
 const LoupeView = ({
@@ -37,6 +39,7 @@ const LoupeView = ({
   autoRemoveAfterStroke = false,
   isExternallyRemoving = false,
   highlightedDetections = [],
+  onCanvasRemoveSuccess,
 }: LoupeViewProps) => {
   const stripImages = filteredImages ?? images.map((img, i) => ({ ...img, originalIndex: i }));
   const stripRef = useRef<HTMLDivElement>(null);
@@ -92,18 +95,29 @@ const LoupeView = ({
 
   const [isAutoRemoving, setIsAutoRemoving] = useState(false);
   const [showStrokeHint, setShowStrokeHint] = useState(false);
-  const [hintPos, setHintPos] = useState<{ x: number; y: number } | null>(null);
+  // Bounding box of the committed mask, in canvas pixel space (pre-zoom).
+  // The Cancel/Remove hint is anchored to this so it follows zoom/pan in render.
+  const [maskBBox, setMaskBBox] = useState<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
 
-  // ── Brush size (controlled by BrushToolbar) ──────────────────────────────────
+  // ── Brush size (owned here; mirrored to BrushToolbar and right-click popover) ──
   const [brushSize, setBrushSize] = useState(50);
   const brushSizeRef = useRef(brushSize);
   brushSizeRef.current = brushSize;
+
+  // ── Brush mode (controlled by BrushToolbar) ──────────────────────────────────
+  const brushModeRef = useRef<"add" | "subtract">("add");
+
+  // ── Right-click brush-size popover ──────────────────────────────────────────
+  const [sizePopover, setSizePopover] = useState<{ x: number; y: number } | null>(null);
+  const sizePopoverRef = useRef<HTMLDivElement>(null);
 
   // Prop refs — keep global listeners free from stale closures
   const autoRemoveAfterStrokeRef = useRef(autoRemoveAfterStroke);
   autoRemoveAfterStrokeRef.current = autoRemoveAfterStroke;
   const onHasStrokesChangeRef = useRef(onHasStrokesChange);
   onHasStrokesChangeRef.current = onHasStrokesChange;
+  const onCanvasRemoveSuccessRef = useRef(onCanvasRemoveSuccess);
+  onCanvasRemoveSuccessRef.current = onCanvasRemoveSuccess;
 
   // ── Zoom helpers ─────────────────────────────────────────────────────────────
   const applyZoomAndPan = (newZoom: number, newPan: { x: number; y: number }) => {
@@ -185,26 +199,33 @@ const LoupeView = ({
     applyZoomAndPan(newZoom, { x: 0, y: 0 });
   };
 
-  // Computes hint position (container px) from the current stroke bounding box
-  const computeHintPos = (): { x: number; y: number } | null => {
-    const points = currentStrokeRef.current;
-    const container = containerRef.current;
-    if (!points.length || !container) return null;
-    const cW = container.clientWidth, cH = container.clientHeight;
-    let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const p of points) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y > maxY) maxY = p.y;
+  // Scans the committed mask snapshot for the bounding box of opaque pixels and
+  // updates `maskBBox`. Returns true if any opaque pixels were found.
+  const updateMaskBBox = (): boolean => {
+    const snap = committedSnapshotRef.current;
+    if (!snap) {
+      setMaskBBox(null);
+      return false;
     }
-    const midX = (minX + maxX) / 2;
-    const z = zoomRef.current, pan = panRef.current;
-    const cx = (midX - cW / 2) * z + cW / 2 + pan.x;
-    const cy = (maxY - cH / 2) * z + cH / 2 + pan.y + (brushSizeRef.current * z) / 2 + 10;
-    return {
-      x: Math.max(52, Math.min(cW - 52, cx)),
-      y: Math.min(cH - 40, Math.max(10, cy)),
-    };
+    const { data, width, height } = snap;
+    let minX = width, minY = height, maxX = -1, maxY = -1;
+    for (let y = 0; y < height; y++) {
+      const rowStart = y * width * 4;
+      for (let x = 0; x < width; x++) {
+        if (data[rowStart + x * 4 + 3] > 0) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) {
+      setMaskBBox(null);
+      return false;
+    }
+    setMaskBBox({ minX, minY, maxX, maxY });
+    return true;
   };
 
   // ── Auto-remove timer ────────────────────────────────────────────────────────
@@ -219,14 +240,18 @@ const LoupeView = ({
     onHasStrokesChangeRef.current?.(false);
     setIsAutoRemoving(false);
     setShowStrokeHint(false);
-    setHintPos(null);
+    setMaskBBox(null);
     autoRemoveTimerRef.current = null;
   };
 
   const startAutoRemoveTimer = () => {
     if (autoRemoveTimerRef.current) clearTimeout(autoRemoveTimerRef.current);
     setIsAutoRemoving(true);
-    autoRemoveTimerRef.current = setTimeout(clearAutoRemove, 2000);
+    autoRemoveTimerRef.current = setTimeout(() => {
+      clearAutoRemove();
+      // Success path only — cancel calls clearAutoRemove directly without firing.
+      onCanvasRemoveSuccessRef.current?.();
+    }, 2000);
   };
 
   // ── Filmstrip auto-scroll ────────────────────────────────────────────────────
@@ -334,7 +359,7 @@ const LoupeView = ({
     }
     setIsAutoRemoving(false);
     setShowStrokeHint(false);
-    setHintPos(null);
+    setMaskBBox(null);
     // Reset zoom / pan / true-100 / image bounds (recomputed on image load)
     zoomRef.current = 1;
     panRef.current = { x: 0, y: 0 };
@@ -393,7 +418,7 @@ const LoupeView = ({
     committedSnapshotRef.current = null;
     onHasStrokesChange?.(false);
     setShowStrokeHint(false);
-    setHintPos(null);
+    setMaskBBox(null);
   }, [clearCanvasSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Close zoom dropdown on outside click ─────────────────────────────────────
@@ -438,26 +463,15 @@ const LoupeView = ({
       }
     };
 
-    const showHint = () => {
-      // Compute bounding box of current stroke in canvas space → container space
-      const points = currentStrokeRef.current;
-      const container = containerRef.current;
-      if (points.length && container) {
-        const cW = container.clientWidth, cH = container.clientHeight;
-        let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const p of points) {
-          if (p.x < minX) minX = p.x;
-          if (p.x > maxX) maxX = p.x;
-          if (p.y > maxY) maxY = p.y;
-        }
-        const midX = (minX + maxX) / 2;
-        const z = zoomRef.current, pan = panRef.current;
-        const cx = (midX - cW / 2) * z + cW / 2 + pan.x;
-        const cy = (maxY - cH / 2) * z + cH / 2 + pan.y + (brushSizeRef.current * z) / 2 + 10;
-        setHintPos({
-          x: Math.max(52, Math.min(cW - 52, cx)),
-          y: Math.min(cH - 40, Math.max(10, cy)),
-        });
+    const finalizeStroke = () => {
+      // Refresh mask bbox; only show the hint if any opaque pixels remain.
+      const hasPixels = updateMaskBBox();
+      if (!hasPixels) {
+        hasStrokesRef.current = false;
+        committedHasStrokesRef.current = false;
+        onHasStrokesChangeRef.current?.(false);
+        setShowStrokeHint(false);
+        return;
       }
       setShowStrokeHint(true);
     };
@@ -470,7 +484,7 @@ const LoupeView = ({
       }
       if (!isDrawingRef.current) return;
       snapshotMask();
-      showHint();
+      finalizeStroke();
       currentStrokeRef.current = [];
       isDrawingRef.current = false;
       lastPosRef.current = null;
@@ -537,7 +551,11 @@ const LoupeView = ({
       maskCtx.clip();
     }
 
-    // Draw current stroke at full opacity on mask canvas
+    // Draw current stroke at full opacity on mask canvas. In subtract mode, the
+    // stroke erases existing committed pixels via destination-out compositing.
+    if (brushModeRef.current === "subtract") {
+      maskCtx.globalCompositeOperation = "destination-out";
+    }
     maskCtx.beginPath();
     maskCtx.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < points.length - 1; i++) {
@@ -615,7 +633,7 @@ const LoupeView = ({
   // ── Stroke hint handlers ─────────────────────────────────────────────────────
   const handleHintRemove = () => {
     setShowStrokeHint(false);
-    setHintPos(null);
+    setMaskBBox(null);
     startAutoRemoveTimer();
   };
 
@@ -625,7 +643,40 @@ const LoupeView = ({
   };
 
   // ── Mouse handlers ───────────────────────────────────────────────────────────
+  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isPatchActive) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setSizePopover({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    // If a stroke just started on right mousedown, abort it
+    if (isDrawingRef.current) {
+      discardStroke();
+    }
+  };
+
+  // Close the size popover on outside click / Escape
+  useEffect(() => {
+    if (!sizePopover) return;
+    const onDown = (e: MouseEvent) => {
+      if (sizePopoverRef.current && !sizePopoverRef.current.contains(e.target as Node)) {
+        setSizePopover(null);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSizePopover(null);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [sizePopover]);
+
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Right-click is reserved for the brush-size popover; never start drawing/panning.
+    if (e.button === 2) return;
     // Pan: either not in patch mode, or Shift held in patch mode
     if (!isPatchActive || e.shiftKey) {
       isPanningRef.current = true;
@@ -662,7 +713,7 @@ const LoupeView = ({
     }
 
     setShowStrokeHint(false);
-    setHintPos(null);
+    setMaskBBox(null);
 
     committedSnapshotRef.current = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
     currentStrokeRef.current = [canvasPos];
@@ -670,7 +721,7 @@ const LoupeView = ({
     lastPosRef.current = canvasPos;
     redrawCurrentStroke();
 
-    if (!hasStrokesRef.current) {
+    if (brushModeRef.current === "add" && !hasStrokesRef.current) {
       hasStrokesRef.current = true;
       onHasStrokesChange?.(true);
     }
@@ -707,7 +758,7 @@ const LoupeView = ({
       if (!inside) {
         // Cursor exited the image — commit the stroke and stop
         commitStroke();
-        if (autoRemoveAfterStrokeRef.current) startAutoRemoveTimer();
+        if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current) startAutoRemoveTimer();
       } else {
         currentStrokeRef.current.push(canvasPos);
         lastPosRef.current = canvasPos;
@@ -723,9 +774,14 @@ const LoupeView = ({
       return;
     }
     if (!isDrawingRef.current) return;
-    const pos = computeHintPos();
     commitStroke();
-    if (pos) setHintPos(pos);
+    if (!updateMaskBBox()) {
+      // Stroke (likely a subtract) emptied the mask — clear state silently
+      hasStrokesRef.current = false;
+      committedHasStrokesRef.current = false;
+      onHasStrokesChange?.(false);
+      return;
+    }
     setShowStrokeHint(true);
   };
 
@@ -734,12 +790,16 @@ const LoupeView = ({
     // Keep panning across boundary (global mouseup stops it)
     if (isPanningRef.current) return;
     if (isDrawingRef.current) {
-      if (autoRemoveAfterStrokeRef.current) {
+      if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current) {
         discardStroke();
       } else {
-        const pos = computeHintPos();
         commitStroke();
-        if (pos) setHintPos(pos);
+        if (!updateMaskBBox()) {
+          hasStrokesRef.current = false;
+          committedHasStrokesRef.current = false;
+          onHasStrokesChange?.(false);
+          return;
+        }
         setShowStrokeHint(true);
       }
     }
@@ -763,6 +823,7 @@ const LoupeView = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
+        onContextMenu={handleContextMenu}
       >
         {/* Zoom + pan wrapper — image and canvas scale together */}
         <div
@@ -858,38 +919,88 @@ const LoupeView = ({
           />
         )}
 
-        {/* Stroke action hint — positioned just below the drawn mask area */}
-        {showStrokeHint && !isAutoRemoving && !isExternallyRemoving && hintPos && (
-          <div
-            className="absolute flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-full px-1 py-1 z-10"
-            style={{ left: hintPos.x, top: hintPos.y, transform: "translateX(-50%)" }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={handleHintCancel}
-              className="text-[12px] text-[#ababab] hover:text-white px-2.5 py-1 rounded-full hover:bg-white/10 transition-colors"
+        {/* Stroke action hint — anchored to the mask bbox so it tracks zoom/pan */}
+        {showStrokeHint && !isAutoRemoving && !isExternallyRemoving && maskBBox && containerRef.current && (() => {
+          const cW = containerRef.current.clientWidth;
+          const cH = containerRef.current.clientHeight;
+          const midX = (maskBBox.minX + maskBBox.maxX) / 2;
+          const cx = (midX - cW / 2) * zoom + cW / 2 + pan.x;
+          const cy = (maskBBox.maxY - cH / 2) * zoom + cH / 2 + pan.y + 12;
+          const x = Math.max(52, Math.min(cW - 52, cx));
+          const y = Math.min(cH - 40, Math.max(10, cy));
+          return (
+            <div
+              className="absolute flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-[8px] px-1 py-1 z-10"
+              style={{ left: x, top: y, transform: "translateX(-50%)" }}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              Cancel
-            </button>
-            <button
-              onClick={handleHintRemove}
-              className="text-[12px] text-white font-medium px-2.5 py-1 rounded-full bg-blue-500/80 hover:bg-blue-500 transition-colors"
-            >
-              Remove
-            </button>
-          </div>
-        )}
+              <button
+                onClick={handleHintCancel}
+                className="text-[12px] text-[#ababab] hover:text-white px-2.5 py-1 rounded-[5px] hover:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleHintRemove}
+                className="text-[12px] text-white font-medium px-2.5 py-1 rounded-[5px] bg-blue-500/80 hover:bg-blue-500 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          );
+        })()}
 
         {/* Canvas removal loader */}
         {(isAutoRemoving || isExternallyRemoving) && (
-          <div className="absolute bottom-4 right-4 flex items-center gap-2 bg-black/60 rounded-full px-3 py-1.5 pointer-events-none">
+          <div className="absolute bottom-4 right-4 flex items-center gap-2 bg-black/80 rounded-lg px-3 py-1.5 pointer-events-none">
             <div className="w-3.5 h-3.5 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin shrink-0" />
-            <span className="text-[12px] text-[#e2e2e2]">Removing…</span>
+            <span className="text-[12px] text-[#e2e2e2]">Removing</span>
           </div>
         )}
 
         {/* ── Brush toolbar ────────────────────────────────────────────────── */}
-        {isPatchActive && <BrushToolbar onBrushSizeChange={setBrushSize} />}
+        {isPatchActive && (
+          <BrushToolbar
+            brushSize={brushSize}
+            onBrushSizeChange={setBrushSize}
+            onBrushModeChange={(m) => { brushModeRef.current = m; }}
+            onClear={() => {
+              if (autoRemoveTimerRef.current) {
+                clearTimeout(autoRemoveTimerRef.current);
+                autoRemoveTimerRef.current = null;
+              }
+              clearAutoRemove();
+            }}
+          />
+        )}
+
+        {/* Right-click brush-size popover — anchored to cursor inside the canvas */}
+        {isPatchActive && sizePopover && (() => {
+          const container = containerRef.current;
+          const cW = container?.clientWidth ?? 0;
+          const cH = container?.clientHeight ?? 0;
+          const POP_W = 220, POP_H = 64;
+          const left = Math.max(8, Math.min(cW - POP_W - 8, sizePopover.x + 12));
+          const top = Math.max(8, Math.min(cH - POP_H - 8, sizePopover.y + 12));
+          return (
+            <div
+              ref={sizePopoverRef}
+              className="absolute z-30 bg-[#1c1c1c]/95 border border-[#303030] rounded-[8px] p-4 backdrop-blur-sm shadow-xl"
+              style={{ left, top, width: POP_W }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            >
+              <BrushSlider
+                label="Brush Size"
+                value={brushSize}
+                min={1}
+                max={200}
+                onChange={setBrushSize}
+                showBrushCursor
+              />
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── Filmstrip ───────────────────────────────────────────────────────── */}

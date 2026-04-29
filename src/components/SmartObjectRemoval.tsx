@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwise, X, ArrowClockwise, MagnifyingGlass, Flag } from "@phosphor-icons/react";
+import { Check, ArrowCounterClockwise, X, ArrowClockwise, MagnifyingGlass, Flag, Plus } from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
+import SuggestObjectModal from "./SuggestObjectModal";
 
 const UI_LABELS = [
   "Exit Signs",
@@ -37,6 +38,7 @@ interface SmartObjectRemovalProps {
   onStateChange?: (state: SmartObjectState) => void;
   onRerun?: () => void;
   onReport?: () => void;
+  onSuggestSubmit?: (suggestion: string) => void;
 }
 
 const SmartObjectRemoval = ({
@@ -51,6 +53,7 @@ const SmartObjectRemoval = ({
   onStateChange,
   onRerun,
   onReport,
+  onSuggestSubmit,
 }: SmartObjectRemovalProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -75,6 +78,12 @@ const SmartObjectRemoval = ({
   const noneFound = hasScanned && distractions.every((d) => d.count === 0);
   const [pendingReset, setPendingReset] = useState<{ label: string; count: number } | null>(null);
   const [skipConfirmation, setSkipConfirmation] = useState(false);
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+
+  const handleSuggestSubmit = (suggestion: string) => {
+    onSuggestSubmit?.(suggestion);
+    setShowSuggestModal(false);
+  };
 
   useEffect(() => {
     if (!resetSignal) return;
@@ -157,6 +166,13 @@ const SmartObjectRemoval = ({
                 </button>
               </div>
             </div>
+            <button
+              onClick={() => setShowSuggestModal(true)}
+              className="self-center mt-3 flex items-center gap-1 text-[#ababab] hover:text-[#e2e2e2] transition-colors cursor-pointer"
+            >
+              <Plus className="w-3 h-3" weight="bold" />
+              <span className="text-[11px] font-medium leading-4">Suggest a new object</span>
+            </button>
           </div>
         )}
 
@@ -212,6 +228,16 @@ const SmartObjectRemoval = ({
               );
             })}
           </div>
+        )}
+
+        {!isScanning && !noneFound && (
+          <button
+            onClick={() => setShowSuggestModal(true)}
+            className="self-start flex items-center gap-1 mt-1 text-[#ababab] hover:text-[#e2e2e2] transition-colors cursor-pointer"
+          >
+            <Plus className="w-3 h-3" weight="bold" />
+            <span className="text-[11px] font-medium leading-4">Suggest a new object</span>
+          </button>
         )}
       </div>
 
@@ -269,6 +295,13 @@ const SmartObjectRemoval = ({
           </div>
         </div>,
         document.body
+      )}
+
+      {showSuggestModal && (
+        <SuggestObjectModal
+          onClose={() => setShowSuggestModal(false)}
+          onSubmit={handleSuggestSubmit}
+        />
       )}
     </>
   );
