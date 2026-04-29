@@ -28,6 +28,15 @@ export interface DistractionDetection {
   label: DistractionClass;
 }
 
+export const MODEL_TO_UI: Record<string, string> = {
+  "Exit Sign": "Exit Signs",
+  "Smoke Detector": "Fire Alarms",
+  "Fire Extinguisher": "Fire Extinguishers",
+  "Electrical Outlet": "Electricity Sockets",
+  "Thermostat": "Thermostats",
+  "Trash Can": "Garbage Cans",
+};
+
 // ── Preprocessing ─────────────────────────────────────────────────────────────
 // Letterbox to 640×640 with gray padding, output [1,3,640,640] RGB/255 NCHW
 

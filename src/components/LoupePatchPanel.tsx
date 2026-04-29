@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwiseIcon, X, CubeFocusIcon } from "@phosphor-icons/react";
+import { Check, ArrowCounterClockwiseIcon, X, CubeFocusIcon, ArrowClockwise, MagnifyingGlass, Flag } from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 
 const MODEL_TO_UI: Record<string, string> = {
@@ -44,6 +44,11 @@ interface LoupePatchPanelProps {
   distractionMap?: Map<number, DistractionDetection[]>;
   isModelScanning?: boolean;
   onRerun?: () => void;
+  onReport?: () => void;
+  removedItems?: Set<string>;
+  onRemove?: (labels: Set<string>) => void;
+  onResetItem?: (label: string) => void;
+  onSelectedLabelsChange?: (labels: Set<string>) => void;
 }
 
 const LoupePatchPanel = ({
@@ -56,13 +61,18 @@ const LoupePatchPanel = ({
   distractionMap,
   isModelScanning = false,
   onRerun,
+  onReport,
+  removedItems = new Set(),
+  onRemove,
+  onResetItem,
+  onSelectedLabelsChange,
 }: LoupePatchPanelProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
   const [removeAfterStroke, setRemoveAfterStroke] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const [pendingReset, setPendingReset] = useState<{ label: string; count: number } | null>(null);
   const [skipConfirmation, setSkipConfirmation] = useState(false);
+
 
   const detected = useMemo(() => {
     const imageDets = distractionMap?.get(currentImageIndex) ?? [];
@@ -87,19 +97,21 @@ const LoupePatchPanel = ({
     onRemovingChange?.(isRemoving);
   }, [isRemoving]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Full reset on image change
+  // Reset selection state on mount and image change
   useEffect(() => {
-    setSelected(new Set());
-    setRemovedItems(new Set());
+    const empty = new Set<string>();
+    setSelected(empty);
+    onSelectedLabelsChange?.(empty);
     setIsRemoving(false);
     setPendingReset(null);
-  }, [currentImageIndex]);
+  }, [currentImageIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Item toggle ───────────────────────────────────────────────────────────
   const toggle = (label: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       next.has(label) ? next.delete(label) : next.add(label);
+      onSelectedLabelsChange?.(next);
       return next;
     });
   };
@@ -107,7 +119,7 @@ const LoupePatchPanel = ({
   // ── Restore ───────────────────────────────────────────────────────────────
   const handleResetClick = (label: string, count: number) => {
     if (skipConfirmation) {
-      setRemovedItems((prev) => { const next = new Set(prev); next.delete(label); return next; });
+      onResetItem?.(label);
       return;
     }
     setPendingReset({ label, count });
@@ -115,7 +127,7 @@ const LoupePatchPanel = ({
 
   const confirmReset = () => {
     if (!pendingReset) return;
-    setRemovedItems((prev) => { const next = new Set(prev); next.delete(pendingReset.label); return next; });
+    onResetItem?.(pendingReset.label);
     setPendingReset(null);
   };
 
@@ -133,15 +145,11 @@ const LoupePatchPanel = ({
 
   const handleRemove = () => {
     if (!canRemove) return;
-    const toRemove = new Set(selected); // capture before async
+    const toRemove = new Set(selected);
     setIsRemoving(true);
     setTimeout(() => {
       onClearCanvas?.();
-      setRemovedItems((prev) => {
-        const next = new Set(prev);
-        toRemove.forEach((label) => next.add(label));
-        return next;
-      });
+      onRemove?.(toRemove);
       setSelected(new Set());
       setIsRemoving(false);
     }, 2200);
@@ -188,9 +196,31 @@ const LoupePatchPanel = ({
 
         {/* Empty state */}
         {!isModelScanning && hasScanned && detected.length === 0 && (
-          <p className="text-[11px] text-[#4a4a4a] leading-4 py-1">
-            No distractions detected in this photo.
-          </p>
+          <div className="flex flex-col items-center bg-[#d6d6d60a] gap-3 py-4 px-4 rounded-xl mt-1">
+            <div className="w-9 h-9 rounded-[8px] border border-[#3a3a3a] flex items-center justify-center">
+              <MagnifyingGlass className="w-4 h-4 text-[#777]" />
+            </div>
+            <div className="flex flex-col gap-0.5 text-center">
+              <p className="text-[12px] font-medium text-[#d4d4d4] leading-[18px]">No distractions detected</p>
+              <p className="text-[11px] text-[#555] leading-4">Think we missed something?</p>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 w-full">
+              <button
+                onClick={onRerun}
+                className="flex items-center justify-center gap-1.5 h-8 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] border border-[#2e2e2e] transition-colors"
+              >
+                <ArrowClockwise className="w-3 h-3 text-[#777]" />
+                <span className="text-[11px] font-medium text-[#c0c0c0]">Rerun scan</span>
+              </button>
+              <button
+                onClick={onReport}
+                className="flex items-center justify-center gap-1.5 h-8 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] border border-[#2e2e2e] transition-colors"
+              >
+                <Flag className="w-3 h-3 text-[#777]" />
+                <span className="text-[11px] font-medium text-[#c0c0c0]">Report issue</span>
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Detected items grid */}

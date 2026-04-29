@@ -8,6 +8,7 @@ import BottomBar from "@/components/BottomBar";
 import LoupeView from "@/components/LoupeView";
 import { useFaceDetection } from "@/hooks/useFaceDetection";
 import { useDistractionDetection } from "@/hooks/useDistractionDetection";
+import { MODEL_TO_UI } from "@/lib/distractionDetection";
 
 interface IndexProps {
   importSource: "sample" | ImageData[];
@@ -26,6 +27,7 @@ const Index = ({ importSource }: IndexProps) => {
   const [isRemoving, setIsRemoving] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [subjectFilter, setSubjectFilter] = useState<number[]>([]);
+  const [highlightedLabels, setHighlightedLabels] = useState<Set<string>>(new Set());
 
   // Hardcoded manual set — swap for real detection output when ready
   const retouchOpportunities = new Set([0, 2, 4]);
@@ -49,6 +51,12 @@ const Index = ({ importSource }: IndexProps) => {
       return subjectFilter.some((id) => clusters.includes(id));
     });
   }, [images, subjectFilter, modelImageMap]);
+
+  const highlightedDetections = useMemo(() => {
+    if (!highlightedLabels.size) return [];
+    const imageDets = distractionMap?.get(selectedIndex) ?? [];
+    return imageDets.filter((det) => highlightedLabels.has(MODEL_TO_UI[det.label]));
+  }, [distractionMap, selectedIndex, highlightedLabels]);
 
   const visibleSubjectIndices = null;
 
@@ -109,11 +117,12 @@ const Index = ({ importSource }: IndexProps) => {
                   clearCanvasSignal={clearCanvasSignal}
                   autoRemoveAfterStroke={autoRemoveAfterStroke}
                   isExternallyRemoving={isRemoving}
+                  highlightedDetections={highlightedDetections}
                 />
               : null
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} />
+        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionSelectionChange={setHighlightedLabels} />
       </div>
     </div>
   );

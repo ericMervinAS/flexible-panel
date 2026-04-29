@@ -37,9 +37,10 @@ interface RightPanelProps {
   distractionMap?: Map<number, DistractionDetection[]>;
   isDistractionScanning?: boolean;
   onDistractionRerun?: () => void;
+  onDistractionSelectionChange?: (labels: Set<string>) => void;
 }
 
-const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false, distractionMap, isDistractionScanning = false, onDistractionRerun }: RightPanelProps) => {
+const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false, distractionMap, isDistractionScanning = false, onDistractionRerun, onDistractionSelectionChange }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [subjectActive, setSubjectActive] = useState(false);
@@ -238,7 +239,34 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
               </div>
             )}
             {activeTab === "patch" && (
-              <LoupePatchPanel onScrollChange={setIsScrolledToBottom} currentImageIndex={currentImageIndex} canvasHasStrokes={canvasHasStrokes} onClearCanvas={onClearCanvas} onRemoveAfterStrokeChange={onRemoveAfterStrokeChange} onRemovingChange={onRemovingChange} distractionMap={distractionMap} isModelScanning={isDistractionScanning} onRerun={onDistractionRerun} />
+              <LoupePatchPanel
+                onScrollChange={setIsScrolledToBottom}
+                currentImageIndex={currentImageIndex}
+                canvasHasStrokes={canvasHasStrokes}
+                onClearCanvas={onClearCanvas}
+                onRemoveAfterStrokeChange={onRemoveAfterStrokeChange}
+                onRemovingChange={onRemovingChange}
+                distractionMap={distractionMap}
+                isModelScanning={isDistractionScanning}
+                onRerun={onDistractionRerun}
+                onReport={() => console.log('[DistractionDetection] User reported a missed detection')}
+                removedItems={removedItems}
+                onRemove={(labels) =>
+                  setRemovedItems((prev) => {
+                    const next = new Set(prev);
+                    labels.forEach((l) => next.add(l));
+                    return next;
+                  })
+                }
+                onResetItem={(label) =>
+                  setRemovedItems((prev) => {
+                    const next = new Set(prev);
+                    next.delete(label);
+                    return next;
+                  })
+                }
+                onSelectedLabelsChange={onDistractionSelectionChange}
+              />
             )}
           </>
         ) : (
