@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import exifr from "exifr";
 import ImageTile from "./ImageTile";
+import type { ImportFolder } from "./ImportGate";
 
 export type ColorTag = "green" | "yellow" | "red" | "none";
 
@@ -35,12 +36,12 @@ interface ImageGridProps {
   subjectFilter?: number[];
   modelImageMap?: Map<number, number[]>;
   initialSelectedIndex?: number;
-  importSource?: "sample" | ImageData[];
+  importSource?: "sample" | ImportFolder;
 }
 
 const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter, modelImageMap, initialSelectedIndex, importSource }: ImageGridProps) => {
   const [allImages, setAllImages] = useState<ImageData[]>(
-    Array.isArray(importSource) ? importSource : sampleImages
+    importSource && importSource !== "sample" ? importSource.images : sampleImages
   );
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(

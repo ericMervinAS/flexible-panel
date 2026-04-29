@@ -2,18 +2,33 @@ import { useRef, useState } from "react";
 import exifr from "exifr";
 import type { ImageData } from "./ImageGrid";
 
+export interface ImportFolder {
+  name: string;
+  images: ImageData[];
+}
+
 interface ImportGateProps {
-  onReady: (source: "sample" | ImageData[]) => void;
+  onReady: (source: "sample" | ImportFolder) => void;
 }
 
 const toJpegName = (name: string) => name.replace(/\.[^.]+$/, ".jpeg");
+
+const folderNameFromFiles = (files: File[]): string => {
+  for (const f of files) {
+    const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath;
+    if (rel && rel.includes("/")) return rel.split("/")[0];
+  }
+  return "Imported Folder";
+};
 
 const ImportGate = ({ onReady }: ImportGateProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
+    const allFiles = Array.from(e.target.files ?? []);
+    const folderName = folderNameFromFiles(allFiles);
+    const files = allFiles
       .filter((f) => f.type === "image/jpeg" || /\.(jpg|jpeg)$/i.test(f.name))
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, 24);
@@ -36,7 +51,7 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
     );
 
     setIsLoading(false);
-    onReady(images);
+    onReady({ name: folderName, images });
   };
 
   return (

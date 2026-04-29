@@ -7,13 +7,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AccessGate from "./components/AccessGate";
-import ImportGate from "./components/ImportGate";
-import type { ImageData } from "./components/ImageGrid";
+import ImportGate, { type ImportFolder } from "./components/ImportGate";
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  const [importSource, setImportSource] = useState<"pending" | "sample" | ImageData[]>("pending");
+  const [importSource, setImportSource] = useState<"pending" | "sample" | ImportFolder>("pending");
 
   return (
     <AccessGate>

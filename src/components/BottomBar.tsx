@@ -130,10 +130,10 @@ const BottomBar = (props: BottomBarProps) => {
             <Info className="w-4 h-4 text-[#777] shrink-0" />
           </div>
         ) : (
-          <>
-            <span className="text-[#e2e2e2] font-medium">{props.albumName}</span>
-            <span className="text-[#ababab]">({props.totalPhotos})</span>
-          </>
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-[#e2e2e2] font-medium truncate" title={props.albumName}>{props.albumName}</span>
+            <span className="text-[#ababab] shrink-0">({props.totalPhotos})</span>
+          </div>
         )}
 
         <div className="w-px h-4 bg-[#303030] shrink-0" />

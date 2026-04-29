@@ -4,6 +4,7 @@ import Toast from "@/components/Toast";
 import FilterBar from "@/components/FilterBar";
 import ImageGrid from "@/components/ImageGrid";
 import type { ImageData } from "@/components/ImageGrid";
+import type { ImportFolder } from "@/components/ImportGate";
 import RightPanel from "@/components/RightPanel";
 import BottomBar from "@/components/BottomBar";
 import LoupeView from "@/components/LoupeView";
@@ -12,7 +13,7 @@ import { useDistractionDetection } from "@/hooks/useDistractionDetection";
 import { MODEL_TO_UI } from "@/lib/distractionDetection";
 
 interface IndexProps {
-  importSource: "sample" | ImageData[];
+  importSource: "sample" | ImportFolder;
 }
 
 const Index = ({ importSource }: IndexProps) => {
@@ -44,7 +45,7 @@ const Index = ({ importSource }: IndexProps) => {
   };
 
   // Hardcoded manual set — swap for real detection output when ready
-  const retouchOpportunities = new Set([0, 2, 4]);
+  const retouchOpportunities = new Set([]);
 
   const { modelSubjects, modelImageMap, isDetecting, isLoadingModel, statusMessage, detectionProgress } =
     useFaceDetection(images);
@@ -119,9 +120,9 @@ const Index = ({ importSource }: IndexProps) => {
                 mode="grid"
                 columns={columns}
                 onColumnsChange={setColumns}
-                totalPhotos={1562}
-                visiblePhotos={232}
-                albumName="Juliana Wedding"
+                totalPhotos={images.length}
+                visiblePhotos={filteredImages.length}
+                albumName={importSource === "sample" ? "Juliana Wedding" : importSource.name}
               />
             </>
           ) : (
