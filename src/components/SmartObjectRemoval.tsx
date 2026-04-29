@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwise, X, ArrowClockwise, MagnifyingGlass, Flag, Plus } from "@phosphor-icons/react";
+import { Check, ArrowCounterClockwise, X, MagnifyingGlass, Plus, FlaskIcon } from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 import SuggestObjectModal from "./SuggestObjectModal";
+import Tooltip from "./Tooltip";
 
 const UI_LABELS = [
   "Exit Signs",
@@ -79,6 +80,13 @@ const SmartObjectRemoval = ({
   const [pendingReset, setPendingReset] = useState<{ label: string; count: number } | null>(null);
   const [skipConfirmation, setSkipConfirmation] = useState(false);
   const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [hasRescanned, setHasRescanned] = useState(false);
+  const [flaskHovered, setFlaskHovered] = useState(false);
+
+  const handleRerun = () => {
+    setHasRescanned(true);
+    onRerun?.();
+  };
 
   const handleSuggestSubmit = (suggestion: string) => {
     onSuggestSubmit?.(suggestion);
@@ -128,22 +136,37 @@ const SmartObjectRemoval = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <h3 className="text-base font-normal text-[#e2e2e2]">Smart Object Removal</h3>
-              <span className="px-1 py-0.5 text-[11px] font-medium leading-[12px] rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
+              {/* <span className="px-1 py-0.5 text-[11px] font-medium leading-[12px] rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
                 Beta
+              </span> */}
+              <span
+                className="relative inline-flex"
+                onMouseEnter={() => setFlaskHovered(true)}
+                onMouseLeave={() => setFlaskHovered(false)}
+              >
+                <Tooltip label="Beta" visible={flaskHovered} />
+                <FlaskIcon className="w-4 h-4" weight="fill" color="#EAB308" />
               </span>
-              {isScanning && (
+              {/* {isScanning && (
                 <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
-              )}
+              )} */}
             </div>
-            <button
-              onClick={onRerun}
-              disabled={isScanning}
-              title="Rescan album"
-              className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${isScanning ? "text-[#474747] cursor-not-allowed" : "text-[#777] hover:text-[#e2e2e2] hover:bg-white/5"
-                }`}
-            >
-              <MagnifyingGlass className="w-4 h-4" />
-            </button>
+            {isScanning && (
+              <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
+            )}
+            {!isScanning && (
+              <button
+                onClick={handleRerun}
+                disabled={isScanning}
+                title="Rescan album"
+                className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${isScanning ? "text-[#474747] cursor-not-allowed" : "text-[#777] hover:text-[#e2e2e2] hover:bg-white/5"
+                  }`}
+              >
+                <MagnifyingGlass className="w-4 h-4" />
+              </button>
+            )}
+
+
           </div>
           <p className="text-[12px] text-[#ababab] leading-4">
             Smart object detection will automatically identify and remove distractions you select
@@ -152,29 +175,27 @@ const SmartObjectRemoval = ({
 
         {!isScanning && noneFound && (
           <div className="flex flex-col pt-1">
-            <div className="flex flex-col items-center bg-[#d6d6d60a] gap-4 py-4 px-6 rounded-xl">
-              <div className="w-10 h-10 rounded-[10px] border border-[#3a3a3a] flex items-center justify-center">
-                <MagnifyingGlass className="w-[18px] h-[18px] text-[#777]" />
+            <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424]">
+              <MagnifyingGlass className="w-8 h-8 text-[#e2e2e2]" weight="duotone" />
+              <div className="flex flex-col gap-1 text-center w-full">
+                <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">No distractions detected</p>
+                <p className="text-[13px] font-normal text-[#ababab] leading-4">Think we missed something?</p>
               </div>
-              <div className="flex flex-col gap-1 text-center">
-                <p className="text-[13px] font-medium text-[#d4d4d4] leading-[18px]">No distractions detected</p>
-                <p className="text-[11px] text-[#555] leading-4">Think we missed something?</p>
-              </div>
-              <div className="grid grid-cols-2 gap-1.5 w-full">
+              <div className="flex items-center justify-center gap-2 w-full">
                 <button
-                  onClick={onRerun}
-                  className="flex items-center justify-center gap-1.5 h-9 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] border border-[#2e2e2e] transition-colors"
+                  onClick={handleRerun}
+                  className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
                 >
-                  <ArrowClockwise className="w-3 h-3 text-[#777]" />
-                  <span className="text-[11px] font-medium text-[#c0c0c0]">Rerun scan</span>
+                  <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">Rescan Album</span>
                 </button>
-                <button
-                  onClick={onReport}
-                  className="flex items-center justify-center gap-1.5 h-9 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] border border-[#2e2e2e] transition-colors"
-                >
-                  <Flag className="w-3 h-3 text-[#777]" />
-                  <span className="text-[11px] font-medium text-[#c0c0c0]">Report issue</span>
-                </button>
+                {hasRescanned && (
+                  <button
+                    onClick={onReport}
+                    className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded hover:bg-white/5 transition-colors"
+                  >
+                    <span className="text-[12px] font-medium text-[#ababab] leading-4">Report Issue</span>
+                  </button>
+                )}
               </div>
             </div>
             <button

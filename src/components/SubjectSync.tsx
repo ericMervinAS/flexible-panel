@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Check, X, MinusCircle, MagnifyingGlass } from "@phosphor-icons/react";
+import { Plus, Check, X, MinusCircle, MagnifyingGlassIcon, StarFourIcon } from "@phosphor-icons/react";
 import PresetDropdown from "./PresetDropdown";
 import Tooltip from "./Tooltip";
 import { subjectPhotoCounts, subjectGender } from "@/data/subjectMapping";
@@ -84,6 +84,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
   const [modelPopoverOpen, setModelPopoverOpen] = useState(false);
   const modelPopoverRef = useRef<HTMLDivElement>(null);
   const [dismissedSelections, setDismissedSelections] = useState<Set<string>>(new Set());
+  const [starHovered, setStarHovered] = useState(false);
 
   useEffect(() => {
     if (!resetSignal) return;
@@ -114,10 +115,11 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
     modelSubs: Set<number>,
     currentModelPresets: Record<string, string | null>,
   ) => {
+    const isChanged = (key: string, val: string | null | undefined) =>
+      !!val && val !== appliedPresets?.[key];
     const hasValidSelections =
-      Array.from(subs).some((i) => !!currentPresets[`subject-${i}`]) ||
-      Array.from(groups).some((label) => !!currentPresets[`group-${label}`]) ||
-      Array.from(modelSubs).some((id) => !!currentModelPresets[`model-${id}`]);
+      Object.entries(currentPresets).some(([k, v]) => isChanged(k, v)) ||
+      Object.entries(currentModelPresets).some(([k, v]) => isChanged(k, v));
     onSelectionsChange?.(hasValidSelections);
     onStateChange?.({
       selectedSubjects: Array.from(subs),
@@ -143,28 +145,31 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
 
     if (key.startsWith("model-")) {
       const id = parseInt(key.slice("model-".length), 10);
-      if (selectedModelSubjects.has(id)) {
-        const next = new Set(selectedModelSubjects);
-        next.delete(id);
-        setSelectedModelSubjects(next);
-        notify(selectedGroups, selectedSubjects, presets, next, modelPresets);
-      }
+      const nextSubs = new Set(selectedModelSubjects);
+      nextSubs.delete(id);
+      const nextModelPresets = { ...modelPresets };
+      delete nextModelPresets[key];
+      setSelectedModelSubjects(nextSubs);
+      setModelPresets(nextModelPresets);
+      notify(selectedGroups, selectedSubjects, presets, nextSubs, nextModelPresets);
     } else if (key.startsWith("group-")) {
       const label = key.slice("group-".length);
-      if (selectedGroups.has(label)) {
-        const next = new Set(selectedGroups);
-        next.delete(label);
-        setSelectedGroups(next);
-        notify(next, selectedSubjects, presets, selectedModelSubjects, modelPresets);
-      }
+      const nextGroups = new Set(selectedGroups);
+      nextGroups.delete(label);
+      const nextPresets = { ...presets };
+      delete nextPresets[key];
+      setSelectedGroups(nextGroups);
+      setPresets(nextPresets);
+      notify(nextGroups, selectedSubjects, nextPresets, selectedModelSubjects, modelPresets);
     } else if (key.startsWith("subject-")) {
       const i = parseInt(key.slice("subject-".length), 10);
-      if (selectedSubjects.has(i)) {
-        const next = new Set(selectedSubjects);
-        next.delete(i);
-        setSelectedSubjects(next);
-        notify(selectedGroups, next, presets, selectedModelSubjects, modelPresets);
-      }
+      const nextSubs = new Set(selectedSubjects);
+      nextSubs.delete(i);
+      const nextPresets = { ...presets };
+      delete nextPresets[key];
+      setSelectedSubjects(nextSubs);
+      setPresets(nextPresets);
+      notify(selectedGroups, nextSubs, nextPresets, selectedModelSubjects, modelPresets);
     }
   };
 
@@ -312,21 +317,33 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <h3 className="text-base font-normal text-[#e2e2e2]">Subject Sync</h3>
-            <span className="px-1 py-0.5 text-[11px] font-medium leading-[12px] rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
+            {/* <span className="px-1 py-0.5 text-[11px] font-medium leading-[12px] rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
               New
+            </span> */}
+            <span
+              className="relative inline-flex"
+              onMouseEnter={() => setStarHovered(true)}
+              onMouseLeave={() => setStarHovered(false)}
+            >
+              <Tooltip label="Just Launched" visible={starHovered} />
+              <StarFourIcon className="w-4 h-4" weight="fill" color="#EAB308" />
             </span>
-            {scanning && (
+            {/* {scanning && (
               <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
-            )}
+            )} */}
           </div>
-          <button
+          {scanning && (
+            <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
+          )}
+          {!scanning && (<button
             onClick={handleRescan}
             disabled={scanning}
             className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${scanning ? "text-[#474747] cursor-not-allowed" : "text-[#777] hover:text-[#e2e2e2] hover:bg-white/5"
               }`}
           >
-            <MagnifyingGlass className="w-4 h-4" />
+            <MagnifyingGlassIcon className="w-4 h-4" />
           </button>
+          )}
         </div>
         <p className="text-[12px] text-[#ababab] leading-4">
           Apply presets on subjects identified across the entire album
@@ -374,7 +391,8 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
             <div ref={modelPopoverRef} className="relative">
               <div className="grid grid-cols-5 gap-2">
                 {visibleModelSubjects.map((subject) => {
-                  const active = selectedModelSubjects.has(subject.id);
+                  const inList = visibleSelectedModelIds.includes(subject.id);
+                  const active = selectedModelSubjects.has(subject.id) || inList;
                   const applied = !!appliedPresets?.[`model-${subject.id}`];
                   const presetLabel = appliedPresets?.[`model-${subject.id}`];
                   return (
@@ -388,7 +406,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
                         <Tooltip label={presetLabel} prefix="Applied:" visible={hoveredModelSubject === subject.id} />
                       )}
                       <button
-                        onClick={() => toggleModelSubject(subject.id)}
+                        onClick={() => active ? dismissSelection(`model-${subject.id}`) : toggleModelSubject(subject.id)}
                         className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${active ? "border-[#2563eb]" : "border-transparent"}`}
                       >
                         <img
@@ -402,11 +420,11 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
                           <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
                         </div>
                       )}
-                      {!active && applied && (
+                      {/* {!active && applied && (
                         <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#16a34a] flex items-center justify-center">
                           <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
                         </div>
-                      )}
+                      )} */}
                       <span className={`text-[10px] font-medium ${active ? "text-[#e2e2e2]" : "text-[#777]"}`}>
                         {subject.photoCount}
                       </span>
@@ -422,18 +440,19 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
                     >
                       <span className="text-[12px] font-medium leading-none">+{modelHiddenCount}</span>
                     </button>
-                    <span className="text-[10px] font-medium text-[#777]">View More</span>
+                    <span className="text-[10px] font-medium text-[#777]"> </span>
                   </div>
                 )}
               </div>
 
               {/* Model View More popover */}
               {modelPopoverOpen && (
-                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 bg-[#242424] border border-[#474747] rounded-lg p-3 flex flex-col gap-3 max-h-72 overflow-y-auto" style={{ scrollbarWidth: "none" }}>
+                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 bg-[#242424] border border-[#474747] rounded-lg p-3 flex flex-col gap-3 max-h-[230px] overflow-y-auto" >
                   <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">All Subjects</span>
                   <div className="grid grid-cols-5 gap-2">
                     {displayedModelSubjects.map((subject) => {
-                      const active = selectedModelSubjects.has(subject.id);
+                      const inList = visibleSelectedModelIds.includes(subject.id);
+                      const active = selectedModelSubjects.has(subject.id) || inList;
                       const applied = !!appliedPresets?.[`model-${subject.id}`];
                       const presetLabel = appliedPresets?.[`model-${subject.id}`];
                       return (
@@ -454,7 +473,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
                             </div>
                           )}
                           <button
-                            onClick={() => toggleModelSubject(subject.id)}
+                            onClick={() => active ? dismissSelection(`model-${subject.id}`) : toggleModelSubject(subject.id)}
                             className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${active ? "border-[#2563eb]" : "border-transparent hover:border-[#5e5e5e]"}`}
                           >
                             <img
@@ -465,11 +484,6 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
                           </button>
                           {active && (
                             <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#2563eb] flex items-center justify-center">
-                              <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
-                            </div>
-                          )}
-                          {!active && applied && (
-                            <div className="absolute bottom-[14px] right-0 w-4 h-4 rounded-full bg-[#16a34a] flex items-center justify-center">
                               <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
                             </div>
                           )}
@@ -507,7 +521,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
                         <img src={subject.keyFaceDataUrl} alt={`Person ${id + 1}`} className="w-full h-full object-cover" />
                       </SelectionThumbnail>
                       <PresetDropdown
-                        value={modelPresets[key] ?? null}
+                        value={modelPresets[key] ?? appliedPresets?.[key] ?? null}
                         genderFilter={subject.category}
                         onChange={(v) => setModelPreset(key, v)}
                       />
@@ -528,7 +542,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
                         </div>
                       </SelectionThumbnail>
                       <PresetDropdown
-                        value={presets[key] ?? null}
+                        value={presets[key] ?? appliedPresets?.[key] ?? null}
                         genderFilter={label}
                         onChange={(v) => setPreset(key, v)}
                       />
@@ -547,7 +561,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
                         <img src={subjects[i].avatar} alt={`Subject ${i + 1}`} className="w-full h-full object-cover" />
                       </SelectionThumbnail>
                       <PresetDropdown
-                        value={presets[key] ?? null}
+                        value={presets[key] ?? appliedPresets?.[key] ?? null}
                         genderFilter={subjectGender[i]}
                         onChange={(v) => setPreset(key, v)}
                       />

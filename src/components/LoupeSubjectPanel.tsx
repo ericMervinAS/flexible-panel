@@ -126,15 +126,15 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
   // Gender groups present — prefer model-detected categories over hardcoded mapping
   const activeGenders: Set<string> = modelSubjects?.length && modelImageMap
     ? new Set(
-        modelClusterIds
-          .map((cid) => modelSubjects.find((s) => s.id === cid)?.category)
-          .filter((c): c is string => !!c)
-      )
+      modelClusterIds
+        .map((cid) => modelSubjects.find((s) => s.id === cid)?.category)
+        .filter((c): c is string => !!c)
+    )
     : new Set(
-        (rawIndices ?? subjects.map((_, i) => i))
-          .map((i) => subjectGender[i])
-          .filter(Boolean)
-      );
+      (rawIndices ?? subjects.map((_, i) => i))
+        .map((i) => subjectGender[i])
+        .filter(Boolean)
+    );
 
   const isChipEnabled = (chip: string) => {
     if (chip === "All Subjects") return true;

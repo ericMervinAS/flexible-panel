@@ -475,7 +475,11 @@ const LoupeView = ({
         setShowStrokeHint(false);
         return;
       }
-      setShowStrokeHint(true);
+      if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current) {
+        startAutoRemoveTimer();
+      } else {
+        setShowStrokeHint(true);
+      }
     };
 
     const stop = (e: MouseEvent) => {
@@ -784,7 +788,11 @@ const LoupeView = ({
       onHasStrokesChange?.(false);
       return;
     }
-    setShowStrokeHint(true);
+    if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current) {
+      startAutoRemoveTimer();
+    } else {
+      setShowStrokeHint(true);
+    }
   };
 
   const handleMouseLeave = () => {
