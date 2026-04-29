@@ -300,6 +300,7 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
                 distractionMap={distractionMap}
                 onRerun={onDistractionRerun}
                 onReport={() => console.log('[DistractionDetection] User reported a missed detection')}
+                onSuggestSubmit={onSuggestObject}
                 onResetItem={(label) =>
                   setRemovedItems((prev) => {
                     const next = new Set(prev);

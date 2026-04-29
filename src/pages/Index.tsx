@@ -29,13 +29,17 @@ const Index = ({ importSource }: IndexProps) => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [subjectFilter, setSubjectFilter] = useState<number[]>([]);
   const [highlightedLabels, setHighlightedLabels] = useState<Set<string>>(new Set());
-  const [removeToast, setRemoveToast] = useState<{ message: string; key: number } | null>(null);
+  const [removeToast, setRemoveToast] = useState<{ message: string; key: number; ctaLabel?: string } | null>(null);
 
   const handleRemoveSuccess = (count: number, brushOnly: boolean) => {
     const message = brushOnly
       ? "Object Removed Successfully"
       : `${count} Object${count === 1 ? "" : "s"} Removed Successfully`;
-    setRemoveToast({ message, key: Date.now() });
+    setRemoveToast({ message, key: Date.now(), ctaLabel: "Undo" });
+  };
+
+  const handleSuggestObject = (_suggestion: string) => {
+    setRemoveToast({ message: "Suggestion submitted", key: Date.now() });
   };
 
   // Hardcoded manual set — swap for real detection output when ready
@@ -132,13 +136,13 @@ const Index = ({ importSource }: IndexProps) => {
               : null
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionSelectionChange={setHighlightedLabels} onDistractionRemoveSuccess={handleRemoveSuccess} />
+        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionSelectionChange={setHighlightedLabels} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} />
       </div>
       {removeToast && (
         <Toast
           key={removeToast.key}
           message={removeToast.message}
-          ctaLabel="Undo"
+          ctaLabel={removeToast.ctaLabel}
           onDismiss={() => setRemoveToast(null)}
         />
       )}
