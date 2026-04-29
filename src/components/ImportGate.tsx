@@ -29,7 +29,7 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
     const allFiles = Array.from(e.target.files ?? []);
     const folderName = folderNameFromFiles(allFiles);
     const files = allFiles
-      .filter((f) => f.type === "image/jpeg" || /\.(jpg|jpeg)$/i.test(f.name))
+      .filter((f) => f.type === "image/jpeg" || f.type === "image/webp" || /\.(jpg|jpeg|webp)$/i.test(f.name))
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, 24);
 
@@ -77,7 +77,7 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
             </svg>
             <div className="flex flex-col gap-1 text-center">
               <span className="text-[18px] font-medium text-[#d8d8d8]">Upload Folder</span>
-              <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">First 24 JPEGs from folder</span>
+              <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">First 24 Images from folder</span>
             </div>
           </button>
 
@@ -103,7 +103,7 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
         type="file"
         className="hidden"
         onChange={handleInputChange}
-        accept=".jpg,.jpeg"
+        accept=".jpg,.jpeg,.webp"
         multiple
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore
