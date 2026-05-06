@@ -19,13 +19,13 @@ const GridSlider = ({ value, min, max, step, onChange }: GridSliderProps) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const [grabbed, setGrabbed] = useState(false);
 
-  const pct = ((value - min) / (max - min)) * 100;
+  const pct = ((max - value) / (max - min)) * 100;
 
   const valueFromEvent = useCallback(
     (clientX: number) => {
       if (!trackRef.current) return value;
       const rect = trackRef.current.getBoundingClientRect();
-      const raw = (clientX - rect.left) / rect.width;
+      const raw = 1 - (clientX - rect.left) / rect.width;
       const clamped = Math.max(0, Math.min(1, raw));
       const stepped = Math.round((min + clamped * (max - min)) / step) * step;
       return Math.max(min, Math.min(max, stepped));
@@ -243,8 +243,8 @@ const BottomBar = (props: BottomBarProps) => {
                       key={pct}
                       onClick={() => { props.handleZoomPreset(pct); props.setShowZoomDropdown(false); }}
                       className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${!props.isFit && props.displayPct() === pct
-                          ? "text-[#e2e2e2]"
-                          : "text-[#ababab] hover:text-[#e2e2e2]"
+                        ? "text-[#e2e2e2]"
+                        : "text-[#ababab] hover:text-[#e2e2e2]"
                         }`}
                     >
                       {pct}%

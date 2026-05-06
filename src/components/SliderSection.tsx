@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { DotsSixVerticalIcon, CaretRight, ArrowCounterClockwise, NotePencil } from "@phosphor-icons/react";
+import { DotsSixVerticalIcon, CaretRight, ArrowCounterClockwise, PencilSimpleIcon, DotsSixIcon } from "@phosphor-icons/react";
 import SliderRow from "./SliderRow";
 import type { SliderDef } from "@/data/presetMapping";
 
@@ -42,7 +42,11 @@ const SliderSection = ({
       }}
       className="flex flex-col"
     >
-      <div className="group/section flex items-center gap-2 h-6">
+      <div
+        {...attributes}
+        {...listeners}
+        className="group/section relative flex items-center gap-2 h-6 cursor-grab active:cursor-grabbing touch-none"
+      >
         <button
           onClick={() => setIsOpen((v) => !v)}
           className="w-3 h-3 flex items-center justify-center text-[#777] hover:text-[#ababab] transition-colors shrink-0"
@@ -55,11 +59,15 @@ const SliderSection = ({
 
         <span className="flex-1 text-[11px] font-semibold text-[#ababab] uppercase tracking-[0.5px]">{title}</span>
 
+        <div className="absolute left-1/2 -translate-x-1/2 h-4 flex items-center justify-center text-[#aaa] pointer-events-none opacity-0 group-hover/section:opacity-100 transition-opacity">
+          <DotsSixIcon size={14} />
+        </div>
+
         <button
           onClick={onReset}
           className="w-4 h-4 flex items-center justify-center text-[#777] hover:text-[#ababab] transition-colors shrink-0"
         >
-          <NotePencil size={16} />
+          <PencilSimpleIcon size={16} />
         </button>
 
         <button
@@ -69,13 +77,13 @@ const SliderSection = ({
           <ArrowCounterClockwise size={16} />
         </button>
 
-        <button
+        {/* <button
           {...attributes}
           {...listeners}
           className="w-4 h-4 flex items-center justify-center text-[#aaa] hover:text-[#777] transition-colors shrink-0 cursor-grab active:cursor-grabbing touch-none"
         >
           <DotsSixVerticalIcon size={14} />
-        </button>
+        </button> */}
       </div>
 
       {isOpen && (

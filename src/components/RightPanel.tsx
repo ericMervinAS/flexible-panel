@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { User, Stack, Eraser } from "@phosphor-icons/react";
+import { User, Stack, Eraser, FlipHorizontal, FlipVertical, Diamond } from "@phosphor-icons/react";
 import SubjectSync, { SubjectSyncState } from "./SubjectSync";
 import SmartObjectRemoval, { SmartObjectState } from "./SmartObjectRemoval";
 import { RetouchHistoryEntry } from "./RetouchHistory";
@@ -42,9 +42,10 @@ interface RightPanelProps {
   onDistractionHoverChange?: (label: string | null) => void;
   onDistractionRemoveSuccess?: (count: number, brushOnly: boolean) => void;
   onSuggestObject?: (suggestion: string) => void;
+  flexibleWidth?: boolean;
 }
 
-const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false, distractionMap, isDistractionScanning = false, onDistractionRerun, onDistractionRerunCurrent, onDistractionSelectionChange, onDistractionHoverChange, onDistractionRemoveSuccess, onSuggestObject }: RightPanelProps) => {
+const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, onTabChange, canvasHasStrokes = false, onClearCanvas, onRemoveAfterStrokeChange, onRemovingChange, visibleSubjectIndices, modelSubjects, modelImageMap, isModelDetecting, modelStatusMessage, modelSubjectFilter, tabOverride, hasRetouchingOpportunity = false, distractionMap, isDistractionScanning = false, onDistractionRerun, onDistractionRerunCurrent, onDistractionSelectionChange, onDistractionHoverChange, onDistractionRemoveSuccess, onSuggestObject, flexibleWidth = false }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [subjectActive, setSubjectActive] = useState(false);
@@ -187,7 +188,9 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
   };
 
   return (
-    <aside className="w-[344px] min-w-[344px] bg-[#1c1c1c] flex flex-col relative border-l border-background">
+    <aside
+      className={`${flexibleWidth ? "w-[26vw] min-w-[26vw]" : "w-[344px] min-w-[344px]"} bg-[#1c1c1c] flex flex-col relative border-l border-background`}
+    >
       {/* Loupe tab bar */}
       {isLoupeView && (
         <div className="flex items-center gap-3 px-5 pt-3 shrink-0">
@@ -327,6 +330,43 @@ const RightPanel = ({ isScanning, isLoupeView = false, currentImageIndex = 0, on
                 onStateChange={(s) => { objectStateRef.current = s; }}
               />
             </div>
+            {/* <div className="h-px bg-background" /> */}
+            {/* <div className="px-5 py-5">
+              <div className="w-1/2 flex gap-2">
+                <div className="flex-1 h-8 flex items-center bg-[#242424] border-[0.5px] border-[#303030] rounded-md overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => { }}
+                    className="flex-1 h-full flex items-center justify-center text-[#ababab] hover:text-[#e2e2e2] hover:bg-[#ffffff1a] transition-colors"
+                  >
+                    <FlipHorizontal size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { }}
+                    className="flex-1 h-full flex items-center justify-center text-[#ababab] hover:text-[#e2e2e2] hover:bg-[#ffffff1a] transition-colors"
+                  >
+                    <FlipVertical size={16} />
+                  </button>
+                </div>
+                <div className="flex-1 h-8 flex items-center bg-[#242424] border-[0.5px] border-[#303030] rounded-md overflow-hidden ">
+                  <button
+                    type="button"
+                    onClick={() => { }}
+                    className="flex-1 h-full flex items-center justify-center text-[#ababab] hover:text-[#e2e2e2] hover:bg-[#ffffff1a] transition-colors"
+                  >
+                    <Diamond size={16} className="-scale-x-100" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { }}
+                    className="flex-1 h-full flex items-center justify-center text-[#ababab] hover:text-[#e2e2e2] hover:bg-[#ffffff1a] transition-colors"
+                  >
+                    <Diamond size={16} />
+                  </button>
+                </div>
+              </div>
+            </div> */}
           </>
         )}
       </div>

@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { PushPinIcon, StarFourIcon, FlaskIcon, ArrowFatLineUpIcon } from "@phosphor-icons/react";
+import { PushPinIcon, StarFourIcon, FlaskIcon, ArrowFatLineUpIcon, LightningIcon } from "@phosphor-icons/react";
 import type { BadgeType } from "@/data/presetMapping";
 import Tooltip from "./Tooltip";
 
 const BADGE_ICON: Record<BadgeType, React.ReactNode> = {
-  new: <StarFourIcon size={12} weight="fill" className="text-yellow-500 hover:text-yellow-400" />,
+  new: <StarFourIcon size={12} weight="fill" className=" text-blue-500 hover:text-blue-400" />,
   beta: <FlaskIcon size={12} weight="fill" className=" text-yellow-500 hover:text-yellow-400" />,
-  improved: <ArrowFatLineUpIcon size={12} weight="fill" className="text-yellow-500 hover:text-yellow-400" />,
+  improved: <LightningIcon size={12} weight="fill" className=" text-blue-500 hover:text-blue-400" />,
 };
 
 interface SliderRowProps {
