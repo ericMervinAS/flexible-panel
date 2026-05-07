@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Check, X, MinusCircle, MagnifyingGlassIcon, StarFourIcon } from "@phosphor-icons/react";
+import { Plus, Check, X, MinusCircle, ArrowsClockwiseIcon, StarFourIcon } from "@phosphor-icons/react";
 import PresetDropdown from "./PresetDropdown";
 import Tooltip from "./Tooltip";
 import { subjectPhotoCounts, subjectGender } from "@/data/subjectMapping";
@@ -341,7 +341,7 @@ const SubjectSync = ({ isScanning, disabled, resetSignal, appliedPresets, visibl
             className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${scanning ? "text-[#474747] cursor-not-allowed" : "text-[#777] hover:text-[#e2e2e2] hover:bg-white/5"
               }`}
           >
-            <MagnifyingGlassIcon className="w-4 h-4" />
+            <ArrowsClockwiseIcon className="w-4 h-4" />
           </button>
           )}
         </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { DotsSixVerticalIcon, CaretRight, ArrowCounterClockwise, PencilSimpleIcon, DotsSixIcon } from "@phosphor-icons/react";
+import { DotsSixVerticalIcon, CaretRightIcon, ArrowCounterClockwiseIcon, PencilSimpleIcon, DotsSixIcon } from "@phosphor-icons/react";
 import SliderRow from "./SliderRow";
 import type { SliderDef } from "@/data/presetMapping";
 
@@ -51,7 +51,7 @@ const SliderSection = ({
           onClick={() => setIsOpen((v) => !v)}
           className="w-3 h-3 flex items-center justify-center text-[#777] hover:text-[#ababab] transition-colors shrink-0"
         >
-          <CaretRight
+          <CaretRightIcon
             size={12}
             className={`transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
           />
@@ -74,7 +74,7 @@ const SliderSection = ({
           onClick={onReset}
           className="w-4 h-4 flex items-center justify-center text-[#777] hover:text-[#ababab] transition-colors shrink-0"
         >
-          <ArrowCounterClockwise size={16} />
+          <ArrowCounterClockwiseIcon size={16} />
         </button>
 
         {/* <button

@@ -551,7 +551,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
                 <PushPin size={12} weight="fill" className="text-[#777]" />
               </div>
               {/* <span className="flex-1 text-[14px] font-normal text-[#e2e2e2]">Pinned</span> */}
-              <span className="flex-1 text-[11px] font-semibold text-[#ababab] uppercase tracking-[0.5px]">Pinned</span>
+              <span className="flex-1 text-[11px] font-semibold text-[#ababab] uppercase tracking-[0.5px]">Favorite Sliders</span>
             </div>
             <div className="pt-2.5 pb-2.5 flex flex-col gap-3">
               {Array.from(pinnedSliders).map((key) => {

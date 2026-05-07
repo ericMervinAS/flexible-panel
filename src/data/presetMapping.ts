@@ -16,7 +16,7 @@ export interface SliderDef {
 }
 
 export const SECTIONS: { title: string; sliders: SliderDef[] }[] = [
-  { title: "Blemish Removal", sliders: [{ name: "Acne" }, { name: "Freckles" }, { name: "Spots" }] },
+  { title: "Face Spots", sliders: [{ name: "Acne" }, { name: "Freckles" }, { name: "Spots" }] },
   { title: "Wrinkles", sliders: [{ name: "Forehead", badge: "new", badgeLabel: "Just Launched" }, { name: "Smile Lines" }] },
   { title: "Teeth", sliders: [{ name: "Whiten" }, { name: "Brighten" }] },
   { title: "Face", sliders: [{ name: "Brighten" }, { name: "Smoothen", badge: "beta", badgeLabel: "Beta" }, { name: "Remove Shine" }] },
@@ -31,7 +31,7 @@ export const SECTIONS: { title: string; sliders: SliderDef[] }[] = [
 // All values are 0–100.
 
 export interface PresetValues {
-  "Blemish Removal": { Acne: number; Freckles: number; Spots: number };
+  "Face Spots": { Acne: number; Freckles: number; Spots: number };
   Wrinkles: { Forehead: number; "Smile Lines": number };
   Teeth: { Whiten: number; Brighten: number };
   Face: { Brighten: number; Smoothen: number; "Remove Shine": number };
@@ -93,7 +93,7 @@ export const PRESETS: Preset[] = [
     tags: ["Masculine", "Feminine", "Child"],
     custom: true,
     values: {
-      "Blemish Removal": { Acne: 0, Freckles: 0, Spots: 0 },
+      "Face Spots": { Acne: 0, Freckles: 0, Spots: 0 },
       Wrinkles: { Forehead: 0, "Smile Lines": 0 },
       Teeth: { Whiten: 0, Brighten: 0 },
       Face: { Brighten: 0, Smoothen: 0, "Remove Shine": 0 },
@@ -112,7 +112,7 @@ export const PRESETS: Preset[] = [
     tags: ["All Subjects"],
     custom: false,
     values: {
-      "Blemish Removal": { Acne: 75, Freckles: 75, Spots: 75 },
+      "Face Spots": { Acne: 75, Freckles: 75, Spots: 75 },
       Wrinkles: { Forehead: 0, "Smile Lines": 0 },
       Teeth: { Whiten: 0, Brighten: 0 },
       Face: { Brighten: 50, Smoothen: 35, "Remove Shine": 0 },
@@ -129,7 +129,7 @@ export const PRESETS: Preset[] = [
     tags: ["All Subjects"],
     custom: false,
     values: {
-      "Blemish Removal": { Acne: 75, Freckles: 75, Spots: 75 },
+      "Face Spots": { Acne: 75, Freckles: 75, Spots: 75 },
       Wrinkles: { Forehead: 0, "Smile Lines": 0 },
       Teeth: { Whiten: 25, Brighten: 50 },
       Face: { Brighten: 50, Smoothen: 0, "Remove Shine": 0 },
@@ -146,7 +146,7 @@ export const PRESETS: Preset[] = [
     tags: ["All Subjects"],
     custom: false,
     values: {
-      "Blemish Removal": { Acne: 0, Freckles: 0, Spots: 0 },
+      "Face Spots": { Acne: 0, Freckles: 0, Spots: 0 },
       Wrinkles: { Forehead: 0, "Smile Lines": 0 },
       Teeth: { Whiten: 25, Brighten: 50 },
       Face: { Brighten: 50, Smoothen: 0, "Remove Shine": 0 },
@@ -163,7 +163,7 @@ export const PRESETS: Preset[] = [
     tags: ["All Subjects"],
     custom: false,
     values: {
-      "Blemish Removal": { Acne: 25, Freckles: 0, Spots: 25 },
+      "Face Spots": { Acne: 25, Freckles: 0, Spots: 25 },
       Wrinkles: { Forehead: 100, "Smile Lines": 100 },
       Teeth: { Whiten: 0, Brighten: 50 },
       Face: { Brighten: 0, Smoothen: 35, "Remove Shine": 0 },
@@ -180,7 +180,7 @@ export const PRESETS: Preset[] = [
     tags: ["All Subjects"],
     custom: false,
     values: {
-      "Blemish Removal": { Acne: 75, Freckles: 75, Spots: 75 },
+      "Face Spots": { Acne: 75, Freckles: 75, Spots: 75 },
       Wrinkles: { Forehead: 0, "Smile Lines": 0 },
       Teeth: { Whiten: 0, Brighten: 0 },
       Face: { Brighten: 15, Smoothen: 15, "Remove Shine": 0 },
@@ -197,7 +197,7 @@ export const PRESETS: Preset[] = [
     tags: ["All Subjects"],
     custom: false,
     values: {
-      "Blemish Removal": { Acne: 50, Freckles: 25, Spots: 50 },
+      "Face Spots": { Acne: 50, Freckles: 25, Spots: 50 },
       Wrinkles: { Forehead: 0, "Smile Lines": 0 },
       Teeth: { Whiten: 0, Brighten: 50 },
       Face: { Brighten: 50, Smoothen: 35, "Remove Shine": 0 },

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwise, X, MagnifyingGlass, Plus, FlaskIcon } from "@phosphor-icons/react";
+import { Check, ArrowCounterClockwise, X, MagnifyingGlassIcon, ArrowsClockwiseIcon, PlusIcon, FlaskIcon } from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 import SuggestObjectModal from "./SuggestObjectModal";
 import Tooltip from "./Tooltip";
@@ -162,7 +162,7 @@ const SmartObjectRemoval = ({
                 className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${isScanning ? "text-[#474747] cursor-not-allowed" : "text-[#777] hover:text-[#e2e2e2] hover:bg-white/5"
                   }`}
               >
-                <MagnifyingGlass className="w-4 h-4" />
+                <ArrowsClockwiseIcon className="w-4 h-4" />
               </button>
             )}
 
@@ -176,7 +176,7 @@ const SmartObjectRemoval = ({
         {!isScanning && noneFound && (
           <div className="flex flex-col pt-1">
             <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424]">
-              <MagnifyingGlass className="w-8 h-8 text-[#e2e2e2]" weight="duotone" />
+              <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" weight="regular" />
               <div className="flex flex-col gap-1 text-center w-full">
                 <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">No distractions detected</p>
                 <p className="text-[13px] font-normal text-[#ababab] leading-4">Think we missed something?</p>
@@ -203,7 +203,7 @@ const SmartObjectRemoval = ({
               className="group relative mt-2 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
             >
               <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
-                <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
+                <PlusIcon className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
               </div>
               <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
             </button>
@@ -270,7 +270,7 @@ const SmartObjectRemoval = ({
             className="group relative mt-1 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
           >
             <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
-              <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
+              <PlusIcon className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
             </div>
             <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
           </button>
