@@ -3,20 +3,21 @@ import { PlusCircle, Warning, PushPin } from "@phosphor-icons/react";
 import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
-import Accordion from "./Accordion";
-import PresetDropdown from "./PresetDropdown";
-import SliderRow from "./SliderRow";
-import SliderSection from "./SliderSection";
+import Accordion from "../../Accordion";
+import PresetDropdown from "../../PresetDropdown";
+import SliderRow from "../../SliderRow";
+import SliderSection from "../../SliderSection";
 import { getSubjectIndices, subjectGender } from "@/data/subjectMapping";
 import { SECTIONS, findPreset, presetToSectionValues } from "@/data/presetMapping";
 import type { ModelSubject } from "@/hooks/useFaceDetection";
+import type { SubjectCategory } from "@/lib/faceDetection";
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
 const chips = ["All Subjects", "Masculine", "Feminine", "Elderly", "Child", "Individual"];
 
 const subjectModules = import.meta.glob(
-  "../assets/subjects/*.png",
+  "../../../assets/subjects/*.png",
   { eager: true }
 ) as Record<string, { default: string }>;
 
@@ -24,7 +25,7 @@ const subjects = Object.entries(subjectModules)
   .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
   .map(([, mod]) => ({ avatar: mod.default }));
 
-// ─── Main component ────────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface LoupeRetouchState {
   sliderLayers: Record<string, (number | null)[][]>;
@@ -32,7 +33,7 @@ export interface LoupeRetouchState {
   customized: Set<string>;
 }
 
-interface LoupeSubjectPanelProps {
+interface SubjectTabProps {
   onScrollChange?: (atBottom: boolean) => void;
   currentImageIndex?: number;
   syncedPresets?: Record<string, string>;
@@ -45,7 +46,9 @@ interface LoupeSubjectPanelProps {
   isModelDetecting?: boolean;
 }
 
-const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {}, onStateChange, pasteSignal, loupeResetSignal, modelSubjects, modelImageMap, isModelDetecting }: LoupeSubjectPanelProps) => {
+// ─── Component ─────────────────────────────────────────────────────────────────
+
+const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {}, onStateChange, pasteSignal, loupeResetSignal, modelSubjects, modelImageMap, isModelDetecting }: SubjectTabProps) => {
   const [selectedChip, setSelectedChip] = useState<string | null>("All Subjects");
   const [selectedFaces, setSelectedFaces] = useState<Set<number>>(new Set());
   const [selectedModelFace, setSelectedModelFace] = useState<number | null>(null);
@@ -56,6 +59,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
     const t = setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(t);
   }, [toast]);
+
   // Overrides set directly in Loupe.
   // string  = preset explicitly applied at this level
   // null    = bypassed by cascade — skip this level, fall through to next
@@ -90,7 +94,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
     });
   };
 
-  // Check if content fits without scrolling (or is scrolled to bottom)
   const checkBottom = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -103,11 +106,11 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
     if (!el) return;
     const observer = new ResizeObserver(checkBottom);
     observer.observe(el);
-    // Also observe the inner content for accordion open/close changes
     if (el.firstElementChild) observer.observe(el.firstElementChild);
     checkBottom();
     return () => observer.disconnect();
   }, [onScrollChange]);
+
   // ── Slider layers ─────────────────────────────────────────────────────────────
   // One layer per context key. null cell = inherit from parent. missing key = all inherit.
   // Hierarchy mirrors presets: subject-N > group-{gender} > group-All Subjects
@@ -128,7 +131,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
     ? new Set(
       modelClusterIds
         .map((cid) => modelSubjects.find((s) => s.id === cid)?.category)
-        .filter((c): c is string => !!c)
+        .filter((c): c is SubjectCategory => !!c)
     )
     : new Set(
       (rawIndices ?? subjects.map((_, i) => i))
@@ -155,7 +158,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
     if (customized.has(key)) return STOP;
     if (key in localPresets) {
       const val = localPresets[key];
-      return val === null ? undefined : val; // null = cascade bypass, fall through
+      return val === null ? undefined : val;
     }
     return syncedPresets[key];
   };
@@ -207,7 +210,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
 
     if (chip === "All Subjects") {
       if (!preset || preset.tags.includes("All Subjects")) {
-        // Preset is compatible with All Subjects — apply at that level and cascade down
         const next: Record<string, string | null> = { "group-All Subjects": value };
         ["Masculine", "Feminine", "Elderly", "Child"].forEach((g) => { next[`group-${g}`] = null; });
         subjects.forEach((_, i) => { next[`subject-${i}`] = null; });
@@ -220,7 +222,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
           return layers;
         });
       } else {
-        // Preset targets specific genders — route it down to only those gender groups
         const imageIndices = rawIndices ?? subjects.map((_, i) => i);
         const matchingGenders = (preset.tags as string[]).filter((g) =>
           imageIndices.some((i) => subjectGender[i] === g)
@@ -231,7 +232,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
           return;
         }
 
-        // Apply to each matching gender group (same as if the user selected each group chip individually)
         setLocalPresets((prev) => {
           const next = { ...prev };
           matchingGenders.forEach((g) => {
@@ -257,8 +257,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
           return next;
         });
 
-        // Automatically switch to the first affected gender chip so the user
-        // can immediately see what was applied
         const firstChip = chips.find((c) => matchingGenders.includes(c));
         if (firstChip) setSelectedChip(firstChip);
       }
@@ -280,7 +278,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
         subjects.forEach((_, i) => { if (subjectGender[i] === chip) s.delete(`subject-${i}`); });
         return s;
       });
-      // Load preset into this gender's layer; reset subject layers so they inherit
       setSliderLayers((prev) => {
         const next = { ...prev, [`group-${chip}`]: presetSliders };
         subjects.forEach((_, i) => {
@@ -296,7 +293,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
     ? resolvePreset("Individual", undefined)
     : selectedChip ? resolvePreset(selectedChip, singleFace) : null;
 
-  // The context key for the currently active chip + face/model selection
   const currentContextKey =
     selectedModelFace !== null
       ? `model-${selectedModelFace}`
@@ -304,9 +300,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
         ? `subject-${singleFace}`
         : `group-${selectedChip ?? "All Subjects"}`;
 
-  // Walk up the hierarchy to resolve the effective slider value for the current context
   const resolveSliderValue = (sIdx: number, sliderIdx: number): number => {
-    // Model face: model-specific → category group → All Subjects
     if (selectedModelFace !== null) {
       const val = sliderLayers[`model-${selectedModelFace}`]?.[sIdx]?.[sliderIdx];
       if (val !== null && val !== undefined) return val;
@@ -335,9 +329,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
   };
 
   const effectiveSectionValues = SECTIONS.map((_, sIdx) =>
-    SECTIONS[sIdx].sliders.map((_, sliderIdx) =>
-      resolveSliderValue(sIdx, sliderIdx)
-    )
+    SECTIONS[sIdx].sliders.map((_, sliderIdx) => resolveSliderValue(sIdx, sliderIdx))
   );
 
   const setSlider = (sIdx: number, sliderIdx: number, v: number) => {
@@ -346,7 +338,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
       layer[sIdx][sliderIdx] = v;
       return { ...prev, [currentContextKey]: layer };
     });
-    // Mark this context as customized — breaks preset link, shows no preset
     setCustomized((prev) => new Set([...prev, currentContextKey]));
     setLocalPresets((prev) => { const next = { ...prev }; delete next[currentContextKey]; return next; });
   };
@@ -354,10 +345,9 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
   const resetSection = (sIdx: number) => {
     setSliderLayers((prev) => {
       const layer = (prev[currentContextKey] ?? nullLayer()).map((row) => [...row]);
-      layer[sIdx] = SECTIONS[sIdx].sliders.map(() => null); // null = inherit from parent
+      layer[sIdx] = SECTIONS[sIdx].sliders.map(() => null);
       return { ...prev, [currentContextKey]: layer };
     });
-    // Resetting a section is a manual change — break the preset link the same way a slider move does
     setCustomized((prev) => new Set([...prev, currentContextKey]));
     setLocalPresets((prev) => { const next = { ...prev }; delete next[currentContextKey]; return next; });
   };
@@ -370,13 +360,11 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
     setCustomized(new Set());
   }, [currentImageIndex]);
 
-  // Report state changes to parent
   useEffect(() => {
     onStateChange?.({ sliderLayers, localPresets, customized });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sliderLayers, localPresets, customized]);
 
-  // Apply paste signal
   useEffect(() => {
     if (!pasteSignal) return;
     setSliderLayers(pasteSignal.state.sliderLayers);
@@ -384,7 +372,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
     setCustomized(new Set(pasteSignal.state.customized));
   }, [pasteSignal?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Apply reset signal
   useEffect(() => {
     if (!loupeResetSignal) return;
     setSliderLayers({});
@@ -394,16 +381,15 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
   }, [loupeResetSignal]);
 
   const toggleFace = (i: number) => {
-    setSelectedModelFace(null); // deselect model face when hardcoded face tapped
+    setSelectedModelFace(null);
     setSelectedFaces((prev) => {
-      // Always keep at least one face selected — clicking the active face is a no-op
       if (prev.has(i) && prev.size === 1) return prev;
       return new Set([i]);
     });
   };
 
   const toggleModelFace = (clusterId: number) => {
-    setSelectedFaces(new Set()); // deselect hardcoded faces when model face tapped
+    setSelectedFaces(new Set());
     setSelectedModelFace((prev) => (prev === clusterId ? null : clusterId));
   };
 
@@ -445,7 +431,7 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
           })}
         </div>
 
-        {/* Face grid — commented out for model comparison
+        {/*
         {selectedChip === "Individual" && (
           <div className="grid grid-cols-5 gap-2">
             ...hardcoded grid...
@@ -508,7 +494,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
             }
             onChange={(v) => {
               if (selectedModelFace !== null) {
-                // Apply preset to model face context only
                 const preset = findPreset(v);
                 const presetSliders = preset ? presetToSectionValues(preset) : nullLayer();
                 setLocalPresets((prev) => ({ ...prev, [`model-${selectedModelFace}`]: v }));
@@ -524,7 +509,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
 
         <div className="h-[1px] mt-[-8px] w-full bg-[#e2e2e20d]" />
       </div>
-
 
       {/* Toast */}
       {toast && (
@@ -550,7 +534,6 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
               <div className="w-3 h-3 flex items-center justify-center shrink-0">
                 <PushPin size={12} weight="fill" className="text-[#777]" />
               </div>
-              {/* <span className="flex-1 text-[14px] font-normal text-[#e2e2e2]">Pinned</span> */}
               <span className="flex-1 text-[11px] font-semibold text-[#ababab] uppercase tracking-[0.5px]">Favorite Sliders</span>
             </div>
             <div className="pt-2.5 pb-2.5 flex flex-col gap-3">
@@ -598,4 +581,4 @@ const LoupeSubjectPanel = ({ onScrollChange, currentImageIndex = 0, syncedPreset
   );
 };
 
-export default LoupeSubjectPanel;
+export default SubjectTab;

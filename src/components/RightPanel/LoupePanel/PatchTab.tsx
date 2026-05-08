@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwiseIcon, X, CubeFocusIcon, FlaskIcon, ArrowsCounterClockwiseIcon, Plus, ArrowsClockwiseIcon } from "@phosphor-icons/react";
+import { Check, ArrowCounterClockwiseIcon, X, FlaskIcon, ArrowsClockwiseIcon, Plus } from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
-import SuggestObjectModal from "./SuggestObjectModal";
-import Tooltip from "./Tooltip";
+import SuggestObjectModal from "../../SuggestObjectModal";
+import Tooltip from "../../Tooltip";
 
 const MODEL_TO_UI: Record<string, string> = {
   "Exit Sign": "Exit Signs",
@@ -24,19 +24,17 @@ interface ToggleProps {
 const Toggle = ({ checked, onChange }: ToggleProps) => (
   <button
     onClick={() => onChange(!checked)}
-    className={`relative flex items-center p-0.5 rounded-full w-8 h-[18px] transition-colors shrink-0 ${checked ? "bg-[#2563eb]" : "bg-[#303030]"
-      }`}
+    className={`relative flex items-center p-0.5 rounded-full w-8 h-[18px] transition-colors shrink-0 ${checked ? "bg-[#2563eb]" : "bg-[#303030]"}`}
   >
     <div
-      className={`w-3 h-3 rounded-full transition-transform duration-200 ${checked ? "translate-x-[14px] bg-white" : "translate-x-0 bg-[#ababab]"
-        }`}
+      className={`w-3 h-3 rounded-full transition-transform duration-200 ${checked ? "translate-x-[14px] bg-white" : "translate-x-0 bg-[#ababab]"}`}
     />
   </button>
 );
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
-interface LoupePatchPanelProps {
+interface PatchTabProps {
   onScrollChange?: (atBottom: boolean) => void;
   currentImageIndex?: number;
   canvasHasStrokes?: boolean;
@@ -44,37 +42,34 @@ interface LoupePatchPanelProps {
   onRemoveAfterStrokeChange?: (v: boolean) => void;
   onRemovingChange?: (v: boolean) => void;
   distractionMap?: Map<number, DistractionDetection[]>;
-  isModelScanning?: boolean;
-  onRerun?: () => void;
-  onReport?: () => void;
-  onSuggestSubmit?: (suggestion: string) => void;
+  isDistractionScanning?: boolean;
+  onDistractionRerunCurrent?: () => void;
+  onDistractionSelectionChange?: (labels: Set<string>) => void;
+  onDistractionHoverChange?: (label: string | null) => void;
+  onDistractionRemoveSuccess?: (count: number, brushOnly: boolean) => void;
+  onSuggestObject?: (suggestion: string) => void;
   removedItems?: Set<string>;
-  onRemove?: (labels: Set<string>) => void;
-  onResetItem?: (label: string) => void;
-  onSelectedLabelsChange?: (labels: Set<string>) => void;
-  onHoveredLabelChange?: (label: string | null) => void;
-  onRemoveSuccess?: (count: number, brushOnly: boolean) => void;
+  onAddRemovedItems?: (labels: Set<string>) => void;
+  onResetRemovedItem?: (label: string) => void;
 }
 
-const LoupePatchPanel = ({
-  onScrollChange: _onScrollChange,
+const PatchTab = ({
   currentImageIndex = 0,
   canvasHasStrokes = false,
   onClearCanvas,
   onRemoveAfterStrokeChange,
   onRemovingChange,
   distractionMap,
-  isModelScanning = false,
-  onRerun,
-  onReport,
-  onSuggestSubmit,
+  isDistractionScanning: isModelScanning = false,
+  onDistractionRerunCurrent: onRerun,
+  onDistractionSelectionChange: onSelectedLabelsChange,
+  onDistractionHoverChange: onHoveredLabelChange,
+  onDistractionRemoveSuccess: onRemoveSuccess,
+  onSuggestObject: onSuggestSubmit,
   removedItems = new Set(),
-  onRemove,
-  onResetItem,
-  onSelectedLabelsChange,
-  onHoveredLabelChange,
-  onRemoveSuccess,
-}: LoupePatchPanelProps) => {
+  onAddRemovedItems: onRemove,
+  onResetRemovedItem: onResetItem,
+}: PatchTabProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [removeAfterStroke, setRemoveAfterStroke] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
@@ -94,7 +89,6 @@ const LoupePatchPanel = ({
     setShowSuggestModal(false);
   };
 
-
   const detected = useMemo(() => {
     const imageDets = distractionMap?.get(currentImageIndex) ?? [];
     const countMap = new Map<string, number>();
@@ -107,18 +101,15 @@ const LoupePatchPanel = ({
 
   const hasScanned = distractionMap !== undefined;
 
-  // Non-removed first, removed at the bottom — same ordering as SmartObjectRemoval
   const orderedItems = [
     ...detected.filter((d) => !removedItems.has(d.label)),
     ...detected.filter((d) => removedItems.has(d.label)),
   ];
 
-  // Notify parent when removal state changes so canvas loader can be shown
   useEffect(() => {
     onRemovingChange?.(isRemoving);
   }, [isRemoving]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset selection state on mount and image change
   useEffect(() => {
     const empty = new Set<string>();
     setSelected(empty);
@@ -128,7 +119,6 @@ const LoupePatchPanel = ({
     onHoveredLabelChange?.(null);
   }, [currentImageIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Item toggle ───────────────────────────────────────────────────────────
   const toggle = (label: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -138,7 +128,6 @@ const LoupePatchPanel = ({
     });
   };
 
-  // ── Restore ───────────────────────────────────────────────────────────────
   const handleResetClick = (label: string, count: number) => {
     if (skipConfirmation) {
       onResetItem?.(label);
@@ -153,24 +142,18 @@ const LoupePatchPanel = ({
     setPendingReset(null);
   };
 
-  // ── Remove ────────────────────────────────────────────────────────────────
   const totalObjectCount =
-    detected
-      .filter((d) => selected.has(d.label))
-      .reduce((sum, d) => sum + d.count, 0) +
+    detected.filter((d) => selected.has(d.label)).reduce((sum, d) => sum + d.count, 0) +
     (canvasHasStrokes ? 1 : 0);
 
-  const removeLabel =
-    totalObjectCount > 1 ? `Remove ${totalObjectCount} Objects` : "Remove Object";
+  const removeLabel = totalObjectCount > 1 ? `Remove ${totalObjectCount} Objects` : "Remove Object";
 
   const canRemove = !isRemoving && (selected.size > 0 || (canvasHasStrokes && !removeAfterStroke));
 
   const handleRemove = () => {
     if (!canRemove) return;
     const toRemove = new Set(selected);
-    const removedCount = detected
-      .filter((d) => toRemove.has(d.label))
-      .reduce((sum, d) => sum + d.count, 0);
+    const removedCount = detected.filter((d) => toRemove.has(d.label)).reduce((sum, d) => sum + d.count, 0);
     const brushOnly = toRemove.size === 0 && canvasHasStrokes;
     setIsRemoving(true);
     setTimeout(() => {
@@ -198,9 +181,6 @@ const LoupePatchPanel = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">Smart Object Removal</span>
-            {/* <span className="px-1 py-0.5 text-[11px] font-medium leading-3 rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
-              Beta
-            </span> */}
             <span
               className="relative inline-flex"
               onMouseEnter={() => setFlaskHovered(true)}
@@ -249,7 +229,7 @@ const LoupePatchPanel = ({
                 </button>
                 {hasRescanned && (
                   <button
-                    onClick={onReport}
+                    onClick={() => console.log('[DistractionDetection] User reported a missed detection')}
                     className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded hover:bg-white/5 transition-colors"
                   >
                     <span className="text-[12px] font-medium text-[#ababab] leading-4">Report Issue</span>
@@ -301,16 +281,14 @@ const LoupePatchPanel = ({
                   onClick={() => toggle(d.label)}
                   onMouseEnter={() => !itemsDisabled && onHoveredLabelChange?.(d.label)}
                   onMouseLeave={() => !itemsDisabled && onHoveredLabelChange?.(null)}
-                  className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${itemsDisabled ? "cursor-not-allowed" : "hover:bg-[#2a2a2a] cursor-pointer"
-                    }`}
+                  className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${itemsDisabled ? "cursor-not-allowed" : "hover:bg-[#2a2a2a] cursor-pointer"}`}
                 >
                   <div className="flex items-center gap-1 min-w-0">
                     <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">{d.label}</span>
                     <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">{d.count}</span>
                   </div>
                   <div
-                    className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${isSelected ? "bg-[#2563eb]" : "border border-[#474747] bg-transparent"
-                      }`}
+                    className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${isSelected ? "bg-[#2563eb]" : "border border-[#474747] bg-transparent"}`}
                   >
                     {isSelected && <Check className="w-2 h-2 text-white stroke-[3]" />}
                   </div>
@@ -331,31 +309,8 @@ const LoupePatchPanel = ({
           </div>
         )}
 
-        {/* {detected.length > 0 && (
-          <button
-            onClick={() => setShowSuggestModal(true)}
-            className="group relative mt-1 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
-          >
-            <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
-              <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
-            </div>
-            <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
-          </button>
-        )} */}
-
-        {/* Remove CTA — matches Grid View processing style */}
-        {/* <button
-          disabled={!canRemove}
-          onClick={handleRemove}
-          className={`flex items-center justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium transition-colors ${isRemoving
-            ? "bg-[#1d56d1] text-white cursor-not-allowed"
-            : canRemove
-              ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
-              : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
-            }`}
-        >
-          <span>{isRemoving ? "Removing…" : removeLabel}</span>
-        </button> */}
+        {/* Remove CTA */}
+        {/* <button ... /> — kept as separate button below */}
       </div>
 
       <button
@@ -371,25 +326,13 @@ const LoupePatchPanel = ({
         <span>{isRemoving ? "Removing…" : removeLabel}</span>
       </button>
 
-      <div className="h-[1px] w-full bg-[#e2e2e20d]"></div>
+      <div className="h-[1px] w-full bg-[#e2e2e20d]" />
 
       {/* ── Brush Options ─────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3">
-        {/* <span className="text-[11px] font-semibold tracking-[0.5px] uppercase text-[#ababab] leading-3">
-          Brush Options
-        </span> */}
-
         <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">Brush Options</span>
-
         <div className="flex items-center justify-between gap-4">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
-              Remove after each stroke
-            </span>
-            {/* <span className="text-[11px] text-[#ababab] leading-4">
-              Review each removal
-            </span> */}
-          </div>
+          <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">Remove after each stroke</span>
           <Toggle
             checked={removeAfterStroke}
             onChange={(v) => {
@@ -399,21 +342,15 @@ const LoupePatchPanel = ({
             }}
           />
         </div>
-
-
       </div>
 
-
-
-      {/* ── Restore confirmation modal (same as SmartObjectRemoval) ───────── */}
+      {/* ── Restore confirmation modal ─────────────────────────────────────── */}
       {pendingReset && createPortal(
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
           <div className="bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-5 flex flex-col gap-4 w-[448px]">
             <div className="flex items-start justify-between gap-2">
               <div className="flex flex-col gap-1 pt-0.5">
-                <h3 className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
-                  Reset Object Removal
-                </h3>
+                <h3 className="text-[16px] font-semibold text-[#e2e2e2] leading-5">Reset Object Removal</h3>
                 <p className="text-[14px] font-normal text-[#ababab] leading-5">
                   This will restore {pendingReset.count} photo{pendingReset.count > 1 ? "s" : ""} affected by "{pendingReset.label}".
                 </p>
@@ -425,19 +362,16 @@ const LoupePatchPanel = ({
                 <X className="w-4 h-4 text-[#777]" />
               </button>
             </div>
-
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSkipConfirmation((v) => !v)}
                 className="flex items-center gap-1.5 shrink-0"
               >
-                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${skipConfirmation ? "bg-[#2563eb] border-[#2563eb]" : "bg-[#303030] border-[#474747]"
-                  }`}>
+                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${skipConfirmation ? "bg-[#2563eb] border-[#2563eb]" : "bg-[#303030] border-[#474747]"}`}>
                   {skipConfirmation && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
                 </div>
                 <span className="text-[12px] text-[#777]">Don't ask again</span>
               </button>
-
               <div className="flex items-center gap-2 ml-auto">
                 <button
                   onClick={() => setPendingReset(null)}
@@ -468,4 +402,4 @@ const LoupePatchPanel = ({
   );
 };
 
-export default LoupePatchPanel;
+export default PatchTab;
