@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwiseIcon, X, CubeFocusIcon, FlaskIcon, MagnifyingGlassIcon, Plus } from "@phosphor-icons/react";
+import { Check, ArrowCounterClockwiseIcon, X, CubeFocusIcon, FlaskIcon, ArrowsCounterClockwiseIcon, Plus, ArrowsClockwiseIcon } from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 import SuggestObjectModal from "./SuggestObjectModal";
 import Tooltip from "./Tooltip";
@@ -226,7 +226,7 @@ const LoupePatchPanel = ({
             {isModelScanning ? (
               <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
             ) : (
-              <MagnifyingGlassIcon className="w-5 h-5 text-[#555]" />
+              <ArrowsClockwiseIcon className="w-5 h-5 text-[#555]" />
             )}
           </button>
         </div>
@@ -235,7 +235,7 @@ const LoupePatchPanel = ({
         {!isModelScanning && hasScanned && detected.length === 0 && (
           <div className="flex flex-col items-center gap-3 mt-1">
             <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424] w-full">
-              <MagnifyingGlassIcon className="w-8 h-8 text-[#e2e2e2]" weight="duotone" />
+              <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" weight="duotone" />
               <div className="flex flex-col gap-1 text-center w-full">
                 <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">No distractions detected</p>
                 <p className="text-[13px] font-normal text-[#ababab] leading-4">Think we missed something?</p>

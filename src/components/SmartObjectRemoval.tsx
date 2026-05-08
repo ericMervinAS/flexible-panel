@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwise, X, MagnifyingGlassIcon, ArrowsClockwiseIcon, PlusIcon, FlaskIcon } from "@phosphor-icons/react";
+import { Check, ArrowCounterClockwiseIcon, X, MagnifyingGlassIcon, ArrowsClockwiseIcon, PlusIcon, FlaskIcon } from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 import SuggestObjectModal from "./SuggestObjectModal";
 import Tooltip from "./Tooltip";
@@ -176,7 +176,7 @@ const SmartObjectRemoval = ({
         {!isScanning && noneFound && (
           <div className="flex flex-col pt-1">
             <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424]">
-              <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" weight="regular" />
+              <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" weight="duotone" />
               <div className="flex flex-col gap-1 text-center w-full">
                 <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">No distractions detected</p>
                 <p className="text-[13px] font-normal text-[#ababab] leading-4">Think we missed something?</p>
@@ -234,7 +234,7 @@ const SmartObjectRemoval = ({
                     </div>
                     <div className="shrink-0 relative w-3 h-3">
                       <Check className="absolute top-0 left-0 w-3 h-3 text-[#16a34a] transition-opacity group-hover:opacity-0" />
-                      <ArrowCounterClockwise className="absolute top-0 left-0 w-3 h-3 text-[#e2e2e2] opacity-0 transition-opacity group-hover:opacity-100" />
+                      <ArrowCounterClockwiseIcon className="absolute top-0 left-0 w-3 h-3 text-[#e2e2e2] opacity-0 transition-opacity group-hover:opacity-100" />
                     </div>
                   </button>
                 );
