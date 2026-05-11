@@ -8,10 +8,10 @@ import type { ModelSubject } from "@/hooks/useFaceDetection";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 
 const LOUPE_TABS = [
-  { id: "subject",    Icon: UserIcon   },
-  { id: "background", Icon: StackIcon  },
-  { id: "patch",      Icon: EraserIcon },
-  { id: "tethering",  Icon: CameraIcon },
+  { id: "subject", Icon: UserIcon },
+  { id: "background", Icon: StackIcon },
+  { id: "patch", Icon: EraserIcon },
+  { id: "tethering", Icon: CameraIcon },
 ] as const;
 
 export type LoupeTab = typeof LOUPE_TABS[number]["id"];
@@ -111,20 +111,36 @@ const LoupePanel = ({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Tab bar */}
-      <div className="flex items-center gap-3 px-5 pt-3 shrink-0">
-        {LOUPE_TABS.map(({ id, Icon }) => (
-          <button
-            key={id}
-            onClick={() => { setActiveTab(id); onTabChange?.(id); }}
-            className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${
-              activeTab === id
+      <div className="flex items-center justify-between px-5 pt-3 shrink-0">
+        <div className="flex items-center gap-3">
+          {LOUPE_TABS.slice(0, -1).map(({ id, Icon }) => (
+            <button
+              key={id}
+              onClick={() => { setActiveTab(id); onTabChange?.(id); }}
+              className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${activeTab === id
                 ? "border-[#e2e2e2] text-[#e2e2e2]"
                 : "border-transparent text-[#777] hover:text-[#ababab]"
-            }`}
-          >
-            <Icon size={16} />
-          </button>
-        ))}
+                }`}
+            >
+              <Icon size={16} />
+            </button>
+          ))}
+        </div>
+        {(() => {
+          const { id, Icon } = LOUPE_TABS[LOUPE_TABS.length - 1];
+          return (
+            <button
+              key={id}
+              onClick={() => { setActiveTab(id); onTabChange?.(id); }}
+              className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${activeTab === id
+                ? "border-[#e2e2e2] text-[#e2e2e2]"
+                : "border-transparent text-[#777] hover:text-[#ababab]"
+                }`}
+            >
+              <Icon size={16} />
+            </button>
+          );
+        })()}
       </div>
 
       {/* Tab content */}
@@ -178,22 +194,20 @@ const LoupePanel = ({
                 seq: (prev?.seq ?? 0) + 1,
               }));
             }}
-            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${
-              canPaste
-                ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
-                : "bg-[#303030] text-[#474747] cursor-not-allowed"
-            }`}
+            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${canPaste
+              ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
+              : "bg-[#303030] text-[#474747] cursor-not-allowed"
+              }`}
           >
             Paste
           </button>
           <button
             disabled={!canReset}
             onClick={() => canReset && setLoupeResetSignal((s) => s + 1)}
-            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${
-              canReset
-                ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
-                : "bg-[#303030] text-[#474747] cursor-not-allowed"
-            }`}
+            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${canReset
+              ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
+              : "bg-[#303030] text-[#474747] cursor-not-allowed"
+              }`}
           >
             Reset
           </button>
