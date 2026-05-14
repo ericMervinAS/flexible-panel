@@ -9,6 +9,7 @@ interface RightPanelProps {
   isScanning: boolean;
   isLoupeView?: boolean;
   currentImageIndex?: number;
+  currentImageSrc?: string;
   onTabChange?: (tab: string) => void;
   canvasHasStrokes?: boolean;
   onClearCanvas?: () => void;
@@ -37,6 +38,7 @@ const RightPanel = ({
   isScanning,
   isLoupeView = false,
   currentImageIndex = 0,
+  currentImageSrc,
   onTabChange,
   canvasHasStrokes = false,
   onClearCanvas,
@@ -103,6 +105,7 @@ const RightPanel = ({
       {isLoupeView ? (
         <LoupePanel
           currentImageIndex={currentImageIndex}
+          currentImageSrc={currentImageSrc}
           appliedPresets={appliedPresets}
           removedItems={removedItems}
           onAddRemovedItems={handleAddRemovedItems}

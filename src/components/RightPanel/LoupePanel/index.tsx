@@ -18,6 +18,7 @@ export type LoupeTab = typeof LOUPE_TABS[number]["id"];
 
 interface LoupePanelProps {
   currentImageIndex: number;
+  currentImageSrc?: string;
   appliedPresets: Record<string, string>;
   removedItems: Set<string>;
   onAddRemovedItems: (labels: Set<string>) => void;
@@ -45,6 +46,7 @@ interface LoupePanelProps {
 
 const LoupePanel = ({
   currentImageIndex,
+  currentImageSrc,
   appliedPresets,
   removedItems,
   onAddRemovedItems,
@@ -179,7 +181,7 @@ const LoupePanel = ({
             onResetRemovedItem={onResetRemovedItem}
           />
         )}
-        {activeTab === "tethering" && <TetheringTab />}
+        {activeTab === "tethering" && <TetheringTab currentImageSrc={currentImageSrc} />}
       </div>
 
       {/* Paste / Reset footer */}
