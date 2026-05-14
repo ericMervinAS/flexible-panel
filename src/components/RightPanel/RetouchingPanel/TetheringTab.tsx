@@ -1,32 +1,62 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
-  FolderOpen, CaretDown, CaretLeft, CaretRight,
-  BatteryHigh, GearIcon, CameraIcon,
-  X, Stack, Monitor, Keyboard, LockSimple, ShieldCheck, ArrowRight,
+  FolderOpen,
+  CaretDown,
+  CaretLeft,
+  CaretRight,
+  BatteryHigh,
+  GearIcon,
+  CameraIcon,
+  X,
+  Stack,
+  Monitor,
+  Keyboard,
+  LockSimple,
+  ShieldCheck,
+  ArrowRight,
 } from "@phosphor-icons/react";
 import Accordion from "../../Accordion";
 import PresetDropdown from "../../PresetDropdown";
+import Tooltip from "../../Tooltip";
 
 // ─── Camera stop arrays ────────────────────────────────────────────────────────
 
 const APERTURE_STOPS = ["1.4", "1.8", "2", "2.8", "4", "5.6", "8", "11", "16", "22"];
-const SHUTTER_STOPS  = ["30", "60", "125", "250", "300", "500", "1000", "2000", "4000"];
-const ISO_STOPS      = ["100", "200", "400", "800", "1600", "3200", "6400"];
+const SHUTTER_STOPS = ["30", "60", "125", "250", "300", "500", "1000", "2000", "4000"];
+const ISO_STOPS = ["100", "200", "400", "800", "1600", "3200", "6400"];
 
-const WB_OPTIONS      = ["Auto", "Daylight", "Cloudy", "Shade", "Tungsten", "Fluorescent", "Flash", "Custom"] as const;
+const WB_OPTIONS = [
+  "Auto",
+  "Daylight",
+  "Cloudy",
+  "Shade",
+  "Tungsten",
+  "Fluorescent",
+  "Flash",
+  "Custom",
+] as const;
 const QUALITY_OPTIONS = ["NEF", "JPEG", "NEF + JPEG"] as const;
 
 // ─── Editing Profile cards ────────────────────────────────────────────────────
 
 const EDITING_PROFILES = [
-  { group: "Custom Profiles",     names: ["My Wedding Profile", "Studio Portraits"] },
-  { group: "Aftershoot Profiles", names: ["Wedding — Natural Light", "Wedding — Reception", "Portrait — Studio", "Portrait — Outdoor", "Event"] },
+  { group: "Custom Profiles", names: ["My Wedding Profile", "Studio Portraits"] },
+  {
+    group: "Aftershoot Profiles",
+    names: [
+      "Wedding — Natural Light",
+      "Wedding — Reception",
+      "Portrait — Studio",
+      "Portrait — Outdoor",
+      "Event",
+    ],
+  },
 ];
 
 const PROFILE_CARD_DATA: { name: string; img: string }[] = [
-  { name: "My Wedding Profile",      img: "/tethering-profiles/crispy-cream.png" },
-  { name: "Studio Portraits",        img: "/tethering-profiles/graicard.png" },
+  { name: "My Wedding Profile", img: "/tethering-profiles/crispy-cream.png" },
+  { name: "Studio Portraits", img: "/tethering-profiles/graicard.png" },
   { name: "Hazlenut", img: "/tethering-profiles/crispy-cream.png" },
   { name: "Graicard", img: "/tethering-profiles/crispy-cream.png" },
   { name: "Crispy Cream", img: "/tethering-profiles/crispy-cream.png" },
@@ -40,7 +70,13 @@ interface ProfileDropdownProps {
   maxVisible?: number;
 }
 
-const ProfileDropdown = ({ value, onChange, currentImageSrc, cols = 3, maxVisible }: ProfileDropdownProps) => {
+const ProfileDropdown = ({
+  value,
+  onChange,
+  currentImageSrc,
+  cols = 3,
+  maxVisible,
+}: ProfileDropdownProps) => {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
@@ -49,14 +85,23 @@ const ProfileDropdown = ({ value, onChange, currentImageSrc, cols = 3, maxVisibl
   const updatePosition = () => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    setMenuStyle({ position: "fixed", top: rect.bottom + 4, left: rect.left, width: rect.width, zIndex: 9999 });
+    setMenuStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    });
   };
 
   useEffect(() => {
     if (!open) return;
     updatePosition();
     const onClickOutside = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node) && !menuRef.current?.contains(e.target as Node))
+      if (
+        !containerRef.current?.contains(e.target as Node) &&
+        !menuRef.current?.contains(e.target as Node)
+      )
         setOpen(false);
     };
     document.addEventListener("mousedown", onClickOutside);
@@ -69,36 +114,41 @@ const ProfileDropdown = ({ value, onChange, currentImageSrc, cols = 3, maxVisibl
 
   return (
     <div ref={containerRef} className="flex flex-col gap-2 w-full">
-      <div className={`grid gap-3 w-full`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-        {(maxVisible != null ? PROFILE_CARD_DATA.slice(0, maxVisible) : PROFILE_CARD_DATA).map((profile) => {
-          const selected = value === profile.name;
-          return (
-            <button
-              key={profile.name}
-              onClick={() => onChange(selected ? null : profile.name)}
-              className="flex flex-col gap-1 items-start w-full shrink-0 text-left"
-            >
-              <div
-                className={`relative w-full overflow-hidden shrink-0 ${selected ? "rounded-[5px] p-px bg-white" : "rounded-[4px]"}`}
-                style={{ aspectRatio: "69/46" }}
+      <div
+        className={`grid gap-3 w-full`}
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+      >
+        {(maxVisible != null ? PROFILE_CARD_DATA.slice(0, maxVisible) : PROFILE_CARD_DATA).map(
+          (profile) => {
+            const selected = value === profile.name;
+            return (
+              <button
+                key={profile.name}
+                onClick={() => onChange(selected ? null : profile.name)}
+                className="flex flex-col gap-1 items-start w-full shrink-0 text-left"
               >
-                <img
-                  src={currentImageSrc ?? profile.img}
-                  alt={profile.name}
-                  className="w-full h-full object-cover rounded-[4px]"
-                />
-                {selected && (
-                  <div className="absolute inset-[3px] rounded-[3px] ring-1 ring-[#1c1c1c] pointer-events-none" />
-                )}
-              </div>
-              <span
-                className={`text-[11px] font-medium leading-[12px] truncate w-full ${selected ? "text-[#e2e2e2]" : "text-[#777]"}`}
-              >
-                {profile.name}
-              </span>
-            </button>
-          );
-        })}
+                <div
+                  className={`relative w-full overflow-hidden shrink-0 ${selected ? "rounded-[5px] p-px bg-white" : "rounded-[4px]"}`}
+                  style={{ aspectRatio: "69/46" }}
+                >
+                  <img
+                    src={currentImageSrc ?? profile.img}
+                    alt={profile.name}
+                    className="w-full h-full object-cover rounded-[4px]"
+                  />
+                  {selected && (
+                    <div className="absolute inset-[3px] rounded-[3px] ring-1 ring-[#1c1c1c] pointer-events-none" />
+                  )}
+                </div>
+                <span
+                  className={`text-[11px] font-medium leading-[12px] truncate w-full ${selected ? "text-[#e2e2e2]" : "text-[#777]"}`}
+                >
+                  {profile.name}
+                </span>
+              </button>
+            );
+          }
+        )}
 
         {/* View All */}
         <button
@@ -121,36 +171,42 @@ const ProfileDropdown = ({ value, onChange, currentImageSrc, cols = 3, maxVisibl
         </button>
       </div>
 
-      {open && createPortal(
-        <div
-          ref={menuRef}
-          style={menuStyle}
-          className="bg-[#242424] border border-[#474747] rounded-lg p-1 flex flex-col gap-0.5 max-h-72 overflow-y-auto"
-        >
-          {EDITING_PROFILES.map((section, si) => (
-            <div key={section.group}>
-              {si > 0 && <div className="h-px bg-[#474747] mx-1 my-0.5" />}
-              <div className="px-2 py-2">
-                <span className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#777] leading-4">
-                  {section.group}
-                </span>
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={menuStyle}
+            className="bg-[#242424] border border-[#474747] rounded-lg p-1 flex flex-col gap-0.5 max-h-72 overflow-y-auto"
+          >
+            {EDITING_PROFILES.map((section, si) => (
+              <div key={section.group}>
+                {si > 0 && <div className="h-px bg-[#474747] mx-1 my-0.5" />}
+                <div className="px-2 py-2">
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#777] leading-4">
+                    {section.group}
+                  </span>
+                </div>
+                {section.names.map((name) => (
+                  <button
+                    key={name}
+                    onClick={() => {
+                      onChange(name);
+                      setOpen(false);
+                    }}
+                    className={`w-full text-left px-2 py-2.5 rounded text-[13px] font-medium transition-colors ${
+                      name === value
+                        ? "text-[#e2e2e2] bg-white/5"
+                        : "text-[#ababab] hover:bg-white/5"
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
               </div>
-              {section.names.map((name) => (
-                <button
-                  key={name}
-                  onClick={() => { onChange(name); setOpen(false); }}
-                  className={`w-full text-left px-2 py-2.5 rounded text-[13px] font-medium transition-colors ${
-                    name === value ? "text-[#e2e2e2] bg-white/5" : "text-[#ababab] hover:bg-white/5"
-                  }`}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>,
-        document.body,
-      )}
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
@@ -167,7 +223,7 @@ const InlineSelect = ({ value, options, onChange }: InlineSelectProps) => {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef    = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const updatePosition = () => {
     if (!triggerRef.current) return;
@@ -185,7 +241,10 @@ const InlineSelect = ({ value, options, onChange }: InlineSelectProps) => {
     if (!open) return;
     updatePosition();
     const onClickOutside = (e: MouseEvent) => {
-      if (!triggerRef.current?.contains(e.target as Node) && !menuRef.current?.contains(e.target as Node))
+      if (
+        !triggerRef.current?.contains(e.target as Node) &&
+        !menuRef.current?.contains(e.target as Node)
+      )
         setOpen(false);
     };
     document.addEventListener("mousedown", onClickOutside);
@@ -207,26 +266,30 @@ const InlineSelect = ({ value, options, onChange }: InlineSelectProps) => {
         <CaretDown className="w-3.5 h-3.5 shrink-0" />
       </button>
 
-      {open && createPortal(
-        <div
-          ref={menuRef}
-          style={menuStyle}
-          className="bg-[#242424] border border-[#474747] rounded-lg p-1 flex flex-col gap-0.5"
-        >
-          {options.map((opt) => (
-            <button
-              key={opt}
-              onClick={() => { onChange(opt); setOpen(false); }}
-              className={`w-full text-left px-3 py-2 rounded text-[13px] transition-colors ${
-                opt === value ? "text-[#e2e2e2] bg-white/5" : "text-[#ababab] hover:bg-white/5"
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>,
-        document.body,
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={menuStyle}
+            className="bg-[#242424] border border-[#474747] rounded-lg p-1 flex flex-col gap-0.5"
+          >
+            {options.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => {
+                  onChange(opt);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-3 py-2 rounded text-[13px] transition-colors ${
+                  opt === value ? "text-[#e2e2e2] bg-white/5" : "text-[#ababab] hover:bg-white/5"
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
@@ -247,7 +310,17 @@ interface CameraCardProps {
 
 const DRAG_STEP_PX = 16;
 
-const CameraCard = ({ label, stops, index, onPrev, onNext, renderValue, onDragStart, onDragEnd, suppressHover }: CameraCardProps) => {
+const CameraCard = ({
+  label,
+  stops,
+  index,
+  onPrev,
+  onNext,
+  renderValue,
+  onDragStart,
+  onDragEnd,
+  suppressHover,
+}: CameraCardProps) => {
   const dragRef = useRef<{ lastX: number } | null>(null);
   const [isActive, setIsActive] = useState(false);
 
@@ -293,21 +366,31 @@ const CameraCard = ({ label, stops, index, onPrev, onNext, renderValue, onDragSt
       className="flex-1 bg-[#242424] rounded-[6px] flex flex-col items-center gap-[6px] pt-4 pb-[10px] px-1 relative cursor-ew-resize select-none group"
       onMouseDown={handleMouseDown}
     >
-      <div className={`absolute inset-0 rounded-[6px] bg-white/5 transition-opacity pointer-events-none ${overlayClass}`} />
+      <div
+        className={`absolute inset-0 rounded-[6px] bg-white/5 transition-opacity pointer-events-none ${overlayClass}`}
+      />
       <div className="flex items-baseline gap-0.5 justify-center w-full">
         {renderValue(stops[index])}
       </div>
-      <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[#777]">{label}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+        {label}
+      </span>
       <div className="absolute inset-x-1 top-4 h-6 flex items-center justify-between pointer-events-none">
         <button
-          onClick={(e) => { e.stopPropagation(); onPrev(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrev();
+          }}
           disabled={index === 0}
           className="text-[#666] hover:text-[#ababab] disabled:opacity-25 transition-colors pointer-events-auto"
         >
           <CaretLeft size={12} weight="bold" />
         </button>
         <button
-          onClick={(e) => { e.stopPropagation(); onNext(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
           disabled={index === stops.length - 1}
           className="text-[#666] hover:text-[#ababab] disabled:opacity-25 transition-colors pointer-events-auto"
         >
@@ -346,10 +429,11 @@ const TetherWelcomeModal = ({ onClose }: TetherWelcomeModalProps) => {
   return createPortal(
     <div
       className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="bg-[#1c1c1c] border border-[#303030] rounded-[16px] p-6 flex flex-col gap-5 w-[480px]">
-
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-col gap-1">
@@ -369,7 +453,10 @@ const TetherWelcomeModal = ({ onClose }: TetherWelcomeModalProps) => {
         {/* Feature cards */}
         <div className="flex flex-col gap-2">
           {WELCOME_FEATURES.map(({ icon: Icon, title, description }) => (
-            <div key={title} className="flex items-start gap-3.5 bg-[#242424] rounded-[10px] px-4 py-3.5">
+            <div
+              key={title}
+              className="flex items-start gap-3.5 bg-[#242424] rounded-[10px] px-4 py-3.5"
+            >
               <div className="shrink-0 w-9 h-9 rounded-[8px] bg-[#2563eb]/20 flex items-center justify-center mt-0.5">
                 <Icon size={18} weight="duotone" className="text-[#60a5fa]" />
               </div>
@@ -395,7 +482,10 @@ const TetherWelcomeModal = ({ onClose }: TetherWelcomeModalProps) => {
 
         {/* Footer actions */}
         <div className="flex items-center justify-between">
-          <button onClick={onClose} className="text-[13px] text-[#555] hover:text-[#ababab] transition-colors">
+          <button
+            onClick={onClose}
+            className="text-[13px] text-[#555] hover:text-[#ababab] transition-colors"
+          >
             Don't show again
           </button>
           <button
@@ -408,13 +498,29 @@ const TetherWelcomeModal = ({ onClose }: TetherWelcomeModalProps) => {
         </div>
       </div>
     </div>,
-    document.body,
+    document.body
   );
 };
 
 // ─── Tether Setup Modal ───────────────────────────────────────────────────────
 
 const NAME_TOKENS = ["{Date}", "{Time}", "{Counter}", "{CameraModel}"];
+
+const parseTemplate = (template: string): Array<{ type: "literal" | "token"; value: string }> => {
+  const parts: Array<{ type: "literal" | "token"; value: string }> = [];
+  const regex = /\{[^}]+\}/g;
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(template)) !== null) {
+    if (m.index > lastIndex)
+      parts.push({ type: "literal", value: template.slice(lastIndex, m.index) });
+    parts.push({ type: "token", value: m[0] });
+    lastIndex = m.index + m[0].length;
+  }
+  if (lastIndex < template.length)
+    parts.push({ type: "literal", value: template.slice(lastIndex) });
+  return parts;
+};
 
 const buildPreview = (template: string) =>
   template
@@ -439,11 +545,17 @@ interface TetherSetupModalProps {
 }
 
 const TetherSetupModal = ({
-  onClose, currentImageSrc, mode = "setup",
-  editingProfile, onEditingProfileChange,
-  retouchPreset, onRetouchPresetChange,
-  fileFormat, onFileFormatChange,
-  namingTemplate, onNamingTemplateChange,
+  onClose,
+  currentImageSrc,
+  mode = "setup",
+  editingProfile,
+  onEditingProfileChange,
+  retouchPreset,
+  onRetouchPresetChange,
+  fileFormat,
+  onFileFormatChange,
+  namingTemplate,
+  onNamingTemplateChange,
 }: TetherSetupModalProps) => {
   const isPreferences = mode === "preferences";
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -453,10 +565,14 @@ const TetherSetupModal = ({
   return createPortal(
     <div
       className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <div className="bg-[#1c1c1c] border border-[#303030] rounded-[16px] p-6 flex flex-col gap-6 w-[480px] max-h-[90vh] overflow-y-auto" style={{ scrollbarWidth: "none" }}>
-
+      <div
+        className="bg-[#1c1c1c] border border-[#303030] rounded-[16px] p-6 flex flex-col gap-6 w-[480px] max-h-[90vh] overflow-y-auto"
+        style={{ scrollbarWidth: "none" }}
+      >
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-col gap-1">
@@ -464,7 +580,9 @@ const TetherSetupModal = ({
               {isPreferences ? "Tethering Preferences" : "Start Tethered Shoot"}
             </h3>
             <p className="text-[14px] text-[#777] leading-5">
-              {isPreferences ? "Adjust settings for your current tethered session." : "Connect your camera and set up auto-processing."}
+              {isPreferences
+                ? "Adjust settings for your current tethered session."
+                : "Connect your camera and set up auto-processing."}
             </p>
           </div>
           <button
@@ -477,7 +595,9 @@ const TetherSetupModal = ({
 
         {/* Camera */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">Camera</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+            Camera
+          </span>
           <div className="flex items-center justify-between px-3 py-3 bg-[#242424] rounded-[8px]">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-[#4ade80] shrink-0" />
@@ -490,19 +610,61 @@ const TetherSetupModal = ({
         {/* Editing Profile */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">Editing Profile</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+              Editing Profile
+            </span>
             <span className="text-[11px] text-[#555]">Auto applied</span>
           </div>
-          <ProfileDropdown value={editingProfile} onChange={onEditingProfileChange} cols={4} maxVisible={3} currentImageSrc={currentImageSrc} />
+          <ProfileDropdown
+            value={editingProfile}
+            onChange={onEditingProfileChange}
+            cols={4}
+            maxVisible={3}
+            currentImageSrc={currentImageSrc}
+          />
         </div>
 
         {/* Retouching Preset */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">Retouching Preset</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+              Retouching Preset
+            </span>
             <span className="text-[11px] text-[#555]">Auto applied</span>
           </div>
           <PresetDropdown value={retouchPreset} onChange={onRetouchPresetChange} />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+              File Format
+            </span>
+          </div>
+
+          <div className="flex gap-2">
+            {(["NEF", "JPEG"] as const).map((fmt) => {
+              const selected = fileFormat.includes(fmt);
+              return (
+                <button
+                  key={fmt}
+                  onClick={() => {
+                    const next = selected
+                      ? fileFormat.filter((f) => f !== fmt)
+                      : [...fileFormat, fmt];
+                    if (next.length > 0) onFileFormatChange(next);
+                  }}
+                  className={`px-3 py-1.5 rounded text-[13px] font-medium transition-colors ${
+                    selected
+                      ? "bg-[#2563eb] text-white"
+                      : "bg-[#242424] text-[#ababab] hover:bg-[#2e2e2e]"
+                  }`}
+                >
+                  {fmt}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Info banner */}
@@ -540,58 +702,92 @@ const TetherSetupModal = ({
             <>
               {/* <div className="h-px bg-[#303030] mt-4 mb-4" /> */}
 
-              {/* File format */}
-              <div className="flex flex-col gap-2 mt-[-4px]">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">File format</span>
-                <div className="flex gap-2">
-                  {(["NEF", "JPEG"] as const).map((fmt) => {
-                    const selected = fileFormat.includes(fmt);
-                    return (
-                      <button
-                        key={fmt}
-                        onClick={() => {
-                          const next = selected
-                            ? fileFormat.filter((f) => f !== fmt)
-                            : [...fileFormat, fmt];
-                          if (next.length > 0) onFileFormatChange(next);
-                        }}
-                        className={`px-3 py-1.5 rounded text-[13px] font-medium transition-colors ${
-                          selected
-                            ? "bg-[#2563eb] text-white"
-                            : "bg-[#242424] text-[#ababab] hover:bg-[#2e2e2e]"
-                        }`}
-                      >
-                        {fmt}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+                Destination Folder
+              </span>
 
               {/* Naming template */}
               <div className="flex flex-col gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">Naming template</span>
-                <input
-                  type="text"
-                  value={namingTemplate}
-                  onChange={(e) => onNamingTemplateChange(e.target.value)}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  className="w-full px-3 py-2.5 bg-[#242424] rounded-[8px] text-[13px] text-[#e2e2e2] placeholder:text-[#555] outline-none border border-transparent focus:border-[#2563eb] focus:shadow-[0_0_0_3px_rgba(37,99,235,0.12)] transition-all"
-                />
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+                    Naming Template
+                  </span>
+                  <button
+                    onClick={() => onNamingTemplateChange("{Date}_{Counter:0001}")}
+                    className="text-[10px] text-[#555] hover:text-[#ababab] transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                {/* Token strip */}
+                <div className="flex items-center flex-wrap gap-1 px-2.5 py-2 min-h-[40px] bg-[#161616] rounded-[8px] border border-[#2a2a2a]">
+                  {parseTemplate(namingTemplate).length > 0 ? (
+                    parseTemplate(namingTemplate).map((seg, i) =>
+                      seg.type === "token" ? (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-[3px] pl-2 pr-1 py-[3px] rounded-[4px] bg-[#1e3a5f] border border-[#2563eb]/30"
+                        >
+                          <span className="text-[11px] font-medium text-[#60a5fa] font-mono">
+                            {seg.value}
+                          </span>
+                          <button
+                            onClick={() => {
+                              const escaped = seg.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                              onNamingTemplateChange(
+                                namingTemplate.replace(new RegExp(escaped), "")
+                              );
+                            }}
+                            className="flex items-center justify-center w-[14px] h-[14px] rounded text-[#60a5fa]/40 hover:text-[#60a5fa] hover:bg-white/5 transition-all"
+                          >
+                            <X size={8} weight="bold" />
+                          </button>
+                        </span>
+                      ) : (
+                        <span key={i} className="text-[12px] text-[#555] font-mono">
+                          {seg.value}
+                        </span>
+                      )
+                    )
+                  ) : (
+                    <span className="text-[12px] text-[#3a3a3a] font-mono">Add tokens below…</span>
+                  )}
+                </div>
+
+                {/* Insert row */}
                 <div className="flex flex-wrap gap-1.5">
                   {NAME_TOKENS.map((token) => (
                     <button
                       key={token}
                       onClick={() => insertToken(token)}
-                      className="px-2 py-1 rounded bg-[#242424] border border-[#303030] text-[12px] text-[#ababab] hover:bg-[#2e2e2e] transition-colors"
+                      className="inline-flex items-center gap-[5px] px-2 py-[5px] rounded-[5px] bg-[#242424] border border-[#303030] text-[11px] font-mono text-[#777] hover:text-[#ababab] hover:border-[#444] transition-colors"
                     >
+                      <span className="text-[#444] text-[10px]">+</span>
                       {token}
                     </button>
                   ))}
+                  {(["_", "-"] as const).map((sep) => (
+                    <button
+                      key={sep}
+                      onClick={() => onNamingTemplateChange(namingTemplate + sep)}
+                      className="px-2.5 py-[5px] rounded-[5px] bg-[#242424] border border-[#303030] text-[11px] font-mono text-[#555] hover:text-[#ababab] hover:border-[#444] transition-colors"
+                    >
+                      "{sep}"
+                    </button>
+                  ))}
                 </div>
-                <p className="text-[12px] text-[#555]">
-                  Preview: <span className="font-medium text-[#ababab]">{buildPreview(namingTemplate)}</span>
-                </p>
+
+                {/* Preview */}
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-[8px] bg-[#161616] border border-[#2a2a2a]">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#555] shrink-0">
+                    Preview
+                  </span>
+                  <div className="w-px h-3 bg-[#2a2a2a] shrink-0" />
+                  <span className="text-[12px] font-mono text-[#777] truncate">
+                    {buildPreview(namingTemplate)}
+                  </span>
+                </div>
               </div>
             </>
           )}
@@ -609,42 +805,55 @@ const TetherSetupModal = ({
             onClick={onClose}
             className="flex items-center gap-2 px-4 py-2.5 bg-[#2563eb] hover:bg-[#3b7af5] active:bg-[#1d4ed8] rounded-[8px] text-[14px] font-medium text-white transition-colors"
           >
-            {isPreferences ? "Save" : "Start Shooting"}
-            {!isPreferences && <ArrowRight size={15} weight="bold" />}
+            {isPreferences ? "Save Preferences" : "Start Shooting"}
+            {/* {!isPreferences && <ArrowRight size={15} weight="bold" />} */}
           </button>
         </div>
       </div>
     </div>,
-    document.body,
+    document.body
   );
 };
 
 // ─── TetheringTab ─────────────────────────────────────────────────────────────
 
-const TetheringTab = ({ currentImageSrc }: { currentImageSrc?: string }) => {
-  const [apertureIdx,    setApertureIdx]    = useState(5); // f/5.6
-  const [shutterIdx,     setShutterIdx]     = useState(4); // 1/300
-  const [isoIdx,         setIsoIdx]         = useState(1); // 200
-  const [wb,             setWb]             = useState("Auto");
-  const [destination,    setDestination]    = useState("/Users/photographer/Desktop/Shoot");
-  const [editingProfile,  setEditingProfile]  = useState<string | null>(null);
-  const [retouchPreset,   setRetouchPreset]   = useState<string | null>(null);
-  const [fileFormat,      setFileFormat]      = useState<string[]>(["NEF", "JPEG"]);
+interface TetheringTabProps {
+  currentImageSrc?: string;
+  isTethering: boolean;
+  onStartTethering: () => void;
+  onCapture?: (autoAdvance: boolean) => void;
+}
 
-  const qualityLabel = fileFormat.includes("NEF") && fileFormat.includes("JPEG")
-    ? "NEF + JPEG"
-    : fileFormat[0] ?? "NEF";
+const TetheringTab = ({
+  currentImageSrc,
+  isTethering,
+  onStartTethering,
+  onCapture,
+}: TetheringTabProps) => {
+  const [apertureIdx, setApertureIdx] = useState(5); // f/5.6
+  const [shutterIdx, setShutterIdx] = useState(4); // 1/300
+  const [isoIdx, setIsoIdx] = useState(1); // 200
+  const [wb, setWb] = useState("Auto");
+  const [destination, setDestination] = useState("/Users/photographer/Desktop/Shoot");
+  const [editingProfile, setEditingProfile] = useState<string | null>(null);
+  const [retouchPreset, setRetouchPreset] = useState<string | null>(null);
+  const [fileFormat, setFileFormat] = useState<string[]>(["NEF", "JPEG"]);
+
+  const qualityLabel =
+    fileFormat.includes("NEF") && fileFormat.includes("JPEG")
+      ? "NEF + JPEG"
+      : (fileFormat[0] ?? "NEF");
 
   const handleQualityChange = (v: string) => {
     if (v === "NEF + JPEG") setFileFormat(["NEF", "JPEG"]);
     else setFileFormat([v]);
   };
-  const [namingTemplate,  setNamingTemplate]  = useState("{Date}_{Counter:0001}");
-  const [autoAdvance,     setAutoAdvance]     = useState(true);
-  const [draggingCard,    setDraggingCard]    = useState<string | null>(null);
-  const [showWelcome,    setShowWelcome]    = useState(false);
-  const [showSetup,      setShowSetup]      = useState(true);
-  const [setupDone,      setSetupDone]      = useState(false);
+  const [namingTemplate, setNamingTemplate] = useState("{Date}_{Counter:0001}");
+  const [autoAdvance, setAutoAdvance] = useState(true);
+  const [draggingCard, setDraggingCard] = useState<string | null>(null);
+  const [autoAdvanceHovered, setAutoAdvanceHovered] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [showSetup, setShowSetup] = useState(!isTethering);
 
   return (
     <div
@@ -653,7 +862,6 @@ const TetheringTab = ({ currentImageSrc }: { currentImageSrc?: string }) => {
     >
       {/* ── Camera Info ── */}
       <div className="flex flex-col gap-3">
-
         {/* Header */}
         <div className="flex items-center justify-between">
           <span className="text-[14px] font-medium text-[#e2e2e2]">Camera Info</span>
@@ -665,7 +873,7 @@ const TetheringTab = ({ currentImageSrc }: { currentImageSrc?: string }) => {
               <span className="text-[11px] font-medium text-[#e2e2e2]">Connected</span>
             </div>
             <button
-              onClick={() => { setSetupDone(true); setShowSetup(true); }}
+              onClick={() => setShowSetup(true)}
               className="text-[#666] hover:text-[#ababab] transition-colors pl-2 py-2"
             >
               <GearIcon size={16} />
@@ -723,7 +931,10 @@ const TetheringTab = ({ currentImageSrc }: { currentImageSrc?: string }) => {
         </div>
 
         {/* Capture button */}
-        <button className="w-full py-2 pl-2 pr-3 bg-[#2563eb] hover:bg-[#3b7af5] active:bg-[#1d4ed8] rounded flex items-center justify-center gap-1.5 transition-colors">
+        <button
+          onClick={() => onCapture?.(autoAdvance)}
+          className="w-full py-2 pl-2 pr-3 bg-[#2563eb] hover:bg-[#3b7af5] active:bg-[#1d4ed8] rounded flex items-center justify-center gap-1.5 transition-colors"
+        >
           <CameraIcon size={16} />
           <span className="text-[12px] font-medium text-white">Capture</span>
         </button>
@@ -731,19 +942,31 @@ const TetheringTab = ({ currentImageSrc }: { currentImageSrc?: string }) => {
         {/* Settings rows */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">WB</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+              WB
+            </span>
             <InlineSelect value={wb} options={WB_OPTIONS} onChange={setWb} />
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">Quality</span>
-            <InlineSelect value={qualityLabel} options={QUALITY_OPTIONS} onChange={handleQualityChange} />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+              Quality
+            </span>
+            <InlineSelect
+              value={qualityLabel}
+              options={QUALITY_OPTIONS}
+              onChange={handleQualityChange}
+            />
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">Model</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+              Model
+            </span>
             <span className="text-[12px] font-medium text-[#ababab]">Nikon Z6 III</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">Battery</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+              Battery
+            </span>
             <div className="flex items-center gap-1.5 text-[#ababab]">
               <BatteryHigh size={16} />
               <span className="text-[12px] font-medium">78%</span>
@@ -751,13 +974,26 @@ const TetheringTab = ({ currentImageSrc }: { currentImageSrc?: string }) => {
           </div>
           <button
             onClick={() => setAutoAdvance((p) => !p)}
-            className="flex items-center justify-between w-full group"
+            className="flex items-center justify-between w-full"
           >
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-              Advance on capture
+            <span
+              onMouseEnter={() => setAutoAdvanceHovered(true)}
+              onMouseLeave={() => setAutoAdvanceHovered(false)}
+              className="relative inline-flex text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]"
+            >
+              <Tooltip
+                label="Automatically move to the next image after each capture"
+                visible={autoAdvanceHovered}
+                position="top"
+              />
+              Auto Advance
             </span>
-            <div className={`relative w-8 h-[18px] rounded-full transition-colors ${autoAdvance ? "bg-[#2563eb]" : "bg-[#383838]"}`}>
-              <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform ${autoAdvance ? "translate-x-[18px]" : "translate-x-[2px]"}`} />
+            <div
+              className={`relative w-8 h-[18px] rounded-full transition-colors ${autoAdvance ? "bg-[#2563eb]" : "bg-[#383838]"}`}
+            >
+              <div
+                className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform ${autoAdvance ? "translate-x-[18px]" : "translate-x-[2px]"}`}
+              />
             </div>
           </button>
         </div>
@@ -770,15 +1006,19 @@ const TetheringTab = ({ currentImageSrc }: { currentImageSrc?: string }) => {
         title="Edit Profile"
         actions={<span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>}
       >
-        <ProfileDropdown value={editingProfile} onChange={setEditingProfile} currentImageSrc={currentImageSrc} />
+        <ProfileDropdown
+          value={editingProfile}
+          onChange={setEditingProfile}
+          currentImageSrc={currentImageSrc}
+        />
       </Accordion>
 
       <div className="h-px bg-[#e2e2e20d]" />
 
       {/* ── Retouching Preset ── */}
-      <Accordion 
-      title="Retouching Preset"
-      actions={<span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>}
+      <Accordion
+        title="Retouching Preset"
+        actions={<span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>}
       >
         <PresetDropdown value={retouchPreset} onChange={setRetouchPreset} />
       </Accordion>
@@ -792,9 +1032,12 @@ const TetheringTab = ({ currentImageSrc }: { currentImageSrc?: string }) => {
       {showWelcome && <TetherWelcomeModal onClose={() => setShowWelcome(false)} />}
       {showSetup && (
         <TetherSetupModal
-          onClose={() => { setSetupDone(true); setShowSetup(false); }}
+          onClose={() => {
+            onStartTethering();
+            setShowSetup(false);
+          }}
           currentImageSrc={currentImageSrc}
-          mode={setupDone ? "preferences" : "setup"}
+          mode={isTethering ? "preferences" : "setup"}
           editingProfile={editingProfile}
           onEditingProfileChange={setEditingProfile}
           retouchPreset={retouchPreset}

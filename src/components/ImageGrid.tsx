@@ -19,7 +19,7 @@ const sampleModules = import.meta.glob(
 
 const toJpegName = (name: string) => name.replace(/\.[^.]+$/, ".jpeg");
 
-const sampleImages: ImageData[] = Object.entries(sampleModules)
+export const sampleImages: ImageData[] = Object.entries(sampleModules)
   .sort(([a], [b]) => a.localeCompare(b))
   .map(([path, mod]) => ({
     src: mod.default,
@@ -29,6 +29,7 @@ const sampleImages: ImageData[] = Object.entries(sampleModules)
   }));
 
 interface ImageGridProps {
+  images: ImageData[];
   columns: number;
   isScanning: boolean;
   onImageDoubleClick: (index: number) => void;
@@ -36,13 +37,9 @@ interface ImageGridProps {
   subjectFilter?: number[];
   modelImageMap?: Map<number, number[]>;
   initialSelectedIndex?: number;
-  importSource?: "sample" | ImportFolder;
 }
 
-const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter, modelImageMap, initialSelectedIndex, importSource }: ImageGridProps) => {
-  const [allImages, setAllImages] = useState<ImageData[]>(
-    importSource && importSource !== "sample" ? importSource.images : sampleImages
-  );
+const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter, modelImageMap, initialSelectedIndex }: ImageGridProps) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(
     initialSelectedIndex != null ? new Set([initialSelectedIndex]) : new Set()
@@ -51,9 +48,11 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, su
   const [focusIndex, setFocusIndex] = useState<number | null>(initialSelectedIndex ?? null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    onImagesChange?.(allImages);
-  }, [allImages, onImagesChange]);
+  // Keep refs so handleDrop closure never goes stale
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+  const onImagesChangeRef = useRef(onImagesChange);
+  onImagesChangeRef.current = onImagesChange;
 
   useEffect(() => {
     if (initialSelectedIndex == null || !scrollRef.current) return;
@@ -84,7 +83,7 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, su
         return { src, filename: toJpegName(file.name), stars, colorTag: "none" };
       })
     );
-    setAllImages((prev) => [...prev, ...newImages]);
+    onImagesChangeRef.current?.([...imagesRef.current, ...newImages]);
   }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -156,14 +155,14 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, su
   };
 
   const displayImages = useMemo(() => {
-    const mapped = allImages.map((img, i) => ({ ...img, originalIndex: i }));
+    const mapped = images.map((img, i) => ({ ...img, originalIndex: i }));
     if (!subjectFilter || subjectFilter.length === 0 || !modelImageMap) return mapped;
     return mapped.filter(({ originalIndex }) => {
       const clusters = modelImageMap.get(originalIndex);
       if (!clusters) return false;
       return subjectFilter.some((id) => clusters.includes(id));
     });
-  }, [allImages, subjectFilter, modelImageMap]);
+  }, [images, subjectFilter, modelImageMap]);
 
   const isMultiSelected = selectedIndices.size > 1;
 

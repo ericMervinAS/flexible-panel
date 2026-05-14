@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import TopBar from "@/components/TopBar";
 import Toast from "@/components/Toast";
 import FilterBar from "@/components/FilterBar";
@@ -7,22 +7,42 @@ import type { ImageData } from "@/components/ImageGrid";
 import type { ImportFolder } from "@/components/ImportGate";
 import RightPanel from "@/components/RightPanel";
 import BottomBar from "@/components/BottomBar";
+import { sampleImages } from "@/components/ImageGrid";
 import LoupeView from "@/components/LoupeView";
 import { useFaceDetection } from "@/hooks/useFaceDetection";
 import { useDistractionDetection } from "@/hooks/useDistractionDetection";
 import { MODEL_TO_UI } from "@/lib/distractionDetection";
 
 interface IndexProps {
-  importSource: "sample" | ImportFolder;
+  importSource: "sample" | "tethering" | ImportFolder;
+  onGoHome?: () => void;
 }
 
-const Index = ({ importSource }: IndexProps) => {
+const Index = ({ importSource, onGoHome }: IndexProps) => {
   const [columns, setColumns] = useState(4);
   const [isScanning, setIsScanning] = useState(true);
-  const [view, setView] = useState<"grid" | "loupe">("grid");
+  const [view, setView] = useState<"grid" | "loupe">(importSource === "tethering" ? "loupe" : "grid");
+  const loupeEverMountedRef = useRef(false);
+  if (view === "loupe") loupeEverMountedRef.current = true;
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [images, setImages] = useState<ImageData[]>([]);
+  const [images, setImages] = useState<ImageData[]>(() => {
+    if (importSource && importSource !== "sample" && importSource !== "tethering") {
+      return (importSource as import("@/components/ImportGate").ImportFolder).images;
+    }
+    return sampleImages;
+  });
+  const [activeTopTab, setActiveTopTab] = useState(importSource === "tethering" ? "EDIT" : "RETOUCH");
   const [loupeActiveTab, setLoupeActiveTab] = useState("subject");
+  const [isTethering, setIsTethering] = useState(false);
+  const handleCapture = (autoAdvance: boolean) => {
+    const newImage = sampleImages[Math.floor(Math.random() * sampleImages.length)];
+    const newIndex = images.length;
+    setImages((prev) => [...prev, newImage]);
+    if (autoAdvance) {
+      setSelectedIndex(newIndex);
+      setView("loupe");
+    }
+  };
   const [canvasHasStrokes, setCanvasHasStrokes] = useState(false);
   const [clearCanvasSignal, setClearCanvasSignal] = useState(0);
   const [autoRemoveAfterStroke, setAutoRemoveAfterStroke] = useState(false);
@@ -99,7 +119,7 @@ const Index = ({ importSource }: IndexProps) => {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <TopBar activeTab="RETOUCH" view={view} onViewChange={handleViewChange} filterOpen={filterOpen} onFilterToggle={() => setFilterOpen((v) => !v)} />
+      <TopBar activeTab={activeTopTab} onTopTabChange={setActiveTopTab} view={view} onViewChange={handleViewChange} filterOpen={filterOpen} onFilterToggle={() => setFilterOpen((v) => !v)} hideCull={importSource === "tethering"} onGoHome={onGoHome} />
       <div className="flex flex-1 overflow-hidden">
         {/* Left: content area */}
         <div className="flex flex-col flex-1 overflow-hidden">
@@ -113,21 +133,22 @@ const Index = ({ importSource }: IndexProps) => {
               />
             </div>
           </div>
-          {view === "grid" ? (
+          {view === "grid" && (
             <>
-              <ImageGrid columns={columns} isScanning={isScanning} onImageDoubleClick={handleOpenLoupe} onImagesChange={setImages} subjectFilter={subjectFilter} modelImageMap={modelImageMap} initialSelectedIndex={selectedIndex} importSource={importSource} />
+              <ImageGrid images={images} columns={columns} isScanning={isScanning} onImageDoubleClick={handleOpenLoupe} onImagesChange={setImages} subjectFilter={subjectFilter} modelImageMap={modelImageMap} initialSelectedIndex={selectedIndex} />
               <BottomBar
                 mode="grid"
                 columns={columns}
                 onColumnsChange={setColumns}
                 totalPhotos={images.length}
                 visiblePhotos={filteredImages.length}
-                albumName={importSource === "sample" ? "Juliana Wedding" : importSource.name}
+                albumName={importSource === "sample" || importSource === "tethering" ? "Juliana Wedding" : (importSource as import("@/components/ImportGate").ImportFolder).name}
               />
             </>
-          ) : (
-            images[selectedIndex]
-              ? <LoupeView
+          )}
+          {loupeEverMountedRef.current && images[selectedIndex] && (
+            <div className={view !== "loupe" ? "hidden" : "flex flex-col flex-1 overflow-hidden"}>
+              <LoupeView
                 image={images[selectedIndex]}
                 images={images}
                 filteredImages={filteredImages}
@@ -144,10 +165,10 @@ const Index = ({ importSource }: IndexProps) => {
                 hoveredDetections={hoveredDetections}
                 onCanvasRemoveSuccess={() => handleRemoveSuccess(1, true)}
               />
-              : null
+            </div>
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} currentImageIndex={selectedIndex} currentImageSrc={images[selectedIndex]?.src} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionRerunCurrent={() => rerunDistractionDetectionForImage(selectedIndex)} onDistractionSelectionChange={setHighlightedLabels} onDistractionHoverChange={setHoveredLabel} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} />
+        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} activeTopTab={activeTopTab} isTethering={isTethering} onStartTethering={() => setIsTethering(true)} onCapture={handleCapture} currentImageIndex={selectedIndex} currentImageSrc={images[selectedIndex]?.src} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionRerunCurrent={() => rerunDistractionDetectionForImage(selectedIndex)} onDistractionSelectionChange={setHighlightedLabels} onDistractionHoverChange={setHoveredLabel} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} initialEditingTab={importSource === "tethering" ? "tethering" : undefined} />
       </div>
       {removeToast && (
         <Toast

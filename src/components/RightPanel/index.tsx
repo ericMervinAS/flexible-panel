@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import RetouchingOpportunityBanner from "../RetouchingOpportunityBanner";
 import GridPanel from "./GridPanel";
-import LoupePanel, { LoupeTab } from "./LoupePanel";
+import RetouchingPanel, { LoupeTab } from "./RetouchingPanel";
+import EditingPanel from "./EditingPanel";
 import type { ModelSubject } from "@/hooks/useFaceDetection";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 
@@ -32,6 +33,11 @@ interface RightPanelProps {
   onDistractionRemoveSuccess?: (count: number, brushOnly: boolean) => void;
   onSuggestObject?: (suggestion: string) => void;
   flexibleWidth?: boolean;
+  activeTopTab?: string;
+  isTethering?: boolean;
+  onStartTethering?: () => void;
+  onCapture?: (autoAdvance: boolean) => void;
+  initialEditingTab?: string;
 }
 
 const RightPanel = ({
@@ -61,6 +67,11 @@ const RightPanel = ({
   onDistractionRemoveSuccess,
   onSuggestObject,
   flexibleWidth = false,
+  activeTopTab = "RETOUCH",
+  isTethering = false,
+  onStartTethering,
+  onCapture,
+  initialEditingTab,
 }: RightPanelProps) => {
   const [appliedPresets, setAppliedPresets] = useState<Record<string, string>>({});
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
@@ -102,8 +113,16 @@ const RightPanel = ({
         }}
       />
 
-      {isLoupeView ? (
-        <LoupePanel
+      {isLoupeView && activeTopTab === "EDIT" ? (
+        <EditingPanel
+          currentImageSrc={currentImageSrc}
+          isTethering={isTethering}
+          onStartTethering={onStartTethering}
+          onCapture={onCapture}
+          initialTab={initialEditingTab as "sliders" | "crop" | "mask" | "tethering" | undefined}
+        />
+      ) : isLoupeView ? (
+        <RetouchingPanel
           currentImageIndex={currentImageIndex}
           currentImageSrc={currentImageSrc}
           appliedPresets={appliedPresets}
@@ -128,6 +147,9 @@ const RightPanel = ({
           onTabChange={onTabChange}
           onScrollChange={setIsScrolledToBottom}
           forceSubjectTabSignal={forceSubjectTabSignal}
+          isTethering={isTethering}
+          onStartTethering={onStartTethering}
+          onCapture={onCapture}
         />
       ) : (
         <GridPanel

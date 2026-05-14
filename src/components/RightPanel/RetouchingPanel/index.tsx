@@ -19,6 +19,9 @@ export type LoupeTab = typeof LOUPE_TABS[number]["id"];
 interface LoupePanelProps {
   currentImageIndex: number;
   currentImageSrc?: string;
+  isTethering?: boolean;
+  onStartTethering?: () => void;
+  onCapture?: (autoAdvance: boolean) => void;
   appliedPresets: Record<string, string>;
   removedItems: Set<string>;
   onAddRemovedItems: (labels: Set<string>) => void;
@@ -44,9 +47,12 @@ interface LoupePanelProps {
   onStateChange?: (index: number, state: LoupeRetouchState) => void;
 }
 
-const LoupePanel = ({
+const RetouchingPanel = ({
   currentImageIndex,
   currentImageSrc,
+  isTethering = false,
+  onStartTethering,
+  onCapture,
   appliedPresets,
   removedItems,
   onAddRemovedItems,
@@ -181,7 +187,14 @@ const LoupePanel = ({
             onResetRemovedItem={onResetRemovedItem}
           />
         )}
-        {activeTab === "tethering" && <TetheringTab currentImageSrc={currentImageSrc} />}
+        {activeTab === "tethering" && (
+          <TetheringTab
+            currentImageSrc={currentImageSrc}
+            isTethering={isTethering}
+            onStartTethering={onStartTethering ?? (() => {})}
+            onCapture={onCapture}
+          />
+        )}
       </div>
 
       {/* Paste / Reset footer */}
@@ -219,4 +232,4 @@ const LoupePanel = ({
   );
 };
 
-export default LoupePanel;
+export default RetouchingPanel;

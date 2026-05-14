@@ -8,11 +8,12 @@ import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AccessGate from "./components/AccessGate";
 import ImportGate, { type ImportFolder } from "./components/ImportGate";
+import HomePage from "./components/HomePage";
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  const [importSource, setImportSource] = useState<"pending" | "sample" | ImportFolder>("pending");
+  const [importSource, setImportSource] = useState<"pending" | "home" | "sample" | "tethering" | ImportFolder>("pending");
 
   return (
     <AccessGate>
@@ -21,11 +22,13 @@ const App = () => {
           <Toaster />
           <Sonner />
           {importSource === "pending" ? (
-            <ImportGate onReady={setImportSource} />
+            <ImportGate onReady={(src) => src === "tethering" ? setImportSource("home") : setImportSource(src)} />
+          ) : importSource === "home" ? (
+            <HomePage onReady={setImportSource} />
           ) : (
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<Index importSource={importSource} />} />
+                <Route path="/" element={<Index importSource={importSource} onGoHome={() => setImportSource("home")} />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

@@ -264,9 +264,9 @@ const LoupeView = ({
     if (!strip || !tile) return;
     strip.scrollTo({
       left: tile.offsetLeft - strip.offsetWidth / 2 + tile.offsetWidth / 2,
-      behavior: "smooth",
+      behavior: "instant",
     });
-  }, [currentIndex, stripImages]);
+  }, [currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Shift key tracking — enables grab-to-pan in patch mode ─────────────────
   useEffect(() => {
