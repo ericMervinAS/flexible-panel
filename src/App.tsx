@@ -20,9 +20,10 @@ type Screen = "pending" | "home" | "import" | "sample" | "tethering" | ImportFol
 const AppContent = () => {
   const [screen, setScreen] = useState<Screen>("pending");
   const [currentAlbumId, setCurrentAlbumId] = useState<string | undefined>();
+  const [initialTopTab, setInitialTopTab] = useState<string | undefined>();
   const { addAlbum } = useAlbums();
 
-  const handleImportReady = (folder: ImportFolder) => {
+  const handleImportReady = (folder: ImportFolder, topTab?: string) => {
     const id = `upload-${Date.now()}`;
     addAlbum({
       id,
@@ -32,6 +33,7 @@ const AppContent = () => {
       source: folder,
     });
     setCurrentAlbumId(id);
+    setInitialTopTab(topTab);
     setScreen(folder);
   };
 
@@ -78,7 +80,7 @@ const AppContent = () => {
       ) : (
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index importSource={screen} onGoHome={() => setScreen("home")} onCancelTethering={() => setScreen("import")} albumId={currentAlbumId} />} />
+            <Route path="/" element={<Index importSource={screen} onGoHome={() => setScreen("home")} onCancelTethering={() => setScreen("import")} albumId={currentAlbumId} initialTopTab={initialTopTab} />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

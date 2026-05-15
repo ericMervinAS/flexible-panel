@@ -21,9 +21,10 @@ interface IndexProps {
   onGoHome?: () => void;
   onCancelTethering?: () => void;
   albumId?: string;
+  initialTopTab?: string;
 }
 
-const Index = ({ importSource, onGoHome, onCancelTethering, albumId }: IndexProps) => {
+const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopTab }: IndexProps) => {
   const { albums, updateAlbum } = useAlbums();
   const albumName = albumId
     ? (albums.find((a) => a.id === albumId)?.name ?? null)
@@ -44,7 +45,9 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId }: IndexProp
     }
     return sampleImages;
   });
-  const [activeTopTab, setActiveTopTab] = useState(importSource === "tethering" ? "EDIT" : "RETOUCH");
+  const [activeTopTab, setActiveTopTab] = useState(
+    initialTopTab ?? (importSource === "tethering" ? "EDIT" : "RETOUCH")
+  );
   const [loupeActiveTab, setLoupeActiveTab] = useState("subject");
   const [isTethering, setIsTethering] = useState(() => {
     if (!albumId) return false;

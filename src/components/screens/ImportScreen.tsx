@@ -1,11 +1,25 @@
 import { useRef, useState, useCallback } from "react";
 import exifr from "exifr";
-import { UploadSimpleIcon, FolderOpenIcon, CameraIcon, HouseSimpleIcon } from "@phosphor-icons/react";
+import {
+  UploadSimpleIcon,
+  FolderOpenIcon,
+  CameraIcon,
+  HouseSimpleIcon,
+  GridFourIcon,
+  MonitorIcon,
+  PlusIcon,
+} from "@phosphor-icons/react";
+import ImageGrid from "@/components/ImageGrid";
 import type { ImageData } from "@/components/ImageGrid";
 import type { ImportFolder } from "@/components/ImportGate";
+import BottomBar from "@/components/BottomBar";
+import LoupeView from "@/components/LoupeView";
+import PreCullRightPanel from "./PreCullRightPanel";
+import { useFaceDetection } from "@/hooks/useFaceDetection";
+import { useDistractionDetection } from "@/hooks/useDistractionDetection";
 
 interface ImportScreenProps {
-  onReady: (folder: ImportFolder) => void;
+  onReady: (folder: ImportFolder, initialTopTab?: string) => void;
   onBack: () => void;
   onStartTethering?: () => void;
 }
@@ -91,23 +105,49 @@ const ImportScreen = ({ onReady, onBack, onStartTethering }: ImportScreenProps) 
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [folder, setFolder] = useState<ImportFolder | null>(null);
+  const [view, setView] = useState<"grid" | "loupe">("grid");
+  const [columns, setColumns] = useState(4);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const addInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
 
-  const handleFiles = useCallback(
-    async (files: File[]) => {
-      setError(null);
-      setIsLoading(true);
-      const result = await processFiles(files);
-      setIsLoading(false);
-      if (!result) {
-        setError("No supported images found. Drop a folder with JPG or WebP files.");
-        return;
-      }
-      onReady(result);
-    },
-    [onReady]
-  );
+  // Kick off models as soon as a folder is loaded so they're ready for Cull
+  const images: ImageData[] = folder?.images ?? [];
+  useFaceDetection(images);
+  useDistractionDetection(images);
+
+  const handleFiles = useCallback(async (files: File[]) => {
+    setError(null);
+    setIsLoading(true);
+    const result = await processFiles(files);
+    setIsLoading(false);
+    if (!result) {
+      setError("No supported images found. Drop a folder with JPG or WebP files.");
+      return;
+    }
+    setFolder(result);
+    setSelectedIndex(0);
+  }, []);
+
+  const handleAddFiles = useCallback(async (files: File[]) => {
+    const added = await processFiles(files);
+    if (!added) return;
+    setFolder((prev) => (prev ? { ...prev, images: [...prev.images, ...added.images] } : added));
+  }, []);
+
+  const handleCull = () => {
+    if (folder) onReady(folder, "CULL");
+  };
+
+  const handleEdit = () => {
+    if (folder) onReady(folder, "EDIT");
+  };
+
+  const handleRetouch = () => {
+    if (folder) onReady(folder, "RETOUCH");
+  };
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -142,13 +182,135 @@ const ImportScreen = ({ onReady, onBack, onStartTethering }: ImportScreenProps) 
       }
     }
 
-    if (files.length) handleFiles(files);
+    if (files.length) {
+      if (folder) handleAddFiles(files);
+      else handleFiles(files);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length) handleFiles(files);
+    e.target.value = "";
   };
+
+  const handleAddInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length) handleAddFiles(files);
+    e.target.value = "";
+  };
+
+  if (folder) {
+    return (
+      <div
+        className="h-screen bg-[#111] flex flex-col select-none"
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {/* Minimal top bar: Home + Grid/Loupe + Add Images */}
+        <header className="flex items-center h-11 px-3 bg-[#1c1c1c] shrink-0 border-b border-background gap-2.5">
+          <button
+            onClick={onBack}
+            className="flex items-center justify-center w-6 h-6 rounded transition-colors hover:bg-white/5"
+          >
+            <HouseSimpleIcon weight="fill" className="w-4 h-4 text-[#777] hover:text-[#fff]" />
+          </button>
+
+          <div className="w-px h-4 bg-[#303030]" />
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setView("grid")}
+              className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${view === "grid" ? "bg-white/10 border border-[#5e5e5e]" : "hover:bg-white/5"}`}
+            >
+              <GridFourIcon
+                weight="fill"
+                className={`w-4 h-4 ${view === "grid" ? "text-[#e2e2e2]" : "text-[#777]"}`}
+              />
+            </button>
+            <button
+              onClick={() => setView("loupe")}
+              className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${view === "loupe" ? "bg-white/10 border border-[#5e5e5e]" : "hover:bg-white/5"}`}
+            >
+              <MonitorIcon
+                weight="fill"
+                className={`w-4 h-4 ${view === "loupe" ? "text-[#e2e2e2]" : "text-[#777]"}`}
+              />
+            </button>
+          </div>
+
+          <div className="w-px h-4 bg-[#303030]" />
+
+          <button
+            onClick={() => addInputRef.current?.click()}
+            className="flex items-center gap-1 text-[#ababab] text-[12px] font-medium hover:text-[#e2e2e2] transition-colors"
+          >
+            <PlusIcon className="w-4 h-4" />
+            <span>Add Images</span>
+          </button>
+        </header>
+
+        {/* Body: grid/loupe + right panel */}
+        <div className="flex flex-1 overflow-hidden">
+          <div className="flex flex-col flex-1 overflow-hidden">
+            {view === "grid" ? (
+              <ImageGrid
+                images={folder.images}
+                columns={columns}
+                isScanning={false}
+                onImageDoubleClick={(i) => {
+                  setSelectedIndex(i);
+                  setView("loupe");
+                }}
+                onImagesChange={(imgs) =>
+                  setFolder((prev) => (prev ? { ...prev, images: imgs } : prev))
+                }
+                initialSelectedIndex={selectedIndex}
+              />
+            ) : (
+              folder.images[selectedIndex] && (
+                <LoupeView
+                  image={folder.images[selectedIndex]}
+                  images={folder.images}
+                  currentIndex={selectedIndex}
+                  totalImages={folder.images.length}
+                  onSelectImage={setSelectedIndex}
+                  onGoToGrid={() => setView("grid")}
+                />
+              )
+            )}
+            {view === "grid" && (
+              <BottomBar
+                mode="grid"
+                columns={columns}
+                onColumnsChange={setColumns}
+                totalPhotos={folder.images.length}
+                visiblePhotos={folder.images.length}
+                albumName={folder.name}
+              />
+            )}
+          </div>
+          <PreCullRightPanel
+            onCull={handleCull}
+            onRetouch={handleRetouch}
+            onEdit={handleEdit}
+            onOneClickCullEdit={handleCull}
+          />
+        </div>
+
+        <input
+          ref={addInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleAddInputChange}
+          accept=".jpg,.jpeg,.webp"
+          multiple
+        />
+      </div>
+    );
+  }
 
   return (
     <div
