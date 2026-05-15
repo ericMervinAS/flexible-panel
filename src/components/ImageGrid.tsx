@@ -3,7 +3,7 @@ import exifr from "exifr";
 import ImageTile from "./ImageTile";
 import type { ImportFolder } from "./ImportGate";
 
-export type ColorTag = "green" | "yellow" | "red" | "none";
+export type ColorTag = "green" | "yellow" | "red" | "blue" | "purple" | "none";
 
 export interface ImageData {
   src: string;
@@ -121,9 +121,25 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
     }
   };
 
+  const handleRatingChange = (index: number, rating: number) => {
+    const updated = imagesRef.current.map((img, i) =>
+      i === index ? { ...img, stars: rating } : img
+    );
+    onImagesChangeRef.current?.(updated);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       if (anchorIndex !== null) onImageDoubleClick(anchorIndex);
+      return;
+    }
+
+    const digit = parseInt(e.key, 10);
+    if (digit >= 0 && digit <= 5 && selectedIndices.size > 0) {
+      const updated = imagesRef.current.map((img, i) =>
+        selectedIndices.has(i) ? { ...img, stars: digit } : img
+      );
+      onImagesChangeRef.current?.(updated);
       return;
     }
 
@@ -180,7 +196,7 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, contain: "layout style" }}
         onKeyDown={handleKeyDown}
       >
-        {displayImages.map(({ src, filename, originalIndex }) => (
+        {displayImages.map(({ src, filename, stars, colorTag, originalIndex }) => (
           <ImageTile
             key={originalIndex}
             src={src}
@@ -188,8 +204,11 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
             isScanning={isScanning}
             isSelected={selectedIndices.has(originalIndex)}
             isPrimary={originalIndex === anchorIndex && isMultiSelected}
+            rating={stars}
+            colorTag={colorTag}
             onClick={(e) => handleClick(originalIndex, e)}
             onDoubleClick={() => onImageDoubleClick(originalIndex)}
+            onRatingChange={(r) => handleRatingChange(originalIndex, r)}
           />
         ))}
       </div>

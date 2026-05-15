@@ -79,7 +79,7 @@ const PreCullRightPanel = ({
               className="text-[14px] font-semibold leading-5 bg-clip-text text-transparent"
               style={{
                 backgroundImage:
-                  "linear-gradient(90deg, #ff7272 0%, #cd70b9 20%, #9a6eff 35%, #43a3ff 55%, #31dab9 70%, #61ff75 80%, #ffd141 92%, #ffa15a 100%)",
+                  "linear-gradient(0deg, #FFD141 -10%, #FF7272 111.78%)",
               }}
             >
               One Click Cull &amp; Edit

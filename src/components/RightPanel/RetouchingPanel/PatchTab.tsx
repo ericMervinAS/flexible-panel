@@ -1,6 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwiseIcon, X, FlaskIcon, ArrowsClockwiseIcon, Plus } from "@phosphor-icons/react";
+import {
+  Check,
+  ArrowCounterClockwiseIcon,
+  X,
+  FlaskIcon,
+  ArrowsClockwiseIcon,
+  Plus,
+} from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 import SuggestObjectModal from "../../SuggestObjectModal";
 import Tooltip from "../../Tooltip";
@@ -10,7 +17,7 @@ const MODEL_TO_UI: Record<string, string> = {
   "Smoke Detector": "Fire Alarms",
   "Fire Extinguisher": "Fire Extinguishers",
   "Electrical Outlet": "Electricity Sockets",
-  "Thermostat": "Thermostats",
+  Thermostat: "Thermostats",
   "Trash Can": "Garbage Cans",
 };
 
@@ -153,7 +160,9 @@ const PatchTab = ({
   const handleRemove = () => {
     if (!canRemove) return;
     const toRemove = new Set(selected);
-    const removedCount = detected.filter((d) => toRemove.has(d.label)).reduce((sum, d) => sum + d.count, 0);
+    const removedCount = detected
+      .filter((d) => toRemove.has(d.label))
+      .reduce((sum, d) => sum + d.count, 0);
     const brushOnly = toRemove.size === 0 && canvasHasStrokes;
     setIsRemoving(true);
     setTimeout(() => {
@@ -176,11 +185,12 @@ const PatchTab = ({
     >
       {/* ── Smart Object ──────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2">
-
         {/* Title row */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">Smart Object Removal</span>
+            <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
+              Smart Object Removal
+            </span>
             <span
               className="relative inline-flex"
               onMouseEnter={() => setFlaskHovered(true)}
@@ -196,12 +206,13 @@ const PatchTab = ({
             onClick={handleRerun}
             disabled={isModelScanning || isRemoving}
             title="Rerun object scan"
-            className={`flex items-center justify-center w-6 h-6 rounded transition-opacity ${isRemoving
-              ? "opacity-30 cursor-not-allowed"
-              : isModelScanning
-                ? "opacity-60 cursor-not-allowed"
-                : "opacity-70 hover:opacity-100 cursor-pointer"
-              }`}
+            className={`flex items-center justify-center w-6 h-6 rounded transition-opacity ${
+              isRemoving
+                ? "opacity-30 cursor-not-allowed"
+                : isModelScanning
+                  ? "opacity-60 cursor-not-allowed"
+                  : "opacity-70 hover:opacity-100 cursor-pointer"
+            }`}
           >
             {isModelScanning ? (
               <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
@@ -215,24 +226,34 @@ const PatchTab = ({
         {!isModelScanning && hasScanned && detected.length === 0 && (
           <div className="flex flex-col items-center gap-3 mt-1">
             <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424] w-full">
-              <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" weight="duotone" />
+              <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" weight="regular" />
               <div className="flex flex-col gap-1 text-center w-full">
-                <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">No distractions detected</p>
-                <p className="text-[13px] font-normal text-[#ababab] leading-4">Think we missed something?</p>
+                <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
+                  No distractions detected
+                </p>
+                <p className="text-[13px] font-normal text-[#ababab] leading-4">
+                  Think we missed something?
+                </p>
               </div>
               <div className="flex items-center justify-center gap-2 w-full">
                 <button
                   onClick={handleRerun}
                   className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
                 >
-                  <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">Rescan Album</span>
+                  <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+                    Rescan Album
+                  </span>
                 </button>
                 {hasRescanned && (
                   <button
-                    onClick={() => console.log('[DistractionDetection] User reported a missed detection')}
+                    onClick={() =>
+                      console.log("[DistractionDetection] User reported a missed detection")
+                    }
                     className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded hover:bg-white/5 transition-colors"
                   >
-                    <span className="text-[12px] font-medium text-[#ababab] leading-4">Report Issue</span>
+                    <span className="text-[12px] font-medium text-[#ababab] leading-4">
+                      Report Issue
+                    </span>
                   </button>
                 )}
               </div>
@@ -244,14 +265,18 @@ const PatchTab = ({
               <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
                 <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
               </div>
-              <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
+              <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">
+                Suggest a new object
+              </span>
             </button>
           </div>
         )}
 
         {/* Detected items grid */}
         {(!hasScanned || detected.length > 0) && (
-          <div className={`grid grid-cols-2 gap-1.5 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+          <div
+            className={`grid grid-cols-2 gap-1.5 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}
+          >
             {orderedItems.map((d) => {
               const isItemRemoved = removedItems.has(d.label);
               const isSelected = selected.has(d.label);
@@ -265,7 +290,9 @@ const PatchTab = ({
                   >
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="text-[11px] text-[#555] leading-4 truncate">{d.label}</span>
-                      <span className="text-[10px] font-medium text-[#474747] leading-3 shrink-0">{d.count}</span>
+                      <span className="text-[10px] font-medium text-[#474747] leading-3 shrink-0">
+                        {d.count}
+                      </span>
                     </div>
                     <div className="shrink-0 relative w-3 h-3">
                       <Check className="absolute top-0 left-0 w-3 h-3 text-[#16a34a] transition-opacity group-hover:opacity-0" />
@@ -285,7 +312,9 @@ const PatchTab = ({
                 >
                   <div className="flex items-center gap-1 min-w-0">
                     <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">{d.label}</span>
-                    <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">{d.count}</span>
+                    <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
+                      {d.count}
+                    </span>
                   </div>
                   <div
                     className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${isSelected ? "bg-[#2563eb]" : "border border-[#474747] bg-transparent"}`}
@@ -303,7 +332,9 @@ const PatchTab = ({
                 <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
                   <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
                 </div>
-                <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest objects</span>
+                <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">
+                  Suggest objects
+                </span>
               </button>
             )}
           </div>
@@ -316,12 +347,13 @@ const PatchTab = ({
       <button
         disabled={!canRemove}
         onClick={handleRemove}
-        className={`flex items-center mt-1 justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium transition-colors ${isRemoving
-          ? "bg-[#1d56d1] text-white cursor-not-allowed"
-          : canRemove
-            ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
-            : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
-          }`}
+        className={`flex items-center mt-1 justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium transition-colors ${
+          isRemoving
+            ? "bg-[#1d56d1] text-white cursor-not-allowed"
+            : canRemove
+              ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
+              : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
+        }`}
       >
         <span>{isRemoving ? "Removing…" : removeLabel}</span>
       </button>
@@ -332,7 +364,9 @@ const PatchTab = ({
       <div className="flex flex-col gap-3">
         <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">Brush Options</span>
         <div className="flex items-center justify-between gap-4">
-          <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">Remove after each stroke</span>
+          <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
+            Remove after each stroke
+          </span>
           <Toggle
             checked={removeAfterStroke}
             onChange={(v) => {
@@ -345,52 +379,58 @@ const PatchTab = ({
       </div>
 
       {/* ── Restore confirmation modal ─────────────────────────────────────── */}
-      {pendingReset && createPortal(
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-          <div className="bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-5 flex flex-col gap-4 w-[448px]">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex flex-col gap-1 pt-0.5">
-                <h3 className="text-[16px] font-semibold text-[#e2e2e2] leading-5">Reset Object Removal</h3>
-                <p className="text-[14px] font-normal text-[#ababab] leading-5">
-                  This will restore {pendingReset.count} photo{pendingReset.count > 1 ? "s" : ""} affected by "{pendingReset.label}".
-                </p>
-              </div>
-              <button
-                onClick={() => setPendingReset(null)}
-                className="shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
-              >
-                <X className="w-4 h-4 text-[#777]" />
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSkipConfirmation((v) => !v)}
-                className="flex items-center gap-1.5 shrink-0"
-              >
-                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${skipConfirmation ? "bg-[#2563eb] border-[#2563eb]" : "bg-[#303030] border-[#474747]"}`}>
-                  {skipConfirmation && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+      {pendingReset &&
+        createPortal(
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+            <div className="bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-5 flex flex-col gap-4 w-[448px]">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col gap-1 pt-0.5">
+                  <h3 className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
+                    Reset Object Removal
+                  </h3>
+                  <p className="text-[14px] font-normal text-[#ababab] leading-5">
+                    This will restore {pendingReset.count} photo{pendingReset.count > 1 ? "s" : ""}{" "}
+                    affected by "{pendingReset.label}".
+                  </p>
                 </div>
-                <span className="text-[12px] text-[#777]">Don't ask again</span>
-              </button>
-              <div className="flex items-center gap-2 ml-auto">
                 <button
                   onClick={() => setPendingReset(null)}
-                  className="px-4 py-2 rounded bg-[#303030] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors"
+                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmReset}
-                  className="px-4 py-2 rounded bg-[#dc2626] text-[14px] font-medium text-white hover:bg-[#b91c1c] transition-colors"
-                >
-                  Reset
+                  <X className="w-4 h-4 text-[#777]" />
                 </button>
               </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSkipConfirmation((v) => !v)}
+                  className="flex items-center gap-1.5 shrink-0"
+                >
+                  <div
+                    className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${skipConfirmation ? "bg-[#2563eb] border-[#2563eb]" : "bg-[#303030] border-[#474747]"}`}
+                  >
+                    {skipConfirmation && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+                  </div>
+                  <span className="text-[12px] text-[#777]">Don't ask again</span>
+                </button>
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    onClick={() => setPendingReset(null)}
+                    className="px-4 py-2 rounded bg-[#303030] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmReset}
+                    className="px-4 py-2 rounded bg-[#dc2626] text-[14px] font-medium text-white hover:bg-[#b91c1c] transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body
+        )}
 
       {showSuggestModal && (
         <SuggestObjectModal

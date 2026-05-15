@@ -203,6 +203,11 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
                 highlightedDetections={highlightedDetections}
                 hoveredDetections={hoveredDetections}
                 onCanvasRemoveSuccess={() => handleRemoveSuccess(1, true)}
+                onRatingChange={(rating) =>
+                  setImages((prev) =>
+                    prev.map((img, i) => i === selectedIndex ? { ...img, stars: rating } : img)
+                  )
+                }
               />
             </div>
           )}

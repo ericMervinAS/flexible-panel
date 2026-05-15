@@ -22,6 +22,7 @@ interface LoupeViewProps {
   isExternallyRemoving?: boolean;
   highlightedDetections?: DistractionDetection[];
   hoveredDetections?: DistractionDetection[];
+  onRatingChange?: (rating: number) => void;
   /** Fired after a canvas-side brush removal completes (timer-driven). */
   onCanvasRemoveSuccess?: () => void;
 }
@@ -41,6 +42,7 @@ const LoupeView = ({
   isExternallyRemoving = false,
   highlightedDetections = [],
   hoveredDetections = [],
+  onRatingChange,
   onCanvasRemoveSuccess,
 }: LoupeViewProps) => {
   const stripImages = filteredImages ?? images.map((img, i) => ({ ...img, originalIndex: i }));
@@ -284,12 +286,18 @@ const LoupeView = ({
     };
   }, []);
 
+  const onRatingChangeRef = useRef(onRatingChange);
+  onRatingChangeRef.current = onRatingChange;
+
   // ── Keyboard navigation + spacebar zoom toggle ───────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "g" || e.key === "G") && !e.metaKey && !e.ctrlKey) { onGoToGrid?.(); return; }
       if (e.key === "ArrowLeft") onSelectImage(Math.max(0, currentIndex - 1));
       if (e.key === "ArrowRight") onSelectImage(Math.min(totalImages - 1, currentIndex + 1));
+
+      const digit = parseInt(e.key, 10);
+      if (digit >= 0 && digit <= 5) { onRatingChangeRef.current?.(digit); return; }
 
       if (e.key === " ") {
         e.preventDefault();
@@ -1064,6 +1072,7 @@ const LoupeView = ({
         showZoomDropdown={showZoomDropdown}
         setShowZoomDropdown={setShowZoomDropdown}
         zoomDropdownRef={zoomDropdownRef}
+        onRatingChange={onRatingChange}
       />
     </div>
   );

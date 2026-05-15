@@ -9,6 +9,16 @@ import {
   CaretLeftIcon,
   CaretRightIcon,
 } from "@phosphor-icons/react";
+import type { ColorTag } from "./ImageGrid";
+
+const colorTagHex: Record<ColorTag, string> = {
+  none: "#5e5e5e",
+  green: "#15803d",
+  blue: "#007bd5",
+  purple: "#8b5cf6",
+  yellow: "#ca8a04",
+  red: "#ef4444",
+};
 
 interface ImageTileProps {
   src: string;
@@ -23,6 +33,7 @@ interface ImageTileProps {
   hasHighlights?: boolean;
   duplicateCount?: number;
   rating?: number;
+  colorTag?: ColorTag;
   isFlagged?: boolean;
   onClick?: (e: React.MouseEvent) => void;
   onDoubleClick?: () => void;
@@ -48,6 +59,7 @@ const ImageTile = ({
   hasHighlights = false,
   duplicateCount,
   rating = 0,
+  colorTag = "none",
   isFlagged = false,
   onClick,
   onDoubleClick,
@@ -56,8 +68,14 @@ const ImageTile = ({
   onRatingChange,
   onFlagToggle,
 }: ImageTileProps) => {
+  const ratingBarColor = colorTagHex[colorTag];
   const hasBadges =
-    hasWarning || isEdited || isRetouched || fileType || hasHighlights || (duplicateCount != null && duplicateCount > 0);
+    hasWarning ||
+    isEdited ||
+    isRetouched ||
+    fileType ||
+    hasHighlights ||
+    (duplicateCount != null && duplicateCount > 0);
 
   return (
     <div
@@ -67,120 +85,145 @@ const ImageTile = ({
       onDoubleClick={onDoubleClick}
     >
       <div className="absolute inset-0 flex flex-col gap-2 pb-3 pt-2 px-3 overflow-hidden">
-      {isSelected && (
-        <div
-          className="absolute inset-0 pointer-events-none z-10"
-          style={{ background: `rgba(226, 226, 226, ${isPrimary ? 0.2 : 0.1})` }}
-        />
-      )}
+        {isSelected && (
+          <div
+            className="absolute inset-0 pointer-events-none z-10"
+            style={{ background: `rgba(226, 226, 226, ${isPrimary ? 0.2 : 0.1})` }}
+          />
+        )}
 
-      {/* Metadata row */}
-      <div className="flex h-6 items-center gap-8 w-full shrink-0">
-        <span className="flex-1 min-w-0 text-[12px] text-[#ababab] truncate leading-4">{filename}</span>
-        {hasBadges && (
-          <div className="flex items-center gap-[2px] shrink-0">
-            {hasWarning && (
-              <div className="backdrop-blur-[2px] bg-[rgba(202,138,4,0.12)] border-[0.5px] border-[rgba(202,138,4,0.4)] flex h-6 min-w-6 items-center justify-center gap-1 overflow-clip px-1 py-1 rounded-[4px] shrink-0">
-                <WarningCircleIcon size={16} className="text-[rgba(202,138,4,1)] shrink-0" />
-              </div>
-            )}
-            {isEdited && (
-              <div className={badgeBase}>
-                <PaletteIcon size={16} className="text-[#e2e2e2] shrink-0" />
-              </div>
-            )}
-            {isRetouched && (
-              <div className={badgeBase}>
-                <BandaidsIcon size={16} className="text-[#e2e2e2] shrink-0" />
-              </div>
-            )}
-            {fileType && (
-              <div className={badgeBase}>
-                <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">{fileType}</span>
-              </div>
-            )}
-            {hasHighlights && (
-              <div className={badgeBase}>
-                <SparkleIcon size={16} className="text-[#e2e2e2] shrink-0" />
-              </div>
-            )}
+        {/* Metadata row */}
+        <div className="flex h-6 items-center gap-8 w-full shrink-0">
+          <span className="flex-1 min-w-0 text-[12px] text-[#ababab] truncate leading-4">
+            {filename}
+          </span>
+          {hasBadges && (
+            <div className="flex items-center gap-[2px] shrink-0">
+              {hasWarning && (
+                <div className="backdrop-blur-[2px] bg-[rgba(202,138,4,0.12)] border-[0.5px] border-[rgba(202,138,4,0.4)] flex h-6 min-w-6 items-center justify-center gap-1 overflow-clip px-1 py-1 rounded-[4px] shrink-0">
+                  <WarningCircleIcon size={16} className="text-[rgba(202,138,4,1)] shrink-0" />
+                </div>
+              )}
+              {isEdited && (
+                <div className={badgeBase}>
+                  <PaletteIcon size={16} className="text-[#e2e2e2] shrink-0" />
+                </div>
+              )}
+              {isRetouched && (
+                <div className={badgeBase}>
+                  <BandaidsIcon size={16} className="text-[#e2e2e2] shrink-0" />
+                </div>
+              )}
+              {fileType && (
+                <div className={badgeBase}>
+                  <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+                    {fileType}
+                  </span>
+                </div>
+              )}
+              {hasHighlights && (
+                <div className={badgeBase}>
+                  <SparkleIcon size={16} className="text-[#e2e2e2] shrink-0" />
+                </div>
+              )}
+              {duplicateCount != null && duplicateCount > 0 && (
+                <div className={badgeBase}>
+                  <CopySimpleIcon size={16} className="text-[#e2e2e2] shrink-0" />
+                  <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+                    {duplicateCount}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Image frame */}
+        <div className="relative flex-1 min-h-0 w-full rounded-[4px] overflow-clip">
+          <img
+            src={src}
+            alt={filename}
+            loading="lazy"
+            className="w-full h-full object-contain rounded-[2px]"
+          />
+          {isScanning && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-5 h-5 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
+            </div>
+          )}
+        </div>
+
+        {/* Actions row */}
+        <div className="flex h-[18px] items-center justify-betwen w-full shrink-0">
+          {/* Left nav */}
+
+          <div className="flex flex-1 items-center min-w-0">
             {duplicateCount != null && duplicateCount > 0 && (
-              <div className={badgeBase}>
-                <CopySimpleIcon size={16} className="text-[#e2e2e2] shrink-0" />
-                <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">{duplicateCount}</span>
-              </div>
+              <button
+                className="flex items-center justify-center w-6 h-6 rounded-[4px] text-[#ababab] hover:text-[#e2e2e2] hover:bg-white/5 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPrev?.();
+                }}
+              >
+                <CaretLeftIcon size={16} />
+              </button>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Image frame */}
-      <div className="relative flex-1 min-h-0 w-full rounded-[4px] overflow-clip">
-        <img
-          src={src}
-          alt={filename}
-          loading="lazy"
-          className="w-full h-full object-contain rounded-[2px]"
-        />
-        {isScanning && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-5 h-5 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
-          </div>
-        )}
-      </div>
-
-      {/* Actions row */}
-      <div className="flex h-[18px] items-center justify-betwen w-full shrink-0">
-        {/* Left nav */}
-
-        <div className="flex flex-1 items-center min-w-0">
-          {(duplicateCount != null && duplicateCount > 0) && (
-            <button
-              className="flex items-center justify-center w-6 h-6 rounded-[4px] text-[#ababab] hover:text-[#e2e2e2] hover:bg-white/5 transition-colors"
-              onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
+          {/* Rating + flag */}
+          <div className="flex items-center gap-1 shrink-0">
+            <div
+              className="flex items-center gap-[2px] px-1.5 py-[3px] rounded-[4px]"
+              style={{ backgroundColor: ratingBarColor }}
             >
-              <CaretLeftIcon size={16} />
+              {Array.from({ length: 5 }, (_, i) => (
+                <button
+                  key={i}
+                  className="shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRatingChange?.(i + 1 === rating ? 0 : i + 1);
+                  }}
+                >
+                  <StarIcon
+                    size={12}
+                    weight="fill"
+                    className={i < rating ? "text-white" : "text-white/30"}
+                  />
+                </button>
+              ))}
+            </div>
+            <button
+              className="flex items-center justify-center text-[#ababab] hover:text-[#e2e2e2] transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onFlagToggle?.();
+              }}
+            >
+              <FlagIcon
+                size={12}
+                weight={isFlagged ? "fill" : "regular"}
+                className={isFlagged ? "text-[#e2e2e2]" : undefined}
+              />
             </button>
-          )}
-        </div>
+          </div>
 
-        {/* Rating + flag */}
-        <div className="flex items-center gap-1 shrink-0">
-          <div className="flex items-center gap-[2px] bg-[#5e5e5e] px-1 py-[2px] rounded-[4px]">
-            {Array.from({ length: 5 }, (_, i) => (
+          {/* Right nav */}
+          <div className="flex flex-1 items-center justify-end min-w-0">
+            {duplicateCount != null && duplicateCount > 0 && (
               <button
-                key={i}
-                className="shrink-0"
-                onClick={(e) => { e.stopPropagation(); onRatingChange?.(i + 1 === rating ? 0 : i + 1); }}
+                className="flex items-center justify-center w-6 h-6 rounded-[4px] text-[#ababab] hover:text-[#e2e2e2] hover:bg-white/5 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNext?.();
+                }}
               >
-                <StarIcon
-                  size={10}
-                  weight={i < rating ? "fill" : "regular"}
-                  className={i < rating ? "text-[#e2e2e2]" : "text-[#ababab]"}
-                />
+                <CaretRightIcon size={16} />
               </button>
-            ))}
+            )}
           </div>
-          <button
-            className="flex items-center justify-center text-[#ababab] hover:text-[#e2e2e2] transition-colors"
-            onClick={(e) => { e.stopPropagation(); onFlagToggle?.(); }}
-          >
-            <FlagIcon size={12} weight={isFlagged ? "fill" : "regular"} className={isFlagged ? "text-[#e2e2e2]" : undefined} />
-          </button>
         </div>
-
-        {/* Right nav */}
-        <div className="flex flex-1 items-center justify-end min-w-0">
-          {(duplicateCount != null && duplicateCount > 0) && (
-            <button
-              className="flex items-center justify-center w-6 h-6 rounded-[4px] text-[#ababab] hover:text-[#e2e2e2] hover:bg-white/5 transition-colors"
-              onClick={(e) => { e.stopPropagation(); onNext?.(); }}
-            >
-              <CaretRightIcon size={16} />
-            </button>
-          )}
-        </div>
-      </div>
       </div>
     </div>
   );

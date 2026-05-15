@@ -100,10 +100,18 @@ const RightPanel = ({
   }, [hasRetouchingOpportunity, opportunityDismissed, isLoupeView]);
 
   const handleAddRemovedItems = (labels: Set<string>) =>
-    setRemovedItems((prev) => { const next = new Set(prev); labels.forEach((l) => next.add(l)); return next; });
+    setRemovedItems((prev) => {
+      const next = new Set(prev);
+      labels.forEach((l) => next.add(l));
+      return next;
+    });
 
   const handleResetRemovedItem = (label: string) =>
-    setRemovedItems((prev) => { const next = new Set(prev); next.delete(label); return next; });
+    setRemovedItems((prev) => {
+      const next = new Set(prev);
+      next.delete(label);
+      return next;
+    });
 
   return (
     <aside
@@ -120,19 +128,25 @@ const RightPanel = ({
 
       {isLoupeView ? (
         <>
-          <div className={`flex-1 flex flex-col overflow-hidden ${activeTopTab !== "EDIT" ? "hidden" : ""}`}>
+          <div
+            className={`flex-1 flex flex-col overflow-hidden ${activeTopTab !== "EDIT" ? "hidden" : ""}`}
+          >
             <EditingPanel
               currentImageSrc={currentImageSrc}
               isTethering={isTethering}
               onStartTethering={onStartTethering}
               onCapture={onCapture}
-              initialTab={initialEditingTab as "sliders" | "crop" | "mask" | "tethering" | undefined}
+              initialTab={
+                initialEditingTab as "sliders" | "crop" | "mask" | "tethering" | undefined
+              }
               tetheringTabActive={tetheringTabActive}
               onTetheringTabActiveChange={setTetheringTabActive}
               onCancelTethering={onCancelTethering}
             />
           </div>
-          <div className={`flex-1 flex flex-col overflow-hidden ${activeTopTab === "EDIT" ? "hidden" : ""}`}>
+          <div
+            className={`flex-1 flex flex-col overflow-hidden ${activeTopTab === "EDIT" ? "hidden" : ""}`}
+          >
             <RetouchingPanel
               currentImageIndex={currentImageIndex}
               currentImageSrc={currentImageSrc}
@@ -215,8 +229,9 @@ const RightPanel = ({
       {/* Scroll fade gradient – only visible in loupe view above the footer */}
       {isLoupeView && (
         <div
-          className={`absolute left-0 right-0 h-10 pointer-events-none z-10 transition-opacity duration-300 ${isScrolledToBottom ? "opacity-0" : "opacity-100"
-            }`}
+          className={`absolute left-0 right-0 h-10 pointer-events-none z-10 transition-opacity duration-300 ${
+            isScrolledToBottom ? "opacity-0" : "opacity-100"
+          }`}
           style={{
             bottom: 56,
             background: "linear-gradient(0deg, rgba(28, 28, 28, 0.00) 0%, #1C1C1C 88.66%)",

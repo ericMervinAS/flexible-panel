@@ -76,10 +76,12 @@ const GridSlider = ({ value, min, max, step, onChange }: GridSliderProps) => {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const colorTagBg: Record<ColorTag, string> = {
+  none: "#5e5e5e",
   green: "#15803d",
-  yellow: "#a16207",
-  red: "#b91c1c",
-  none: "transparent",
+  blue: "#007bd5",
+  purple: "#8b5cf6",
+  yellow: "#ca8a04",
+  red: "#ef4444",
 };
 
 const ZOOM_PRESETS = [25, 50, 75, 100, 150, 200, 400];
@@ -108,6 +110,7 @@ type LoupeProps = {
   showZoomDropdown: boolean;
   setShowZoomDropdown: (v: boolean | ((prev: boolean) => boolean)) => void;
   zoomDropdownRef: RefObject<HTMLDivElement>;
+  onRatingChange?: (rating: number) => void;
 };
 
 type BottomBarProps = GridProps | LoupeProps;
@@ -156,21 +159,21 @@ const BottomBar = (props: BottomBarProps) => {
         {isLoupe && (
           <>
             <div
-              className="flex items-center gap-[2px] px-2 py-1 rounded-md shrink-0"
-              style={{
-                backgroundColor:
-                  props.image.colorTag !== "none"
-                    ? colorTagBg[props.image.colorTag]
-                    : "#303030",
-              }}
+              className="flex items-center gap-[2px] px-2 py-[2px] rounded-[6px] shrink-0"
+              style={{ backgroundColor: colorTagBg[props.image.colorTag] }}
             >
               {Array.from({ length: 5 }).map((_, i) => (
-                <Star
+                <button
                   key={i}
-                  size={12}
-                  fill={i < props.image.stars ? "white" : "rgba(255,255,255,0.3)"}
-                  strokeWidth={0}
-                />
+                  className="shrink-0"
+                  onClick={() => props.onRatingChange?.(i + 1 === props.image.stars ? 0 : i + 1)}
+                >
+                  <Star
+                    size={12}
+                    fill={i < props.image.stars ? "white" : "rgba(255,255,255,0.3)"}
+                    strokeWidth={0}
+                  />
+                </button>
               ))}
             </div>
             <button className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors">

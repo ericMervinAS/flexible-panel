@@ -31,7 +31,6 @@ interface SliderRowProps {
 }
 
 const LABEL_RESET_DELAY = 600;
-const VALUE_DRAG_STEP_PX = 8;
 
 const SliderRow = ({
   label,
@@ -54,7 +53,6 @@ const SliderRow = ({
   const [inputVal, setInputVal] = useState(String(value));
   const [valueHovered, setValueHovered] = useState(false);
   const labelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const valueDragRef = useRef<{ lastX: number; hasDragged: boolean } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isActive = rowHovered || isDragging;
@@ -96,38 +94,10 @@ const SliderRow = ({
     setValueEditing(false);
   };
 
-  const handleValueMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    valueDragRef.current = { lastX: e.clientX, hasDragged: false };
-    document.body.style.cursor = "ew-resize";
-
-    const onMove = (ev: MouseEvent) => {
-      if (!valueDragRef.current) return;
-      const delta = ev.clientX - valueDragRef.current.lastX;
-      if (Math.abs(delta) >= VALUE_DRAG_STEP_PX) {
-        valueDragRef.current.hasDragged = true;
-        const direction = delta > 0 ? 1 : -1;
-        onChange(Math.min(max, Math.max(min, value + direction)));
-        valueDragRef.current.lastX = ev.clientX;
-      }
-    };
-
-    const onUp = (ev: MouseEvent) => {
-      const totalDelta = Math.abs(ev.clientX - startX);
-      if (totalDelta < 3 && !valueDragRef.current?.hasDragged) {
-        setValueEditing(true);
-        setInputVal(String(value));
-        setTimeout(() => inputRef.current?.select(), 0);
-      }
-      valueDragRef.current = null;
-      document.body.style.cursor = "";
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+  const handleValueClick = () => {
+    setValueEditing(true);
+    setInputVal(String(value));
+    setTimeout(() => inputRef.current?.select(), 0);
   };
 
   // Track fill: same for hover and grabbed (#5e5e5e)
@@ -217,11 +187,16 @@ const SliderRow = ({
           value={inputVal}
           min={min}
           max={max}
-          onChange={(e) => setInputVal(e.target.value)}
+          onChange={(e) => {
+            if (e.target.value.length <= 3) setInputVal(e.target.value);
+          }}
           onBlur={commitInput}
           onKeyDown={(e) => {
             if (e.key === "Enter") commitInput();
-            if (e.key === "Escape") { setInputVal(String(value)); setValueEditing(false); }
+            if (e.key === "Escape") {
+              setInputVal(String(value));
+              setValueEditing(false);
+            }
           }}
           className="w-[36px] text-[12px] font-medium text-right shrink-0 bg-transparent text-[#e2e2e2] outline-none border-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
@@ -229,8 +204,8 @@ const SliderRow = ({
         <span
           onMouseEnter={() => setValueHovered(true)}
           onMouseLeave={() => setValueHovered(false)}
-          onMouseDown={handleValueMouseDown}
-          className={`w-[36px] text-[12px] font-medium text-right shrink-0 transition-colors select-none ${valueHovered ? "text-[#e2e2e2] cursor-ew-resize" : textColor}`}
+          onClick={handleValueClick}
+          className={`w-[36px] text-[12px] font-medium text-right shrink-0 transition-colors select-none cursor-pointer ${valueHovered ? "text-[#e2e2e2]" : textColor}`}
         >
           {value}
         </span>

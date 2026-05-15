@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Lock } from "@phosphor-icons/react";
+import { LockIcon } from "@phosphor-icons/react";
 
 // Must match the salt used in scripts/set-code.mjs
 const SALT = "aftershoot-arc-v1";
@@ -8,7 +8,9 @@ const SESSION_KEY = "as_arc_access";
 
 async function deriveHash(code: string): Promise<string> {
   const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveBits"]);
+  const key = await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, [
+    "deriveBits",
+  ]);
   const bits = await crypto.subtle.deriveBits(
     { name: "PBKDF2", salt: enc.encode(SALT), iterations: 100_000, hash: "SHA-256" },
     key,
@@ -79,7 +81,9 @@ const AccessGate = ({ children }: { children: React.ReactNode }) => {
     e.preventDefault();
     const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
     if (!text) return;
-    const next = Array(6).fill("").map((_, i) => text[i] ?? "");
+    const next = Array(6)
+      .fill("")
+      .map((_, i) => text[i] ?? "");
     setDigits(next);
     refs.current[Math.min(text.length, 5)]?.focus();
     if (text.length === 6) verify(text);
@@ -96,7 +100,7 @@ const AccessGate = ({ children }: { children: React.ReactNode }) => {
         {/* Header */}
         <div className="flex flex-col items-center gap-3">
           <div className="w-[52px] h-[52px] rounded-2xl bg-[#151515] border border-[#242424] flex items-center justify-center shadow-[0_0_0_1px_rgba(255,255,255,0.03)_inset]">
-            <Lock className="w-[22px] h-[22px] text-[#474747]" weight="duotone" />
+            <LockIcon className="w-[22px] h-[22px] text-[#474747]" weight="duotone" />
           </div>
           <div className="flex flex-col items-center gap-1">
             <span className="text-[#d4d4d4] text-[15px] font-medium tracking-[-0.01em]">
@@ -111,7 +115,9 @@ const AccessGate = ({ children }: { children: React.ReactNode }) => {
           {digits.map((d, i) => (
             <input
               key={i}
-              ref={(el) => { refs.current[i] = el; }}
+              ref={(el) => {
+                refs.current[i] = el;
+              }}
               type="text"
               inputMode="numeric"
               maxLength={1}
@@ -121,11 +127,12 @@ const AccessGate = ({ children }: { children: React.ReactNode }) => {
               onKeyDown={(e) => handleKeyDown(i, e)}
               onPaste={handlePaste}
               className={`w-11 h-[54px] text-center text-[22px] font-semibold rounded-xl border bg-[#111] outline-none transition-all duration-150 caret-transparent select-none
-                ${shake
-                  ? "border-[#7f1d1d] text-[#ef4444] bg-[#1a0a0a]"
-                  : d
-                  ? "border-[#1d4ed8] text-[#e2e2e2] shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
-                  : "border-[#1e1e1e] text-[#e2e2e2] focus:border-[#2e2e2e] focus:bg-[#131313]"
+                ${
+                  shake
+                    ? "border-[#7f1d1d] text-[#ef4444] bg-[#1a0a0a]"
+                    : d
+                      ? "border-[#1d4ed8] text-[#e2e2e2] shadow-[0_0_0_3px_rgba(37,99,235,0.12)]"
+                      : "border-[#1e1e1e] text-[#e2e2e2] focus:border-[#2e2e2e] focus:bg-[#131313]"
                 }
                 ${checking ? "opacity-30" : ""}
               `}
