@@ -61,11 +61,12 @@ const ImageTile = ({
 
   return (
     <div
-      className="relative flex flex-col gap-2 pb-3 pt-2 px-3 bg-[#1c1c1c] aspect-square"
+      className="relative aspect-square bg-[#1c1c1c]"
       style={{ contentVisibility: "auto", containIntrinsicSize: "0 310px" }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
     >
+      <div className="absolute inset-0 flex flex-col gap-2 pb-3 pt-2 px-3 overflow-hidden">
       {isSelected && (
         <div
           className="absolute inset-0 pointer-events-none z-10"
@@ -114,7 +115,7 @@ const ImageTile = ({
       </div>
 
       {/* Image frame */}
-      <div className="relative h-full w-full rounded-[4px] overflow-clip shrink-0">
+      <div className="relative flex-1 min-h-0 w-full rounded-[4px] overflow-clip">
         <img
           src={src}
           alt={filename}
@@ -179,6 +180,7 @@ const ImageTile = ({
             </button>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

@@ -1,5 +1,4 @@
-import { useRef, useState } from "react";
-import exifr from "exifr";
+import { useState } from "react";
 import {
   HouseIcon,
   MagicWandIcon,
@@ -15,27 +14,19 @@ import {
   PlusIcon,
   SparkleIcon,
 } from "@phosphor-icons/react";
-import type { ImageData } from "./ImageGrid";
 import type { ImportFolder } from "./ImportGate";
 
 interface HomePageProps {
   onReady: (source: "sample" | "tethering" | ImportFolder) => void;
+  onCreateAlbum: () => void;
 }
 
 import heroPortrait from "../assets/UI/home-hero-portrait.png";
+import tetheringEntry from "../assets/UI/tethering-entry.png";
 import tetheringPortrait from "../assets/UI/home-tethering-portrait.png";
 import logoImg from "../assets/UI/logo.png";
 import userImg from "../assets/UI/user.png";
-
-const toJpegName = (name: string) => name.replace(/\.[^.]+$/, ".jpeg");
-
-const folderNameFromFiles = (files: File[]): string => {
-  for (const f of files) {
-    const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath;
-    if (rel && rel.includes("/")) return rel.split("/")[0];
-  }
-  return "Imported Folder";
-};
+import sampleCover from "../assets/samples/187170.webp";
 
 type Album = {
   id: string;
@@ -49,13 +40,17 @@ const SAMPLE_ALBUM: Album = {
   id: "sample",
   name: "Juliana Wedding",
   imageCount: 24,
+  coverSrc: sampleCover,
   source: "sample",
 };
 
 function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
   return (
-    <div className="flex flex-col w-[257px] shrink-0">
-      <div className="h-[190px] bg-[#242424] rounded-lg overflow-hidden relative flex flex-col justify-between">
+    <div className="flex flex-col w-full">
+      <div
+        className="aspect-[257/190] bg-[#242424] rounded-lg overflow-hidden relative flex flex-col justify-between group cursor-pointer"
+        onDoubleClick={onOpen}
+      >
         {album.coverSrc && (
           <img
             src={album.coverSrc}
@@ -64,7 +59,8 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
           />
         )}
         <div className="p-2 relative z-10" />
-        <div className="flex items-end justify-between p-1 relative z-10">
+        <div className="absolute inset-x-0 bottom-0 h-30 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10" />
+        <div className="flex items-end justify-between p-1 relative z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
           <div className="flex gap-1">
             <div className="w-6 h-6 bg-[rgba(17,17,17,0.85)] border-[0.5px] border-[#474747] rounded flex items-center justify-center backdrop-blur-sm">
               <ScissorsIcon size={16} className="text-[#e2e2e2]" weight="fill" />
@@ -94,7 +90,7 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
             onClick={onOpen}
             className="bg-[#303030] text-[#e2e2e2] text-xs font-medium px-3 py-2 rounded shrink-0 ml-3 hover:bg-[#3a3a3a] transition-colors"
           >
-            Cull Now
+            Retouch Now
           </button>
         </div>
       </div>
@@ -102,10 +98,8 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
   );
 }
 
-const HomePage = ({ onReady }: HomePageProps) => {
-  const [isLoading, setIsLoading] = useState(false);
+const HomePage = ({ onReady, onCreateAlbum }: HomePageProps) => {
   const [albums, setAlbums] = useState<Album[]>([SAMPLE_ALBUM]);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleStartTethering = () => {
     const newAlbum: Album = {
@@ -116,40 +110,6 @@ const HomePage = ({ onReady }: HomePageProps) => {
     };
     setAlbums((prev) => [...prev, newAlbum]);
     onReady("tethering");
-  };
-
-  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const allFiles = Array.from(e.target.files ?? []);
-    const folderName = folderNameFromFiles(allFiles);
-    const files = allFiles
-      .filter(
-        (f) =>
-          f.type === "image/jpeg" || f.type === "image/webp" || /\.(jpg|jpeg|webp)$/i.test(f.name)
-      )
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, 24);
-
-    if (!files.length) return;
-    setIsLoading(true);
-
-    const images: ImageData[] = await Promise.all(
-      files.map(async (file): Promise<ImageData> => {
-        const src = URL.createObjectURL(file);
-        let stars = 0;
-        try {
-          const meta = await exifr.parse(file, { xmp: true });
-          if (typeof meta?.Rating === "number") {
-            stars = Math.min(5, Math.max(0, Math.round(meta.Rating)));
-          }
-        } catch {
-          /* no metadata */
-        }
-        return { src, filename: toJpegName(file.name), stars, colorTag: "none" };
-      })
-    );
-
-    setIsLoading(false);
-    onReady({ name: folderName, images });
   };
 
   return (
@@ -219,31 +179,59 @@ const HomePage = ({ onReady }: HomePageProps) => {
         {/* Left content */}
         <div className="flex-1 flex flex-col gap-5 pl-[30px] py-6 overflow-y-auto min-w-0">
           {/* Hero "Create a new album" card */}
-          <div
-            className="w-[380px] h-[144px] rounded-[9.6px] overflow-hidden relative shrink-0"
-            style={{
-              backgroundImage: `linear-gradient(to right, #1c1c1c 40%, transparent 75%), url(${heroPortrait})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center top",
-            }}
-          >
-            {/* Left content */}
-            <div className="absolute inset-0 flex flex-col justify-center px-4 py-3 w-[240px]">
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1">
-                  <p className="text-white text-base font-semibold leading-5">Create a new album</p>
-                  <p className="text-[#ababab] text-xs leading-4">
-                    Smart Selections. Effortless Editing. AI-precise Retouching
-                  </p>
+          <div className="flex gap-5 ">
+            <div
+              onClick={onCreateAlbum}
+              className="w-[380px] h-[144px] rounded-[10px] overflow-hidden relative shrink-0 hover:cursor-pointer"
+              style={{
+                backgroundImage: `url(${heroPortrait})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center top",
+              }}
+            >
+              {/* Left content */}
+              <div className="absolute inset-0 flex flex-col justify-center px-4 py-3 w-[240px]">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <p className="text-white text-base font-semibold leading-5">
+                      Create a new album
+                    </p>
+                    <p className="text-[#ababab] text-xs leading-4">
+                      Smart Selections. Effortless Editing. AI-precise Retouching
+                    </p>
+                  </div>
+                  <button className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-2 rounded w-fit h-8 transition-colors">
+                    <PlusIcon size={16} />
+                    Create Album
+                  </button>
                 </div>
-                <button
-                  onClick={() => inputRef.current?.click()}
-                  disabled={isLoading}
-                  className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-medium px-3 py-2 rounded w-fit h-8 transition-colors"
-                >
-                  <PlusIcon size={16} />
-                  {isLoading ? "Loading…" : "Create Album"}
-                </button>
+              </div>
+            </div>
+
+            <div
+              onClick={handleStartTethering}
+              className="w-[380px] h-[144px] rounded-[10px] overflow-hidden relative shrink-0 hover:cursor-pointer"
+              style={{
+                backgroundImage: `url(${tetheringEntry})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center top",
+              }}
+            >
+              {/* Left content */}
+              <div className="absolute inset-0 flex flex-col justify-center px-4 py-3 w-[240px]">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <p className="text-white text-base font-semibold leading-5">
+                      Tethering is now Live
+                    </p>
+                    <p className="text-[#ababab] text-xs leading-4">
+                      Your workflow just got a whole lot faster and smoother!
+                    </p>
+                  </div>
+                  <button className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-medium px-3 py-2 rounded w-fit h-8 transition-colors">
+                    Try Now
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -254,7 +242,7 @@ const HomePage = ({ onReady }: HomePageProps) => {
           </p>
 
           {/* Albums grid */}
-          <div className="flex gap-5 flex-wrap">
+          <div className="grid grid-cols-4 gap-5 pr-[30px]">
             {albums.map((album) => (
               <AlbumCard key={album.id} album={album} onOpen={() => onReady(album.source)} />
             ))}
@@ -264,7 +252,7 @@ const HomePage = ({ onReady }: HomePageProps) => {
         {/* Right Sidebar */}
         <div className="w-[361px] border-l border-[#1c1c1c] flex flex-col gap-2 p-2 overflow-y-auto shrink-0">
           {/* Tethering promo card */}
-          <div
+          {/* <div
             className="rounded-[4px] px-5 relative overflow-hidden shrink-0 flex items-center"
             style={{
               minHeight: "160px",
@@ -289,7 +277,7 @@ const HomePage = ({ onReady }: HomePageProps) => {
                 </button>
               </div>
             </div>
-          </div>
+          </div> */}
 
           {/* You & Aftershoot stats card */}
           <div className="bg-[#1c1c1c] rounded-[4px] p-5 flex flex-col gap-6 shrink-0">
@@ -351,20 +339,6 @@ const HomePage = ({ onReady }: HomePageProps) => {
           </div>
         </div>
       </div>
-
-      {/* Hidden folder picker */}
-      <input
-        ref={inputRef}
-        type="file"
-        className="hidden"
-        onChange={handleInputChange}
-        accept=".jpg,.jpeg,.webp"
-        multiple
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        webkitdirectory=""
-        directory=""
-      />
     </div>
   );
 };

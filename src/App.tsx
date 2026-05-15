@@ -9,11 +9,12 @@ import NotFound from "./pages/NotFound.tsx";
 import AccessGate from "./components/AccessGate";
 import ImportGate, { type ImportFolder } from "./components/ImportGate";
 import HomePage from "./components/HomePage";
+import ImportScreen from "./components/screens/ImportScreen";
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  const [importSource, setImportSource] = useState<"pending" | "home" | "sample" | "tethering" | ImportFolder>("pending");
+  const [importSource, setImportSource] = useState<"pending" | "home" | "import" | "sample" | "tethering" | ImportFolder>("pending");
 
   return (
     <AccessGate>
@@ -24,7 +25,9 @@ const App = () => {
           {importSource === "pending" ? (
             <ImportGate onReady={(src) => src === "tethering" ? setImportSource("home") : setImportSource(src)} />
           ) : importSource === "home" ? (
-            <HomePage onReady={setImportSource} />
+            <HomePage onReady={setImportSource} onCreateAlbum={() => setImportSource("import")} />
+          ) : importSource === "import" ? (
+            <ImportScreen onReady={setImportSource} onBack={() => setImportSource("home")} />
           ) : (
             <BrowserRouter>
               <Routes>

@@ -8,7 +8,7 @@ import {
   HouseSimpleIcon,
 } from "@phosphor-icons/react";
 
-const ALL_TABS = ["IMPORT", "CULL", "EDIT", "RETOUCH"] as const;
+const ALL_TABS = ["CULL", "EDIT", "RETOUCH"] as const;
 
 interface TopBarProps {
   activeTab: string;
@@ -36,7 +36,10 @@ const TopBar = ({
     <header className="flex items-center justify-between h-11 px-3 bg-[#1c1c1c] shrink-0 border-b border-background">
       {/* Left: Views + Filter + Add */}
       <div className="flex items-center gap-2.5 w-[400px]">
-        <button onClick={onGoHome} className="flex items-center justify-center w-6 h-6 rounded transition-colors hover:bg-white/5">
+        <button
+          onClick={onGoHome}
+          className="flex items-center justify-center w-6 h-6 rounded transition-colors hover:bg-white/5"
+        >
           <HouseSimpleIcon weight="fill" className="w-4 h-4 text-[#777] hover:text-[#fff]" />
         </button>
 
