@@ -10,32 +10,93 @@ import AccessGate from "./components/AccessGate";
 import ImportGate, { type ImportFolder } from "./components/ImportGate";
 import HomePage from "./components/HomePage";
 import ImportScreen from "./components/screens/ImportScreen";
+import { AlbumsProvider, useAlbums } from "@/context/AlbumsContext";
+import type { Album } from "@/types/album";
 
 const queryClient = new QueryClient();
 
-const App = () => {
-  const [importSource, setImportSource] = useState<"pending" | "home" | "import" | "sample" | "tethering" | ImportFolder>("pending");
+type Screen = "pending" | "home" | "import" | "sample" | "tethering" | ImportFolder;
 
+const AppContent = () => {
+  const [screen, setScreen] = useState<Screen>("pending");
+  const [currentAlbumId, setCurrentAlbumId] = useState<string | undefined>();
+  const { addAlbum } = useAlbums();
+
+  const handleImportReady = (folder: ImportFolder) => {
+    const id = `upload-${Date.now()}`;
+    addAlbum({
+      id,
+      name: folder.name,
+      imageCount: folder.images.length,
+      coverSrc: folder.images[0]?.src,
+      source: folder,
+    });
+    setCurrentAlbumId(id);
+    setScreen(folder);
+  };
+
+  const handleTetheringStart = () => {
+    const id = `tether-${Date.now()}`;
+    const now = new Date();
+    const date = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    addAlbum({
+      id,
+      name: `Tethered Shoot · ${date} · ${time}`,
+      imageCount: 0,
+      source: "tethering",
+    });
+    setCurrentAlbumId(id);
+    setScreen("tethering");
+  };
+
+  const handleHomeReady = (source: "sample" | "tethering" | ImportFolder) => {
+    if (source === "tethering") {
+      handleTetheringStart();
+      return;
+    }
+    setScreen(source);
+  };
+
+  const handleOpenAlbum = (album: Album) => {
+    setCurrentAlbumId(album.id);
+    setScreen(album.source === "tethering" ? "tethering" : album.source);
+  };
+
+  return (
+    <>
+      {screen === "pending" ? (
+        <ImportGate onReady={(src) => src === "tethering" ? setScreen("home") : setScreen(src)} />
+      ) : screen === "home" ? (
+        <HomePage onReady={handleHomeReady} onOpenAlbum={handleOpenAlbum} onCreateAlbum={() => setScreen("import")} />
+      ) : screen === "import" ? (
+        <ImportScreen
+          onReady={handleImportReady}
+          onBack={() => setScreen("home")}
+          onStartTethering={handleTetheringStart}
+        />
+      ) : (
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index importSource={screen} onGoHome={() => setScreen("home")} onCancelTethering={() => setScreen("import")} albumId={currentAlbumId} />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      )}
+    </>
+  );
+};
+
+const App = () => {
   return (
     <AccessGate>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          {importSource === "pending" ? (
-            <ImportGate onReady={(src) => src === "tethering" ? setImportSource("home") : setImportSource(src)} />
-          ) : importSource === "home" ? (
-            <HomePage onReady={setImportSource} onCreateAlbum={() => setImportSource("import")} />
-          ) : importSource === "import" ? (
-            <ImportScreen onReady={setImportSource} onBack={() => setImportSource("home")} />
-          ) : (
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Index importSource={importSource} onGoHome={() => setImportSource("home")} />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          )}
+          <AlbumsProvider>
+            <AppContent />
+          </AlbumsProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </AccessGate>

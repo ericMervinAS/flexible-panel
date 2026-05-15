@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { UserIcon, StackIcon, EraserIcon, CameraIcon } from "@phosphor-icons/react";
 import SubjectTab, { LoupeRetouchState } from "./SubjectTab";
 import BackgroundTab from "./BackgroundTab";
@@ -22,6 +22,8 @@ interface LoupePanelProps {
   isTethering?: boolean;
   onStartTethering?: () => void;
   onCapture?: (autoAdvance: boolean) => void;
+  tetheringTabActive?: boolean;
+  onTetheringTabActiveChange?: (active: boolean) => void;
   appliedPresets: Record<string, string>;
   removedItems: Set<string>;
   onAddRemovedItems: (labels: Set<string>) => void;
@@ -45,6 +47,7 @@ interface LoupePanelProps {
   onScrollChange?: (atBottom: boolean) => void;
   forceSubjectTabSignal?: number;
   onStateChange?: (index: number, state: LoupeRetouchState) => void;
+  onCancelTethering?: () => void;
 }
 
 const RetouchingPanel = ({
@@ -53,6 +56,8 @@ const RetouchingPanel = ({
   isTethering = false,
   onStartTethering,
   onCapture,
+  tetheringTabActive,
+  onTetheringTabActiveChange,
   appliedPresets,
   removedItems,
   onAddRemovedItems,
@@ -75,9 +80,29 @@ const RetouchingPanel = ({
   onTabChange,
   onScrollChange,
   forceSubjectTabSignal,
+  onCancelTethering,
 }: LoupePanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [perImageState, setPerImageState] = useState<Record<number, LoupeRetouchState>>({});
+  const previousTabRef = useRef<LoupeTab>("subject");
+
+  useEffect(() => {
+    if (tetheringTabActive) setActiveTab("tethering");
+  }, [tetheringTabActive]);
+
+  const handleTabChange = (tab: LoupeTab) => {
+    if (tab === "tethering") previousTabRef.current = activeTab;
+    setActiveTab(tab);
+    onTabChange?.(tab);
+    onTetheringTabActiveChange?.(tab === "tethering");
+  };
+
+  const handleCancelSetup = useCallback(() => {
+    const prev = previousTabRef.current;
+    setActiveTab(prev);
+    onTabChange?.(prev);
+    onTetheringTabActiveChange?.(false);
+  }, [onTabChange, onTetheringTabActiveChange]);
   const [pasteSourceIndex, setPasteSourceIndex] = useState<number | null>(null);
   const [loupeResetSignal, setLoupeResetSignal] = useState(0);
   const [loupePasteSignal, setLoupePasteSignal] = useState<{ state: LoupeRetouchState; seq: number } | null>(null);
@@ -124,7 +149,7 @@ const RetouchingPanel = ({
           {LOUPE_TABS.slice(0, -1).map(({ id, Icon }) => (
             <button
               key={id}
-              onClick={() => { setActiveTab(id); onTabChange?.(id); }}
+              onClick={() => handleTabChange(id)}
               className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${activeTab === id
                 ? "border-[#e2e2e2] text-[#e2e2e2]"
                 : "border-transparent text-[#777] hover:text-[#ababab]"
@@ -139,7 +164,7 @@ const RetouchingPanel = ({
           return (
             <button
               key={id}
-              onClick={() => { setActiveTab(id); onTabChange?.(id); }}
+              onClick={() => handleTabChange(id)}
               className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${activeTab === id
                 ? "border-[#e2e2e2] text-[#e2e2e2]"
                 : "border-transparent text-[#777] hover:text-[#ababab]"
@@ -192,6 +217,8 @@ const RetouchingPanel = ({
             currentImageSrc={currentImageSrc}
             isTethering={isTethering}
             onStartTethering={onStartTethering ?? (() => {})}
+            onCancelSetup={handleCancelSetup}
+            onCancelTethering={onCancelTethering}
             onCapture={onCapture}
           />
         )}

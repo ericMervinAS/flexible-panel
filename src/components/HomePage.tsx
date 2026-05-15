@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   HouseIcon,
   MagicWandIcon,
@@ -15,34 +14,18 @@ import {
   SparkleIcon,
 } from "@phosphor-icons/react";
 import type { ImportFolder } from "./ImportGate";
+import type { Album } from "@/types/album";
+import { useAlbums } from "@/context/AlbumsContext";
+import heroPortrait from "../assets/UI/home-hero-portrait.png";
+import tetheringEntry from "../assets/UI/tethering-entry.png";
+import logoImg from "../assets/UI/logo.png";
+import userImg from "../assets/UI/user.png";
 
 interface HomePageProps {
   onReady: (source: "sample" | "tethering" | ImportFolder) => void;
+  onOpenAlbum: (album: Album) => void;
   onCreateAlbum: () => void;
 }
-
-import heroPortrait from "../assets/UI/home-hero-portrait.png";
-import tetheringEntry from "../assets/UI/tethering-entry.png";
-import tetheringPortrait from "../assets/UI/home-tethering-portrait.png";
-import logoImg from "../assets/UI/logo.png";
-import userImg from "../assets/UI/user.png";
-import sampleCover from "../assets/samples/187170.webp";
-
-type Album = {
-  id: string;
-  name: string;
-  imageCount: number;
-  coverSrc?: string;
-  source: ImportFolder | "sample" | "tethering";
-};
-
-const SAMPLE_ALBUM: Album = {
-  id: "sample",
-  name: "Juliana Wedding",
-  imageCount: 24,
-  coverSrc: sampleCover,
-  source: "sample",
-};
 
 function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
   return (
@@ -59,7 +42,7 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
           />
         )}
         <div className="p-2 relative z-10" />
-        <div className="absolute inset-x-0 bottom-0 h-30 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10" />
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10" />
         <div className="flex items-end justify-between p-1 relative z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
           <div className="flex gap-1">
             <div className="w-6 h-6 bg-[rgba(17,17,17,0.85)] border-[0.5px] border-[#474747] rounded flex items-center justify-center backdrop-blur-sm">
@@ -98,19 +81,8 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
   );
 }
 
-const HomePage = ({ onReady, onCreateAlbum }: HomePageProps) => {
-  const [albums, setAlbums] = useState<Album[]>([SAMPLE_ALBUM]);
-
-  const handleStartTethering = () => {
-    const newAlbum: Album = {
-      id: `tether-${Date.now()}`,
-      name: "Tethered Shoot",
-      imageCount: 0,
-      source: "tethering",
-    };
-    setAlbums((prev) => [...prev, newAlbum]);
-    onReady("tethering");
-  };
+const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
+  const { albums } = useAlbums();
 
   return (
     <div className="h-screen bg-[#111] flex flex-col overflow-hidden">
@@ -209,7 +181,7 @@ const HomePage = ({ onReady, onCreateAlbum }: HomePageProps) => {
             </div>
 
             <div
-              onClick={handleStartTethering}
+              onClick={() => onReady("tethering")}
               className="w-[380px] h-[144px] rounded-[10px] overflow-hidden relative shrink-0 hover:cursor-pointer"
               style={{
                 backgroundImage: `url(${tetheringEntry})`,
@@ -244,7 +216,7 @@ const HomePage = ({ onReady, onCreateAlbum }: HomePageProps) => {
           {/* Albums grid */}
           <div className="grid grid-cols-4 gap-5 pr-[30px]">
             {albums.map((album) => (
-              <AlbumCard key={album.id} album={album} onOpen={() => onReady(album.source)} />
+              <AlbumCard key={album.id} album={album} onOpen={() => onOpenAlbum(album)} />
             ))}
           </div>
         </div>

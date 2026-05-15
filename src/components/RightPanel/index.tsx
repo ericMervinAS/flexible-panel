@@ -3,6 +3,8 @@ import RetouchingOpportunityBanner from "../RetouchingOpportunityBanner";
 import GridPanel from "./GridPanel";
 import RetouchingPanel, { LoupeTab } from "./RetouchingPanel";
 import EditingPanel from "./EditingPanel";
+import AIEditingGridPanel from "./AIEditingGridPanel";
+import TetheredGridPanel from "./TetheredGridPanel";
 import type { ModelSubject } from "@/hooks/useFaceDetection";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 
@@ -38,6 +40,7 @@ interface RightPanelProps {
   onStartTethering?: () => void;
   onCapture?: (autoAdvance: boolean) => void;
   initialEditingTab?: string;
+  onCancelTethering?: () => void;
 }
 
 const RightPanel = ({
@@ -72,10 +75,12 @@ const RightPanel = ({
   onStartTethering,
   onCapture,
   initialEditingTab,
+  onCancelTethering,
 }: RightPanelProps) => {
   const [appliedPresets, setAppliedPresets] = useState<Record<string, string>>({});
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
+  const [tetheringTabActive, setTetheringTabActive] = useState(false);
 
   // Retouching opportunity overlay
   const [opportunityDismissed, setOpportunityDismissed] = useState(false);
@@ -113,44 +118,80 @@ const RightPanel = ({
         }}
       />
 
-      {isLoupeView && activeTopTab === "EDIT" ? (
-        <EditingPanel
+      {isLoupeView ? (
+        <>
+          <div className={`flex-1 flex flex-col overflow-hidden ${activeTopTab !== "EDIT" ? "hidden" : ""}`}>
+            <EditingPanel
+              currentImageSrc={currentImageSrc}
+              isTethering={isTethering}
+              onStartTethering={onStartTethering}
+              onCapture={onCapture}
+              initialTab={initialEditingTab as "sliders" | "crop" | "mask" | "tethering" | undefined}
+              tetheringTabActive={tetheringTabActive}
+              onTetheringTabActiveChange={setTetheringTabActive}
+              onCancelTethering={onCancelTethering}
+            />
+          </div>
+          <div className={`flex-1 flex flex-col overflow-hidden ${activeTopTab === "EDIT" ? "hidden" : ""}`}>
+            <RetouchingPanel
+              currentImageIndex={currentImageIndex}
+              currentImageSrc={currentImageSrc}
+              appliedPresets={appliedPresets}
+              removedItems={removedItems}
+              onAddRemovedItems={handleAddRemovedItems}
+              onResetRemovedItem={handleResetRemovedItem}
+              canvasHasStrokes={canvasHasStrokes}
+              onClearCanvas={onClearCanvas}
+              onRemoveAfterStrokeChange={onRemoveAfterStrokeChange}
+              onRemovingChange={onRemovingChange}
+              modelSubjects={modelSubjects}
+              modelImageMap={modelImageMap}
+              isModelDetecting={isModelDetecting}
+              distractionMap={distractionMap}
+              isDistractionScanning={isDistractionScanning}
+              onDistractionRerunCurrent={onDistractionRerunCurrent}
+              onDistractionSelectionChange={onDistractionSelectionChange}
+              onDistractionHoverChange={onDistractionHoverChange}
+              onDistractionRemoveSuccess={onDistractionRemoveSuccess}
+              onSuggestObject={onSuggestObject}
+              tabOverride={tabOverride}
+              onTabChange={onTabChange}
+              onScrollChange={setIsScrolledToBottom}
+              forceSubjectTabSignal={forceSubjectTabSignal}
+              isTethering={isTethering}
+              onStartTethering={onStartTethering}
+              onCapture={onCapture}
+              tetheringTabActive={tetheringTabActive}
+              onTetheringTabActiveChange={setTetheringTabActive}
+              onCancelTethering={onCancelTethering}
+            />
+          </div>
+        </>
+      ) : isTethering ? (
+        <TetheredGridPanel
+          activeTopTab={activeTopTab}
           currentImageSrc={currentImageSrc}
           isTethering={isTethering}
-          onStartTethering={onStartTethering}
+          onStartTethering={onStartTethering ?? (() => {})}
           onCapture={onCapture}
-          initialTab={initialEditingTab as "sliders" | "crop" | "mask" | "tethering" | undefined}
-        />
-      ) : isLoupeView ? (
-        <RetouchingPanel
-          currentImageIndex={currentImageIndex}
-          currentImageSrc={currentImageSrc}
+          isScanning={isScanning}
           appliedPresets={appliedPresets}
           removedItems={removedItems}
-          onAddRemovedItems={handleAddRemovedItems}
+          onAppliedPresetsChange={setAppliedPresets}
+          onRemovedItemsSet={setRemovedItems}
           onResetRemovedItem={handleResetRemovedItem}
-          canvasHasStrokes={canvasHasStrokes}
-          onClearCanvas={onClearCanvas}
-          onRemoveAfterStrokeChange={onRemoveAfterStrokeChange}
-          onRemovingChange={onRemovingChange}
-          modelSubjects={modelSubjects}
-          modelImageMap={modelImageMap}
-          isModelDetecting={isModelDetecting}
           distractionMap={distractionMap}
           isDistractionScanning={isDistractionScanning}
-          onDistractionRerunCurrent={onDistractionRerunCurrent}
-          onDistractionSelectionChange={onDistractionSelectionChange}
-          onDistractionHoverChange={onDistractionHoverChange}
-          onDistractionRemoveSuccess={onDistractionRemoveSuccess}
+          onDistractionRerun={onDistractionRerun}
+          visibleSubjectIndices={visibleSubjectIndices}
+          modelSubjects={modelSubjects}
+          isModelDetecting={isModelDetecting}
+          modelStatusMessage={modelStatusMessage}
+          modelSubjectFilter={modelSubjectFilter}
           onSuggestObject={onSuggestObject}
-          tabOverride={tabOverride}
-          onTabChange={onTabChange}
-          onScrollChange={setIsScrolledToBottom}
-          forceSubjectTabSignal={forceSubjectTabSignal}
-          isTethering={isTethering}
-          onStartTethering={onStartTethering}
-          onCapture={onCapture}
         />
+      ) : activeTopTab === "EDIT" ? (
+        <AIEditingGridPanel />
       ) : (
         <GridPanel
           isScanning={isScanning}

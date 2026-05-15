@@ -1,9 +1,8 @@
 import { useRef, useState, useCallback } from "react";
 import exifr from "exifr";
-import { ArrowLeftIcon, UploadSimpleIcon, FolderOpenIcon, CameraIcon } from "@phosphor-icons/react";
+import { UploadSimpleIcon, FolderOpenIcon, CameraIcon, HouseSimpleIcon } from "@phosphor-icons/react";
 import type { ImageData } from "@/components/ImageGrid";
 import type { ImportFolder } from "@/components/ImportGate";
-import logoImg from "@/assets/UI/logo.png";
 
 interface ImportScreenProps {
   onReady: (folder: ImportFolder) => void;
@@ -159,26 +158,15 @@ const ImportScreen = ({ onReady, onBack, onStartTethering }: ImportScreenProps) 
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {/* Minimal title bar — no tabs, no nav */}
-      <div className="h-8 bg-[#1c1c1c] flex items-center justify-between shrink-0 border-b border-[#252525]">
-        <div className="flex items-center h-full">
-          <div className="flex items-center gap-[7px] px-[10px]">
-            <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-            <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
-            <div className="w-3 h-3 rounded-full bg-[#28c840]" />
-          </div>
-          <div className="w-6 h-6 flex items-center justify-center ml-1">
-            <img src={logoImg} className="w-full h-full object-contain" alt="Aftershoot" />
-          </div>
-        </div>
+      {/* Minimal title bar — Home only */}
+      <header className="flex items-center h-11 px-3 bg-[#1c1c1c] shrink-0 border-b border-background">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 mr-4 text-[#ababab] text-xs font-medium hover:text-[#e2e2e2] transition-colors"
+          className="flex items-center justify-center w-6 h-6 rounded transition-colors hover:bg-white/5"
         >
-          <ArrowLeftIcon size={13} />
-          <span>Cancel</span>
+          <HouseSimpleIcon weight="fill" className="w-4 h-4 text-[#777] hover:text-[#fff]" />
         </button>
-      </div>
+      </header>
 
       {/* Two-option layout */}
       <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4">

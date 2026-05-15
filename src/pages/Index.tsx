@@ -12,13 +12,22 @@ import LoupeView from "@/components/LoupeView";
 import { useFaceDetection } from "@/hooks/useFaceDetection";
 import { useDistractionDetection } from "@/hooks/useDistractionDetection";
 import { MODEL_TO_UI } from "@/lib/distractionDetection";
+import { CameraIcon } from "@phosphor-icons/react";
+import CoachmarkFlow, { getCoachmarksSeen } from "@/components/CoachmarkFlow";
+import { useAlbums } from "@/context/AlbumsContext";
 
 interface IndexProps {
   importSource: "sample" | "tethering" | ImportFolder;
   onGoHome?: () => void;
+  onCancelTethering?: () => void;
+  albumId?: string;
 }
 
-const Index = ({ importSource, onGoHome }: IndexProps) => {
+const Index = ({ importSource, onGoHome, onCancelTethering, albumId }: IndexProps) => {
+  const { albums, updateAlbum } = useAlbums();
+  const albumName = albumId
+    ? (albums.find((a) => a.id === albumId)?.name ?? null)
+    : null;
   const [columns, setColumns] = useState(4);
   const [isScanning, setIsScanning] = useState(true);
   const [view, setView] = useState<"grid" | "loupe">(importSource === "tethering" ? "loupe" : "grid");
@@ -26,18 +35,34 @@ const Index = ({ importSource, onGoHome }: IndexProps) => {
   if (view === "loupe") loupeEverMountedRef.current = true;
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [images, setImages] = useState<ImageData[]>(() => {
-    if (importSource && importSource !== "sample" && importSource !== "tethering") {
+    if (importSource === "tethering") {
+      const existing = albumId ? albums.find((a) => a.id === albumId)?.capturedImages : undefined;
+      return existing ?? [];
+    }
+    if (importSource && importSource !== "sample") {
       return (importSource as import("@/components/ImportGate").ImportFolder).images;
     }
     return sampleImages;
   });
   const [activeTopTab, setActiveTopTab] = useState(importSource === "tethering" ? "EDIT" : "RETOUCH");
   const [loupeActiveTab, setLoupeActiveTab] = useState("subject");
-  const [isTethering, setIsTethering] = useState(false);
+  const [isTethering, setIsTethering] = useState(() => {
+    if (!albumId) return false;
+    return albums.find((a) => a.id === albumId)?.tetheringStarted ?? false;
+  });
+  const [showCoachmarks, setShowCoachmarks] = useState(
+    importSource === "tethering" && !getCoachmarksSeen()
+  );
   const handleCapture = (autoAdvance: boolean) => {
     const newImage = sampleImages[Math.floor(Math.random() * sampleImages.length)];
     const newIndex = images.length;
-    setImages((prev) => [...prev, newImage]);
+    setImages((prev) => {
+      const next = [...prev, newImage];
+      if (albumId) {
+        updateAlbum(albumId, { coverSrc: newImage.src, imageCount: next.length, capturedImages: next });
+      }
+      return next;
+    });
     if (autoAdvance) {
       setSelectedIndex(newIndex);
       setView("loupe");
@@ -142,9 +167,20 @@ const Index = ({ importSource, onGoHome }: IndexProps) => {
                 onColumnsChange={setColumns}
                 totalPhotos={images.length}
                 visiblePhotos={filteredImages.length}
-                albumName={importSource === "sample" || importSource === "tethering" ? "Juliana Wedding" : (importSource as import("@/components/ImportGate").ImportFolder).name}
+                albumName={albumName ?? (importSource === "sample" ? "Juliana Wedding" : typeof importSource === "object" ? importSource.name : "")}
               />
             </>
+          )}
+          {view === "loupe" && images.length === 0 && (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 select-none">
+              <div className="w-16 h-16 rounded-2xl bg-[#1e1e1e] flex items-center justify-center">
+                <CameraIcon size={32} className="text-[#333]" weight="light" />
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
+                <p className="text-[#4a4a4a] text-sm font-medium">Waiting for your first shot</p>
+                <p className="text-[#333] text-xs">Press your camera shutter or click Capture</p>
+              </div>
+            </div>
           )}
           {loupeEverMountedRef.current && images[selectedIndex] && (
             <div className={view !== "loupe" ? "hidden" : "flex flex-col flex-1 overflow-hidden"}>
@@ -168,8 +204,14 @@ const Index = ({ importSource, onGoHome }: IndexProps) => {
             </div>
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} activeTopTab={activeTopTab} isTethering={isTethering} onStartTethering={() => setIsTethering(true)} onCapture={handleCapture} currentImageIndex={selectedIndex} currentImageSrc={images[selectedIndex]?.src} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionRerunCurrent={() => rerunDistractionDetectionForImage(selectedIndex)} onDistractionSelectionChange={setHighlightedLabels} onDistractionHoverChange={setHoveredLabel} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} initialEditingTab={importSource === "tethering" ? "tethering" : undefined} />
+        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} activeTopTab={activeTopTab} isTethering={isTethering} onStartTethering={() => {
+          setIsTethering(true);
+          if (albumId) updateAlbum(albumId, { tetheringStarted: true });
+        }} onCapture={handleCapture} currentImageIndex={selectedIndex} currentImageSrc={images[selectedIndex]?.src} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionRerunCurrent={() => rerunDistractionDetectionForImage(selectedIndex)} onDistractionSelectionChange={setHighlightedLabels} onDistractionHoverChange={setHoveredLabel} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} initialEditingTab={importSource === "tethering" ? "tethering" : undefined} onCancelTethering={importSource === "tethering" ? onCancelTethering : undefined} />
       </div>
+      {showCoachmarks && isTethering && images.length === 0 && (
+        <CoachmarkFlow onDismiss={() => setShowCoachmarks(false)} />
+      )}
       {removeToast && (
         <Toast
           key={removeToast.key}

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
-  FolderOpen,
+  FolderSimpleIcon,
   CaretDown,
   CaretLeft,
   CaretRight,
@@ -502,36 +502,111 @@ const TetherWelcomeModal = ({ onClose }: TetherWelcomeModalProps) => {
   );
 };
 
-// ─── Tether Setup Modal ───────────────────────────────────────────────────────
+// ─── Tether Detect Modal ─────────────────────────────────────────────────────
 
-const NAME_TOKENS = ["{Date}", "{Time}", "{Counter}", "{CameraModel}"];
+interface TetherDetectModalProps {
+  onCancel: () => void;
+  onDetected: () => void;
+}
 
-const parseTemplate = (template: string): Array<{ type: "literal" | "token"; value: string }> => {
-  const parts: Array<{ type: "literal" | "token"; value: string }> = [];
-  const regex = /\{[^}]+\}/g;
-  let lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = regex.exec(template)) !== null) {
-    if (m.index > lastIndex)
-      parts.push({ type: "literal", value: template.slice(lastIndex, m.index) });
-    parts.push({ type: "token", value: m[0] });
-    lastIndex = m.index + m[0].length;
-  }
-  if (lastIndex < template.length)
-    parts.push({ type: "literal", value: template.slice(lastIndex) });
-  return parts;
+const TetherDetectModal = ({ onCancel, onDetected }: TetherDetectModalProps) => {
+  const [phase, setPhase] = useState<"detecting" | "not-found">("detecting");
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (phase !== "detecting") return;
+    const t = setTimeout(() => {
+      // First attempt fails 2/3 of the time. Any retry always succeeds.
+      const shouldFail = attempt === 0 && Math.random() < 2 / 3;
+      if (shouldFail) setPhase("not-found");
+      else onDetected();
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [phase, attempt, onDetected]);
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+      <div className="bg-[#1c1c1c] border border-[#303030] rounded-[16px] p-6 flex flex-col gap-6 w-[480px]">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-[20px] font-semibold text-[#e2e2e2] leading-6">
+              Start Tethered Shoot
+            </h3>
+            <p className="text-[14px] text-[#777] leading-5">
+              {phase === "detecting"
+                ? "Looking for a connected camera…"
+                : "No camera detected. Check your cable and try again."}
+            </p>
+          </div>
+          <button
+            onClick={onCancel}
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
+          >
+            <X className="w-4 h-4 text-[#777]" />
+          </button>
+        </div>
+
+        {/* Camera row */}
+        <div className="flex items-center justify-between px-3 py-3 bg-[#242424] rounded-[8px]">
+          {phase === "detecting" ? (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-[#777] animate-pulse shrink-0" />
+                <span className="text-[14px] font-medium text-[#777]">Detecting camera…</span>
+              </div>
+              <span className="text-[13px] text-[#555]">Searching</span>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-[#ef4444] shrink-0" />
+                <span className="text-[14px] font-medium text-[#ababab]">No camera found</span>
+              </div>
+              <span className="text-[13px] text-[#ef4444]">Not connected</span>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2.5 rounded-[8px] bg-[#2a2a2a] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#333] transition-colors"
+          >
+            Cancel
+          </button>
+          {phase === "not-found" && (
+            <button
+              onClick={() => {
+                setAttempt((a) => a + 1);
+                setPhase("detecting");
+              }}
+              className="px-4 py-2.5 bg-[#2563eb] hover:bg-[#3b7af5] active:bg-[#1d4ed8] rounded-[8px] text-[14px] font-medium text-white transition-colors"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 };
+
+// ─── Tether Setup Modal ───────────────────────────────────────────────────────
 
 const buildPreview = (template: string) =>
   template
     .replace("{Date}", "2026-05-10")
     .replace("{Time}", "143022")
     .replace(/\{Counter(?::[^}]*)?\}/, "0001")
-    .replace("{CameraModel}", "CanonR6II")
-    .concat(".CR3");
+    .replace("{CameraModel}", "NikonZ6III")
+    .concat(".NEF");
 
 interface TetherSetupModalProps {
-  onClose: () => void;
+  onCancel: () => void;
+  onStart: () => void;
   currentImageSrc?: string;
   mode?: "setup" | "preferences";
   editingProfile: string | null;
@@ -542,10 +617,13 @@ interface TetherSetupModalProps {
   onFileFormatChange: (v: string[]) => void;
   namingTemplate: string;
   onNamingTemplateChange: (v: string) => void;
+  destination: string;
+  onDestinationChange: (v: string) => void;
 }
 
 const TetherSetupModal = ({
-  onClose,
+  onCancel,
+  onStart,
   currentImageSrc,
   mode = "setup",
   editingProfile,
@@ -556,17 +634,82 @@ const TetherSetupModal = ({
   onFileFormatChange,
   namingTemplate,
   onNamingTemplateChange,
+  destination,
+  onDestinationChange,
 }: TetherSetupModalProps) => {
   const isPreferences = mode === "preferences";
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const insertToken = (token: string) => onNamingTemplateChange(namingTemplate + token);
+  // Extract the user's prefix from a {Prefix}_… template (if present).
+  const prefixMatch = namingTemplate.match(/\{Prefix:([^}]*)\}/);
+  const userPrefix = prefixMatch?.[1] ?? "";
+
+  // Pattern presets — concrete, named, with their own template strings.
+  const NAMING_PATTERNS: Array<{ id: string; label: string; template: string; needsPrefix?: boolean }> = [
+    { id: "date-seq", label: "Date + Sequence", template: "{Date}_{Counter:0001}" },
+    { id: "prefix-seq", label: "Prefix + Sequence", template: "{Prefix:Smith}_{Counter:0001}", needsPrefix: true },
+    { id: "date-prefix-seq", label: "Date + Prefix + Sequence", template: "{Date}_{Prefix:Smith}_{Counter:0001}", needsPrefix: true },
+    { id: "camera-seq", label: "Camera + Sequence", template: "{CameraModel}_{Counter:0001}" },
+    { id: "seq-only", label: "Sequence only", template: "IMG_{Counter:0001}" },
+  ];
+
+  const activePatternId = (() => {
+    const stripped = namingTemplate.replace(/\{Prefix:[^}]*\}/g, "{Prefix}");
+    for (const p of NAMING_PATTERNS) {
+      const pStripped = p.template.replace(/\{Prefix:[^}]*\}/g, "{Prefix}");
+      if (pStripped === stripped) return p.id;
+    }
+    return null;
+  })();
+
+  const applyPattern = (p: typeof NAMING_PATTERNS[number]) => {
+    if (p.needsPrefix && userPrefix) {
+      onNamingTemplateChange(p.template.replace(/\{Prefix:[^}]*\}/, `{Prefix:${userPrefix}}`));
+    } else {
+      onNamingTemplateChange(p.template);
+    }
+  };
+
+  const updatePrefix = (next: string) => {
+    const sanitized = next.replace(/[/\\:*?"<>|{}]/g, "");
+    if (namingTemplate.includes("{Prefix:")) {
+      onNamingTemplateChange(namingTemplate.replace(/\{Prefix:[^}]*\}/, `{Prefix:${sanitized || "Smith"}}`));
+    }
+  };
+
+  const previewFor = (tpl: string) =>
+    tpl
+      .replace("{Date}", "2026-05-15")
+      .replace(/\{Prefix:([^}]*)\}/, (_m, p) => userPrefix || p)
+      .replace(/\{Counter(?::[^}]*)?\}/, "0001")
+      .replace("{CameraModel}", "NikonZ6III")
+      .concat(".NEF");
+
+  const activePattern = NAMING_PATTERNS.find((p) => p.id === activePatternId);
+  const showPrefixInput = !!activePattern?.needsPrefix;
+
+  const pickFolder = async () => {
+    const w = window as unknown as {
+      showDirectoryPicker?: () => Promise<{ name: string }>;
+    };
+    if (w.showDirectoryPicker) {
+      try {
+        const handle = await w.showDirectoryPicker();
+        onDestinationChange(`~/Pictures/${handle.name}`);
+      } catch {
+        /* user cancelled */
+      }
+    } else {
+      const next = window.prompt("Destination folder path", destination);
+      if (next) onDestinationChange(next);
+    }
+  };
 
   return createPortal(
     <div
       className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) onCancel();
       }}
     >
       <div
@@ -586,7 +729,7 @@ const TetherSetupModal = ({
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={onCancel}
             className="shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
           >
             <X className="w-4 h-4 text-[#777]" />
@@ -601,7 +744,7 @@ const TetherSetupModal = ({
           <div className="flex items-center justify-between px-3 py-3 bg-[#242424] rounded-[8px]">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-[#4ade80] shrink-0" />
-              <span className="text-[14px] font-medium text-[#e2e2e2]">Canon EOS R6 Mark II</span>
+              <span className="text-[14px] font-medium text-[#e2e2e2]">Nikon Z6 III</span>
             </div>
             <span className="text-[13px] text-[#777]">Connected</span>
           </div>
@@ -700,94 +843,70 @@ const TetherSetupModal = ({
 
           {showAdvanced && (
             <>
-              {/* <div className="h-px bg-[#303030] mt-4 mb-4" /> */}
+              {/* Destination Folder — path selector */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+                  Destination Folder
+                </span>
+                <button
+                  onClick={pickFolder}
+                  // className="group flex items-center gap-2 px-3 py-2.5 bg-[#242424] hover:bg-[#2a2a2a] border border-[#303030] hover:border-[#444] rounded-[8px] text-left transition-colors"
+                  className={`group flex w-full text-left gap-2 items-center justify-between px-2.5 py-2 bg-[#242424] rounded hover:bg-[#2a2a2a] transition-colors`}
+                >
+                  <span className="text-[13px] text-[#e2e2e2] truncate flex-1">{destination}</span>
+                  <FolderSimpleIcon size={16} className="text-[#777] shrink-0" />
+                </button>
+              </div>
 
-              <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
-                Destination Folder
-              </span>
-
-              {/* Naming template */}
+              {/* File Naming — pattern picker */}
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
-                    Naming Template
-                  </span>
-                  <button
-                    onClick={() => onNamingTemplateChange("{Date}_{Counter:0001}")}
-                    className="text-[10px] text-[#555] hover:text-[#ababab] transition-colors"
-                  >
-                    Reset
-                  </button>
-                </div>
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+                  File Naming
+                </span>
 
-                {/* Token strip */}
-                <div className="flex items-center flex-wrap gap-1 px-2.5 py-2 min-h-[40px] bg-[#161616] rounded-[8px] border border-[#2a2a2a]">
-                  {parseTemplate(namingTemplate).length > 0 ? (
-                    parseTemplate(namingTemplate).map((seg, i) =>
-                      seg.type === "token" ? (
-                        <span
-                          key={i}
-                          className="inline-flex items-center gap-[3px] pl-2 pr-1 py-[3px] rounded-[4px] bg-[#1e3a5f] border border-[#2563eb]/30"
-                        >
-                          <span className="text-[11px] font-medium text-[#60a5fa] font-mono">
-                            {seg.value}
+                <div className="flex flex-col gap-1 rounded-[8px] bg-[#161616] border border-[#2a2a2a] p-1">
+                  {NAMING_PATTERNS.map((p) => {
+                    const active = p.id === activePatternId;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => applyPattern(p)}
+                        className={`flex items-center justify-between gap-3 px-2.5 py-2 rounded-[6px] text-left transition-colors ${
+                          active ? "bg-[#1e3a5f]/40" : "hover:bg-white/[0.03]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${
+                              active ? "border-[#60a5fa] bg-[#60a5fa]" : "border-[#444]"
+                            }`}
+                          />
+                          <span className={`text-[12px] font-medium ${active ? "text-[#e2e2e2]" : "text-[#ababab]"}`}>
+                            {p.label}
                           </span>
-                          <button
-                            onClick={() => {
-                              const escaped = seg.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-                              onNamingTemplateChange(
-                                namingTemplate.replace(new RegExp(escaped), "")
-                              );
-                            }}
-                            className="flex items-center justify-center w-[14px] h-[14px] rounded text-[#60a5fa]/40 hover:text-[#60a5fa] hover:bg-white/5 transition-all"
-                          >
-                            <X size={8} weight="bold" />
-                          </button>
+                        </div>
+                        <span className="text-[11px] font-mono text-[#777] truncate">
+                          {previewFor(p.template)}
                         </span>
-                      ) : (
-                        <span key={i} className="text-[12px] text-[#555] font-mono">
-                          {seg.value}
-                        </span>
-                      )
-                    )
-                  ) : (
-                    <span className="text-[12px] text-[#3a3a3a] font-mono">Add tokens below…</span>
-                  )}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* Insert row */}
-                <div className="flex flex-wrap gap-1.5">
-                  {NAME_TOKENS.map((token) => (
-                    <button
-                      key={token}
-                      onClick={() => insertToken(token)}
-                      className="inline-flex items-center gap-[5px] px-2 py-[5px] rounded-[5px] bg-[#242424] border border-[#303030] text-[11px] font-mono text-[#777] hover:text-[#ababab] hover:border-[#444] transition-colors"
-                    >
-                      <span className="text-[#444] text-[10px]">+</span>
-                      {token}
-                    </button>
-                  ))}
-                  {(["_", "-"] as const).map((sep) => (
-                    <button
-                      key={sep}
-                      onClick={() => onNamingTemplateChange(namingTemplate + sep)}
-                      className="px-2.5 py-[5px] rounded-[5px] bg-[#242424] border border-[#303030] text-[11px] font-mono text-[#555] hover:text-[#ababab] hover:border-[#444] transition-colors"
-                    >
-                      "{sep}"
-                    </button>
-                  ))}
-                </div>
-
-                {/* Preview */}
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-[8px] bg-[#161616] border border-[#2a2a2a]">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#555] shrink-0">
-                    Preview
-                  </span>
-                  <div className="w-px h-3 bg-[#2a2a2a] shrink-0" />
-                  <span className="text-[12px] font-mono text-[#777] truncate">
-                    {buildPreview(namingTemplate)}
-                  </span>
-                </div>
+                {showPrefixInput && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-[#161616] border border-[#2a2a2a] rounded-[8px]">
+                    <span className="text-[11px] uppercase tracking-[0.5px] text-[#777] shrink-0">
+                      Prefix
+                    </span>
+                    <input
+                      type="text"
+                      value={userPrefix}
+                      placeholder="Smith"
+                      onChange={(e) => updatePrefix(e.target.value)}
+                      className="flex-1 bg-transparent outline-none text-[13px] text-[#e2e2e2] placeholder:text-[#3a3a3a] font-mono"
+                    />
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -796,13 +915,13 @@ const TetherSetupModal = ({
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 pt-1">
           <button
-            onClick={onClose}
+            onClick={onCancel}
             className="px-4 py-2.5 rounded-[8px] bg-[#2a2a2a] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#333] transition-colors"
           >
             Cancel
           </button>
           <button
-            onClick={onClose}
+            onClick={onStart}
             className="flex items-center gap-2 px-4 py-2.5 bg-[#2563eb] hover:bg-[#3b7af5] active:bg-[#1d4ed8] rounded-[8px] text-[14px] font-medium text-white transition-colors"
           >
             {isPreferences ? "Save Preferences" : "Start Shooting"}
@@ -821,6 +940,8 @@ interface TetheringTabProps {
   currentImageSrc?: string;
   isTethering: boolean;
   onStartTethering: () => void;
+  onCancelSetup?: () => void;
+  onCancelTethering?: () => void;
   onCapture?: (autoAdvance: boolean) => void;
 }
 
@@ -828,6 +949,8 @@ const TetheringTab = ({
   currentImageSrc,
   isTethering,
   onStartTethering,
+  onCancelSetup,
+  onCancelTethering,
   onCapture,
 }: TetheringTabProps) => {
   const [apertureIdx, setApertureIdx] = useState(5); // f/5.6
@@ -853,7 +976,8 @@ const TetheringTab = ({
   const [draggingCard, setDraggingCard] = useState<string | null>(null);
   const [autoAdvanceHovered, setAutoAdvanceHovered] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
-  const [showSetup, setShowSetup] = useState(!isTethering);
+  const [showDetect, setShowDetect] = useState(!isTethering);
+  const [showSetup, setShowSetup] = useState(false);
 
   return (
     <div
@@ -861,180 +985,207 @@ const TetheringTab = ({
       style={{ scrollbarWidth: "none" }}
     >
       {/* ── Camera Info ── */}
-      <div className="flex flex-col gap-3">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <span className="text-[14px] font-medium text-[#e2e2e2]">Camera Info</span>
-          <div className="flex items-center">
-            <div className="flex items-center gap-1 px-1.5 py-1 rounded border border-[rgba(21,128,61,0.4)] bg-[rgba(21,128,61,0.12)] backdrop-blur-[2px]">
-              <div className="w-3 h-3 flex items-center justify-center shrink-0">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+      {isTethering && (
+        <>
+          <div className="flex flex-col gap-3">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <span className="text-[14px] font-medium text-[#e2e2e2]">Camera Info</span>
+              <div className="flex items-center">
+                <div className="flex items-center gap-1 px-1.5 py-1 rounded border border-[rgba(21,128,61,0.4)] bg-[rgba(21,128,61,0.12)] backdrop-blur-[2px]">
+                  <div className="w-3 h-3 flex items-center justify-center shrink-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+                  </div>
+                  <span className="text-[11px] font-medium text-[#e2e2e2]">Connected</span>
+                </div>
+                <button
+                  onClick={() => setShowSetup(true)}
+                  className="text-[#666] hover:text-[#ababab] transition-colors pl-2 py-2"
+                >
+                  <GearIcon size={16} />
+                </button>
               </div>
-              <span className="text-[11px] font-medium text-[#e2e2e2]">Connected</span>
             </div>
+
+            {/* Value cards */}
+            <div className="flex gap-2">
+              <CameraCard
+                label="APERTURE"
+                stops={APERTURE_STOPS}
+                index={apertureIdx}
+                onPrev={() => setApertureIdx((i) => Math.max(0, i - 1))}
+                onNext={() => setApertureIdx((i) => Math.min(APERTURE_STOPS.length - 1, i + 1))}
+                onDragStart={() => setDraggingCard("APERTURE")}
+                onDragEnd={() => setDraggingCard(null)}
+                suppressHover={draggingCard !== null && draggingCard !== "APERTURE"}
+                renderValue={(v) => (
+                  <span className="leading-none text-[#e2e2e2] font-medium">
+                    <span className="text-[12px] pr-1">f</span>
+                    <span className="text-[20px]">{v}</span>
+                  </span>
+                )}
+              />
+              <CameraCard
+                label="SHUTTER"
+                stops={SHUTTER_STOPS}
+                index={shutterIdx}
+                onPrev={() => setShutterIdx((i) => Math.max(0, i - 1))}
+                onNext={() => setShutterIdx((i) => Math.min(SHUTTER_STOPS.length - 1, i + 1))}
+                onDragStart={() => setDraggingCard("SHUTTER")}
+                onDragEnd={() => setDraggingCard(null)}
+                suppressHover={draggingCard !== null && draggingCard !== "SHUTTER"}
+                renderValue={(v) => (
+                  <span className="leading-none text-[#e2e2e2] font-medium">
+                    <span className="text-[14px] pr-1">1/</span>
+                    <span className="text-[20px]">{v}</span>
+                  </span>
+                )}
+              />
+              <CameraCard
+                label="ISO"
+                stops={ISO_STOPS}
+                index={isoIdx}
+                onPrev={() => setIsoIdx((i) => Math.max(0, i - 1))}
+                onNext={() => setIsoIdx((i) => Math.min(ISO_STOPS.length - 1, i + 1))}
+                onDragStart={() => setDraggingCard("ISO")}
+                onDragEnd={() => setDraggingCard(null)}
+                suppressHover={draggingCard !== null && draggingCard !== "ISO"}
+                renderValue={(v) => (
+                  <span className="text-[20px] font-medium text-[#e2e2e2] leading-none">{v}</span>
+                )}
+              />
+            </div>
+
+            {/* Capture button */}
             <button
-              onClick={() => setShowSetup(true)}
-              className="text-[#666] hover:text-[#ababab] transition-colors pl-2 py-2"
+              data-coachmark="capture-btn"
+              onClick={() => onCapture?.(autoAdvance)}
+              className="w-full py-2 pl-2 pr-3 bg-[#2563eb] hover:bg-[#3b7af5] active:bg-[#1d4ed8] rounded flex items-center justify-center gap-1.5 transition-colors"
             >
-              <GearIcon size={16} />
+              <CameraIcon size={16} />
+              <span className="text-[12px] font-medium text-white">Capture</span>
             </button>
-          </div>
-        </div>
 
-        {/* Value cards */}
-        <div className="flex gap-2">
-          <CameraCard
-            label="APERTURE"
-            stops={APERTURE_STOPS}
-            index={apertureIdx}
-            onPrev={() => setApertureIdx((i) => Math.max(0, i - 1))}
-            onNext={() => setApertureIdx((i) => Math.min(APERTURE_STOPS.length - 1, i + 1))}
-            onDragStart={() => setDraggingCard("APERTURE")}
-            onDragEnd={() => setDraggingCard(null)}
-            suppressHover={draggingCard !== null && draggingCard !== "APERTURE"}
-            renderValue={(v) => (
-              <span className="leading-none text-[#e2e2e2] font-medium">
-                <span className="text-[12px] pr-1">f</span>
-                <span className="text-[20px]">{v}</span>
-              </span>
-            )}
-          />
-          <CameraCard
-            label="SHUTTER"
-            stops={SHUTTER_STOPS}
-            index={shutterIdx}
-            onPrev={() => setShutterIdx((i) => Math.max(0, i - 1))}
-            onNext={() => setShutterIdx((i) => Math.min(SHUTTER_STOPS.length - 1, i + 1))}
-            onDragStart={() => setDraggingCard("SHUTTER")}
-            onDragEnd={() => setDraggingCard(null)}
-            suppressHover={draggingCard !== null && draggingCard !== "SHUTTER"}
-            renderValue={(v) => (
-              <span className="leading-none text-[#e2e2e2] font-medium">
-                <span className="text-[14px] pr-1">1/</span>
-                <span className="text-[20px]">{v}</span>
-              </span>
-            )}
-          />
-          <CameraCard
-            label="ISO"
-            stops={ISO_STOPS}
-            index={isoIdx}
-            onPrev={() => setIsoIdx((i) => Math.max(0, i - 1))}
-            onNext={() => setIsoIdx((i) => Math.min(ISO_STOPS.length - 1, i + 1))}
-            onDragStart={() => setDraggingCard("ISO")}
-            onDragEnd={() => setDraggingCard(null)}
-            suppressHover={draggingCard !== null && draggingCard !== "ISO"}
-            renderValue={(v) => (
-              <span className="text-[20px] font-medium text-[#e2e2e2] leading-none">{v}</span>
-            )}
-          />
-        </div>
-
-        {/* Capture button */}
-        <button
-          onClick={() => onCapture?.(autoAdvance)}
-          className="w-full py-2 pl-2 pr-3 bg-[#2563eb] hover:bg-[#3b7af5] active:bg-[#1d4ed8] rounded flex items-center justify-center gap-1.5 transition-colors"
-        >
-          <CameraIcon size={16} />
-          <span className="text-[12px] font-medium text-white">Capture</span>
-        </button>
-
-        {/* Settings rows */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-              WB
-            </span>
-            <InlineSelect value={wb} options={WB_OPTIONS} onChange={setWb} />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-              Quality
-            </span>
-            <InlineSelect
-              value={qualityLabel}
-              options={QUALITY_OPTIONS}
-              onChange={handleQualityChange}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-              Model
-            </span>
-            <span className="text-[12px] font-medium text-[#ababab]">Nikon Z6 III</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-              Battery
-            </span>
-            <div className="flex items-center gap-1.5 text-[#ababab]">
-              <BatteryHigh size={16} />
-              <span className="text-[12px] font-medium">78%</span>
+            {/* Settings rows */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+                  WB
+                </span>
+                <InlineSelect value={wb} options={WB_OPTIONS} onChange={setWb} />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+                  Quality
+                </span>
+                <InlineSelect
+                  value={qualityLabel}
+                  options={QUALITY_OPTIONS}
+                  onChange={handleQualityChange}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+                  Model
+                </span>
+                <span className="text-[12px] font-medium text-[#ababab]">Nikon Z6 III</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+                  Battery
+                </span>
+                <div className="flex items-center gap-1.5 text-[#ababab]">
+                  <BatteryHigh size={16} />
+                  <span className="text-[12px] font-medium">78%</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setAutoAdvance((p) => !p)}
+                className="flex items-center justify-between w-full"
+              >
+                <span
+                  onMouseEnter={() => setAutoAdvanceHovered(true)}
+                  onMouseLeave={() => setAutoAdvanceHovered(false)}
+                  className="relative inline-flex text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]"
+                >
+                  <Tooltip
+                    label="Automatically move to the next image after each capture"
+                    visible={autoAdvanceHovered}
+                    position="top"
+                  />
+                  Auto Advance
+                </span>
+                <div
+                  className={`relative w-8 h-[18px] rounded-full transition-colors ${autoAdvance ? "bg-[#2563eb]" : "bg-[#383838]"}`}
+                >
+                  <div
+                    className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform ${autoAdvance ? "translate-x-[18px]" : "translate-x-[2px]"}`}
+                  />
+                </div>
+              </button>
             </div>
           </div>
-          <button
-            onClick={() => setAutoAdvance((p) => !p)}
-            className="flex items-center justify-between w-full"
-          >
-            <span
-              onMouseEnter={() => setAutoAdvanceHovered(true)}
-              onMouseLeave={() => setAutoAdvanceHovered(false)}
-              className="relative inline-flex text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]"
+
+          <div className="h-px bg-[#e2e2e20d]" />
+
+          {/* ── Editing Profile ── */}
+          <div data-coachmark="edit-profile">
+            <Accordion
+              title="Edit Profile"
+              actions={
+                <span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>
+              }
             >
-              <Tooltip
-                label="Automatically move to the next image after each capture"
-                visible={autoAdvanceHovered}
-                position="top"
+              <ProfileDropdown
+                value={editingProfile}
+                onChange={setEditingProfile}
+                currentImageSrc={currentImageSrc}
               />
-              Auto Advance
-            </span>
-            <div
-              className={`relative w-8 h-[18px] rounded-full transition-colors ${autoAdvance ? "bg-[#2563eb]" : "bg-[#383838]"}`}
+            </Accordion>
+          </div>
+
+          <div className="h-px bg-[#e2e2e20d]" />
+
+          {/* ── Retouching Preset ── */}
+          <div data-coachmark="retouch-preset">
+            <Accordion
+              title="Retouching Preset"
+              actions={
+                <span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>
+              }
             >
-              <div
-                className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform ${autoAdvance ? "translate-x-[18px]" : "translate-x-[2px]"}`}
-              />
-            </div>
-          </button>
-        </div>
-      </div>
-
-      <div className="h-px bg-[#e2e2e20d]" />
-
-      {/* ── Editing Profile ── */}
-      <Accordion
-        title="Edit Profile"
-        actions={<span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>}
-      >
-        <ProfileDropdown
-          value={editingProfile}
-          onChange={setEditingProfile}
-          currentImageSrc={currentImageSrc}
-        />
-      </Accordion>
-
-      <div className="h-px bg-[#e2e2e20d]" />
-
-      {/* ── Retouching Preset ── */}
-      <Accordion
-        title="Retouching Preset"
-        actions={<span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>}
-      >
-        <PresetDropdown value={retouchPreset} onChange={setRetouchPreset} />
-      </Accordion>
-
-      {/* <div className="h-px bg-[#e2e2e20d]" />
-
-      <div className="px-2 py-1.5 bg-[#242424] rounded-[8px] border border-[#303030]">
-          <span className="text-[13px] text-[#ffffff] opacity-50 ">Presets auto-apply to every image. Change later in sidebar.</span>
-      </div> */}
+              <PresetDropdown value={retouchPreset} onChange={setRetouchPreset} />
+            </Accordion>
+          </div>
+        </>
+      )}
 
       {showWelcome && <TetherWelcomeModal onClose={() => setShowWelcome(false)} />}
+      {showDetect && (
+        <TetherDetectModal
+          onCancel={() => {
+            setShowDetect(false);
+            if (onCancelTethering) onCancelTethering();
+            else onCancelSetup?.();
+          }}
+          onDetected={() => {
+            setShowDetect(false);
+            setShowSetup(true);
+          }}
+        />
+      )}
       {showSetup && (
         <TetherSetupModal
-          onClose={() => {
-            onStartTethering();
+          onCancel={() => {
             setShowSetup(false);
+            if (!isTethering) {
+              if (onCancelTethering) onCancelTethering();
+              else onCancelSetup?.();
+            }
+          }}
+          onStart={() => {
+            setShowSetup(false);
+            if (!isTethering) onStartTethering();
           }}
           currentImageSrc={currentImageSrc}
           mode={isTethering ? "preferences" : "setup"}
@@ -1046,6 +1197,8 @@ const TetheringTab = ({
           onFileFormatChange={setFileFormat}
           namingTemplate={namingTemplate}
           onNamingTemplateChange={setNamingTemplate}
+          destination={destination}
+          onDestinationChange={setDestination}
         />
       )}
     </div>

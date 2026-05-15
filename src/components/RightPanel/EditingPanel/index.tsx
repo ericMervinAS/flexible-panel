@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   SlidersHorizontalIcon,
   CropIcon,
@@ -24,6 +24,9 @@ interface EditingPanelProps {
   onStartTethering?: () => void;
   onCapture?: (autoAdvance: boolean) => void;
   initialTab?: EditingTab;
+  tetheringTabActive?: boolean;
+  onTetheringTabActiveChange?: (active: boolean) => void;
+  onCancelTethering?: () => void;
 }
 
 const EditingPanel = ({
@@ -32,8 +35,28 @@ const EditingPanel = ({
   onStartTethering,
   onCapture,
   initialTab,
+  tetheringTabActive,
+  onTetheringTabActiveChange,
+  onCancelTethering,
 }: EditingPanelProps) => {
   const [activeTab, setActiveTab] = useState<EditingTab>(initialTab ?? "sliders");
+  const previousTabRef = useRef<EditingTab>("sliders");
+
+  useEffect(() => {
+    if (tetheringTabActive) setActiveTab("tethering");
+  }, [tetheringTabActive]);
+
+  const handleTabChange = (tab: EditingTab) => {
+    if (tab === "tethering") previousTabRef.current = activeTab;
+    setActiveTab(tab);
+    onTetheringTabActiveChange?.(tab === "tethering");
+  };
+
+  const handleCancelSetup = useCallback(() => {
+    const prev = previousTabRef.current;
+    setActiveTab(prev);
+    onTetheringTabActiveChange?.(false);
+  }, [onTetheringTabActiveChange]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -43,7 +66,7 @@ const EditingPanel = ({
           {EDITING_TABS.map(({ id, Icon }) => (
             <button
               key={id}
-              onClick={() => setActiveTab(id)}
+              onClick={() => handleTabChange(id)}
               className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${
                 activeTab === id
                   ? "border-[#e2e2e2] text-[#e2e2e2]"
@@ -55,7 +78,7 @@ const EditingPanel = ({
           ))}
         </div>
         <button
-          onClick={() => setActiveTab("tethering")}
+          onClick={() => handleTabChange("tethering")}
           className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${
             activeTab === "tethering"
               ? "border-[#e2e2e2] text-[#e2e2e2]"
@@ -76,6 +99,8 @@ const EditingPanel = ({
             currentImageSrc={currentImageSrc}
             isTethering={isTethering}
             onStartTethering={onStartTethering ?? (() => {})}
+            onCancelSetup={handleCancelSetup}
+            onCancelTethering={onCancelTethering}
             onCapture={onCapture}
           />
         )}
