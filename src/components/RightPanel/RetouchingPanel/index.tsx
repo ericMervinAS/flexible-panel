@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { UserIcon, StackIcon, EraserIcon, CameraIcon } from "@phosphor-icons/react";
 import SubjectTab, { LoupeRetouchState } from "./SubjectTab";
 import BackgroundTab from "./BackgroundTab";
@@ -48,6 +48,7 @@ interface LoupePanelProps {
   forceSubjectTabSignal?: number;
   onStateChange?: (index: number, state: LoupeRetouchState) => void;
   onCancelTethering?: () => void;
+  filmstripSelection?: Set<number>;
 }
 
 const RetouchingPanel = ({
@@ -81,6 +82,7 @@ const RetouchingPanel = ({
   onScrollChange,
   forceSubjectTabSignal,
   onCancelTethering,
+  filmstripSelection,
 }: LoupePanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [perImageState, setPerImageState] = useState<Record<number, LoupeRetouchState>>({});
@@ -107,6 +109,9 @@ const RetouchingPanel = ({
   const [loupeResetSignal, setLoupeResetSignal] = useState(0);
   const [loupePasteSignal, setLoupePasteSignal] = useState<{ state: LoupeRetouchState; seq: number } | null>(null);
   const prevImageIndexRef = useRef<number | null>(null);
+  // Always holds the latest perImageState so effects can read it without stale closure issues
+  const perImageStateRef = useRef(perImageState);
+  perImageStateRef.current = perImageState;
 
   useEffect(() => {
     if (prevImageIndexRef.current === null) {
@@ -116,8 +121,15 @@ const RetouchingPanel = ({
     if (prevImageIndexRef.current !== currentImageIndex) {
       setPasteSourceIndex(prevImageIndexRef.current);
       prevImageIndexRef.current = currentImageIndex;
+      // Restore any previously-saved or synced state for the new image.
+      // perImageStateRef still holds the pre-navigation snapshot here because
+      // SubjectTab's onStateChange setState hasn't flushed a new render yet.
+      const savedState = perImageStateRef.current[currentImageIndex];
+      if (savedState && hasRetouches(savedState)) {
+        setLoupePasteSignal((prev) => ({ state: savedState, seq: (prev?.seq ?? 0) + 1 }));
+      }
     }
-  }, [currentImageIndex]);
+  }, [currentImageIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!tabOverride) return;
@@ -138,7 +150,9 @@ const RetouchingPanel = ({
     return hasSliders || hasPresets || state.customized.size > 0;
   };
 
-  const canPaste = pasteSourceIndex !== null && hasRetouches(perImageState[pasteSourceIndex]);
+  const isSync = useMemo(() => (filmstripSelection?.size ?? 0) > 0, [filmstripSelection]);
+  const canPaste = !isSync && pasteSourceIndex !== null && hasRetouches(perImageState[pasteSourceIndex]);
+  const canSync = isSync && hasRetouches(perImageState[currentImageIndex]);
   const canReset = hasRetouches(perImageState[currentImageIndex]);
 
   return (
@@ -216,6 +230,7 @@ const RetouchingPanel = ({
           <TetheringTab
             currentImageSrc={currentImageSrc}
             isTethering={isTethering}
+            isLoupeView={true}
             onStartTethering={onStartTethering ?? (() => {})}
             onCancelSetup={handleCancelSetup}
             onCancelTethering={onCancelTethering}
@@ -225,23 +240,35 @@ const RetouchingPanel = ({
       </div>
 
       {/* Paste / Reset footer */}
-      {activeTab === "subject" && (
+      {(activeTab === "subject" || activeTab === "tethering") && (
         <div className="flex gap-3 items-center px-4 py-3 bg-[#1c1c1c] shrink-0">
           <button
-            disabled={!canPaste}
+            disabled={isSync ? !canSync : !canPaste}
             onClick={() => {
-              if (!canPaste || pasteSourceIndex === null) return;
-              setLoupePasteSignal((prev) => ({
-                state: perImageState[pasteSourceIndex],
-                seq: (prev?.seq ?? 0) + 1,
-              }));
+              if (isSync) {
+                if (!canSync) return;
+                const sourceState = perImageState[currentImageIndex];
+                setPerImageState((prev) => {
+                  const next = { ...prev };
+                  filmstripSelection!.forEach((idx) => {
+                    if (idx !== currentImageIndex) next[idx] = sourceState;
+                  });
+                  return next;
+                });
+              } else {
+                if (!canPaste || pasteSourceIndex === null) return;
+                setLoupePasteSignal((prev) => ({
+                  state: perImageState[pasteSourceIndex],
+                  seq: (prev?.seq ?? 0) + 1,
+                }));
+              }
             }}
-            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${canPaste
+            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${(isSync ? canSync : canPaste)
               ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
               : "bg-[#303030] text-[#474747] cursor-not-allowed"
               }`}
           >
-            Paste
+            {isSync ? "Sync" : "Paste"}
           </button>
           <button
             disabled={!canReset}

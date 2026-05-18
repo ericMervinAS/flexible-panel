@@ -34,6 +34,7 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
   const [view, setView] = useState<"grid" | "loupe">(importSource === "tethering" ? "loupe" : "grid");
   const loupeEverMountedRef = useRef(false);
   if (view === "loupe") loupeEverMountedRef.current = true;
+  const imagesLengthRef = useRef(0);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [images, setImages] = useState<ImageData[]>(() => {
     if (importSource === "tethering") {
@@ -49,6 +50,7 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
     initialTopTab ?? (importSource === "tethering" ? "EDIT" : "RETOUCH")
   );
   const [loupeActiveTab, setLoupeActiveTab] = useState("subject");
+  const [filmstripSelection, setFilmstripSelection] = useState<Set<number>>(new Set());
   const [isTethering, setIsTethering] = useState(() => {
     if (!albumId) return false;
     return albums.find((a) => a.id === albumId)?.tetheringStarted ?? false;
@@ -56,9 +58,11 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
   const [showCoachmarks, setShowCoachmarks] = useState(
     importSource === "tethering" && !getCoachmarksSeen()
   );
+  imagesLengthRef.current = images.length;
+
   const handleCapture = (autoAdvance: boolean) => {
     const newImage = sampleImages[Math.floor(Math.random() * sampleImages.length)];
-    const newIndex = images.length;
+    const newIndex = imagesLengthRef.current;
     setImages((prev) => {
       const next = [...prev, newImage];
       if (albumId) {
@@ -66,9 +70,8 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
       }
       return next;
     });
-    if (autoAdvance) {
+    if (view === "grid" || autoAdvance) {
       setSelectedIndex(newIndex);
-      setView("loupe");
     }
   };
   const [canvasHasStrokes, setCanvasHasStrokes] = useState(false);
@@ -203,6 +206,7 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
                 highlightedDetections={highlightedDetections}
                 hoveredDetections={hoveredDetections}
                 onCanvasRemoveSuccess={() => handleRemoveSuccess(1, true)}
+                onSelectionChange={setFilmstripSelection}
                 onRatingChange={(rating) =>
                   setImages((prev) =>
                     prev.map((img, i) => i === selectedIndex ? { ...img, stars: rating } : img)
@@ -212,7 +216,7 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
             </div>
           )}
         </div>
-        <RightPanel isScanning={isScanning} isLoupeView={view === "loupe"} activeTopTab={activeTopTab} isTethering={isTethering} onStartTethering={() => {
+        <RightPanel filmstripSelection={filmstripSelection} isScanning={isScanning} isLoupeView={view === "loupe"} activeTopTab={activeTopTab} isTethering={isTethering} onStartTethering={() => {
           setIsTethering(true);
           if (albumId) updateAlbum(albumId, { tetheringStarted: true });
         }} onCapture={handleCapture} currentImageIndex={selectedIndex} currentImageSrc={images[selectedIndex]?.src} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionRerunCurrent={() => rerunDistractionDetectionForImage(selectedIndex)} onDistractionSelectionChange={setHighlightedLabels} onDistractionHoverChange={setHoveredLabel} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} initialEditingTab={importSource === "tethering" ? "tethering" : undefined} onCancelTethering={importSource === "tethering" ? onCancelTethering : undefined} />

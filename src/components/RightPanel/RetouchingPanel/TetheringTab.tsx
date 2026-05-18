@@ -19,6 +19,10 @@ import {
 import Accordion from "../../Accordion";
 import PresetDropdown from "../../PresetDropdown";
 import Tooltip from "../../Tooltip";
+import editorial_style from "@/assets/profile/editorial_style.webp";
+import graicard from "@/assets/profile/graicard.jpg";
+import matcha from "@/assets/profile/matcha.jpg";
+import porta_400 from "@/assets/profile/porta_400.webp";
 
 // ─── Camera stop arrays ────────────────────────────────────────────────────────
 
@@ -41,7 +45,7 @@ const QUALITY_OPTIONS = ["NEF", "JPEG", "NEF + JPEG"] as const;
 // ─── Editing Profile cards ────────────────────────────────────────────────────
 
 const EDITING_PROFILES = [
-  { group: "Custom Profiles", names: ["My Wedding Profile", "Studio Portraits"] },
+  { group: "Custom Profiles", names: ["Editorial Style", "Graicard", "Matcha", "Porta 400"] },
   {
     group: "Aftershoot Profiles",
     names: [
@@ -55,11 +59,10 @@ const EDITING_PROFILES = [
 ];
 
 const PROFILE_CARD_DATA: { name: string; img: string }[] = [
-  { name: "My Wedding Profile", img: "/tethering-profiles/crispy-cream.png" },
-  { name: "Studio Portraits", img: "/tethering-profiles/graicard.png" },
-  { name: "Hazlenut", img: "/tethering-profiles/crispy-cream.png" },
-  { name: "Graicard", img: "/tethering-profiles/crispy-cream.png" },
-  { name: "Crispy Cream", img: "/tethering-profiles/crispy-cream.png" },
+  { name: "Editorial Style", img: editorial_style },
+  { name: "Graicard", img: graicard },
+  { name: "Matcha", img: matcha },
+  { name: "Porta 400", img: porta_400 },
 ];
 
 interface ProfileDropdownProps {
@@ -939,6 +942,7 @@ const TetherSetupModal = ({
 interface TetheringTabProps {
   currentImageSrc?: string;
   isTethering: boolean;
+  isLoupeView?: boolean;
   onStartTethering: () => void;
   onCancelSetup?: () => void;
   onCancelTethering?: () => void;
@@ -948,6 +952,7 @@ interface TetheringTabProps {
 const TetheringTab = ({
   currentImageSrc,
   isTethering,
+  isLoupeView = false,
   onStartTethering,
   onCancelSetup,
   onCancelTethering,
@@ -1099,30 +1104,34 @@ const TetheringTab = ({
                   <span className="text-[12px] font-medium">78%</span>
                 </div>
               </div>
-              <button
-                onClick={() => setAutoAdvance((p) => !p)}
-                className="flex items-center justify-between w-full"
-              >
-                <span
-                  onMouseEnter={() => setAutoAdvanceHovered(true)}
-                  onMouseLeave={() => setAutoAdvanceHovered(false)}
-                  className="relative inline-flex text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]"
+              {isLoupeView ? (
+                <button
+                  onClick={() => setAutoAdvance((p) => !p)}
+                  className="flex items-center justify-between w-full"
                 >
-                  <Tooltip
-                    label="Automatically move to the next image after each capture"
-                    visible={autoAdvanceHovered}
-                    position="top"
-                  />
-                  Auto Advance
-                </span>
-                <div
-                  className={`relative w-8 h-[18px] rounded-full transition-colors ${autoAdvance ? "bg-[#2563eb]" : "bg-[#383838]"}`}
-                >
+                  <span
+                    onMouseEnter={() => setAutoAdvanceHovered(true)}
+                    onMouseLeave={() => setAutoAdvanceHovered(false)}
+                    className="relative inline-flex text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]"
+                  >
+                    <Tooltip
+                      label="Automatically move to the next image after each capture"
+                      visible={autoAdvanceHovered}
+                      position="top"
+                    />
+                    Auto Advance
+                  </span>
                   <div
-                    className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform ${autoAdvance ? "translate-x-[18px]" : "translate-x-[2px]"}`}
-                  />
-                </div>
-              </button>
+                    className="relative w-8 h-[18px] rounded-full transition-colors"
+                    style={{ backgroundColor: autoAdvance ? "#2563eb" : "#383838" }}
+                  >
+                    <div
+                      style={{ transform: autoAdvance ? "translateX(18px)" : "translateX(2px)" }}
+                      className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform"
+                    />
+                  </div>
+                </button>
+              ) : null}
             </div>
           </div>
 

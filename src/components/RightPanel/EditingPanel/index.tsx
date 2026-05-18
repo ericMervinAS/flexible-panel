@@ -98,6 +98,7 @@ const EditingPanel = ({
           <TetheringTab
             currentImageSrc={currentImageSrc}
             isTethering={isTethering}
+            isLoupeView={true}
             onStartTethering={onStartTethering ?? (() => {})}
             onCancelSetup={handleCancelSetup}
             onCancelTethering={onCancelTethering}

@@ -41,6 +41,7 @@ interface RightPanelProps {
   onCapture?: (autoAdvance: boolean) => void;
   initialEditingTab?: string;
   onCancelTethering?: () => void;
+  filmstripSelection?: Set<number>;
 }
 
 const RightPanel = ({
@@ -76,6 +77,7 @@ const RightPanel = ({
   onCapture,
   initialEditingTab,
   onCancelTethering,
+  filmstripSelection,
 }: RightPanelProps) => {
   const [appliedPresets, setAppliedPresets] = useState<Record<string, string>>({});
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
@@ -152,6 +154,7 @@ const RightPanel = ({
               currentImageSrc={currentImageSrc}
               appliedPresets={appliedPresets}
               removedItems={removedItems}
+              filmstripSelection={filmstripSelection}
               onAddRemovedItems={handleAddRemovedItems}
               onResetRemovedItem={handleResetRemovedItem}
               canvasHasStrokes={canvasHasStrokes}
@@ -186,8 +189,11 @@ const RightPanel = ({
           activeTopTab={activeTopTab}
           currentImageSrc={currentImageSrc}
           isTethering={isTethering}
+          isLoupeView={isLoupeView}
           onStartTethering={onStartTethering ?? (() => {})}
           onCapture={onCapture}
+          initialTetherTab={tetheringTabActive}
+          onTabChange={(tab) => setTetheringTabActive(tab === "tethering")}
           isScanning={isScanning}
           appliedPresets={appliedPresets}
           removedItems={removedItems}

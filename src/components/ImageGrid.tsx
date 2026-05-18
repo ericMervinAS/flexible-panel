@@ -55,13 +55,17 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
   onImagesChangeRef.current = onImagesChange;
 
   useEffect(() => {
-    if (initialSelectedIndex == null || !scrollRef.current) return;
+    if (initialSelectedIndex == null) return;
+    setSelectedIndices(new Set([initialSelectedIndex]));
+    setAnchorIndex(initialSelectedIndex);
+    setFocusIndex(initialSelectedIndex);
+    if (!scrollRef.current) return;
     const pos = displayImages.findIndex((img) => img.originalIndex === initialSelectedIndex);
     if (pos === -1) return;
     const tile = scrollRef.current.children[pos] as HTMLElement | undefined;
-    tile?.scrollIntoView({ block: "center", behavior: "instant" });
+    tile?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // scroll once on mount only
+  }, [initialSelectedIndex]);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();

@@ -12,6 +12,13 @@ import HomePage from "./components/HomePage";
 import ImportScreen from "./components/screens/ImportScreen";
 import { AlbumsProvider, useAlbums } from "@/context/AlbumsContext";
 import type { Album } from "@/types/album";
+import editorial_style from "@/assets/profile/editorial_style.webp";
+import graicard from "@/assets/profile/graicard.jpg";
+import matcha from "@/assets/profile/matcha.jpg";
+import porta_400 from "@/assets/profile/porta_400.webp";
+
+const PRESET_COVERS = [editorial_style, graicard, matcha, porta_400];
+let presetCoverIndex = 0;
 
 const queryClient = new QueryClient();
 
@@ -42,10 +49,13 @@ const AppContent = () => {
     const now = new Date();
     const date = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     const time = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const defaultCover = PRESET_COVERS[presetCoverIndex % PRESET_COVERS.length];
+    presetCoverIndex++;
     addAlbum({
       id,
       name: `Tethered Shoot · ${date} · ${time}`,
       imageCount: 0,
+      coverSrc: defaultCover,
       source: "tethering",
     });
     setCurrentAlbumId(id);

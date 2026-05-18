@@ -25,6 +25,8 @@ interface LoupeViewProps {
   onRatingChange?: (rating: number) => void;
   /** Fired after a canvas-side brush removal completes (timer-driven). */
   onCanvasRemoveSuccess?: () => void;
+  /** Fired whenever the filmstrip multi-selection changes. */
+  onSelectionChange?: (selectedIndices: Set<number>) => void;
 }
 
 const LoupeView = ({
@@ -44,6 +46,7 @@ const LoupeView = ({
   hoveredDetections = [],
   onRatingChange,
   onCanvasRemoveSuccess,
+  onSelectionChange,
 }: LoupeViewProps) => {
   const stripImages = filteredImages ?? images.map((img, i) => ({ ...img, originalIndex: i }));
   const stripRef = useRef<HTMLDivElement>(null);
@@ -102,6 +105,45 @@ const LoupeView = ({
   // Bounding box of the committed mask, in canvas pixel space (pre-zoom).
   // The Cancel/Remove hint is anchored to this so it follows zoom/pan in render.
   const [maskBBox, setMaskBBox] = useState<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
+
+  // ── Filmstrip multi-selection ────────────────────────────────────────────────
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const selectedIndicesRef = useRef(selectedIndices);
+  selectedIndicesRef.current = selectedIndices;
+  // Anchor for keyboard shift-selection; null when not in a keyboard-select session.
+  const kbSelectAnchorRef = useRef<number | null>(null);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+
+  const applySelection = (next: Set<number>) => {
+    setSelectedIndices(next);
+    onSelectionChangeRef.current?.(next);
+  };
+
+  const handleFilmstripTileClick = (originalIndex: number, modifiers: { cmd: boolean; shift: boolean }) => {
+    if (!modifiers.cmd && !modifiers.shift) {
+      // Plain click on a selected tile — navigate to it (switch parent) without clearing selection
+      if (selectedIndices.has(originalIndex)) return;
+      // Plain click on unselected tile — navigate and clear selection
+      applySelection(new Set());
+      return;
+    }
+    if (modifiers.cmd) {
+      const next = new Set(selectedIndices);
+      if (next.has(originalIndex)) next.delete(originalIndex);
+      else next.add(originalIndex);
+      applySelection(next);
+      return;
+    }
+    // Shift — range select between currentIndex and clicked, using stripImages order
+    const aPos = stripImages.findIndex((img) => img.originalIndex === currentIndex);
+    const bPos = stripImages.findIndex((img) => img.originalIndex === originalIndex);
+    if (aPos < 0 || bPos < 0) return;
+    const lo = Math.min(aPos, bPos), hi = Math.max(aPos, bPos);
+    const next = new Set(selectedIndices);
+    for (let i = lo; i <= hi; i++) next.add(stripImages[i].originalIndex);
+    applySelection(next);
+  };
 
   // ── Brush size (owned here; mirrored to BrushToolbar and right-click popover) ──
   const [brushSize, setBrushSize] = useState(50);
@@ -276,7 +318,11 @@ const LoupeView = ({
       if (e.key === "Shift") { isShiftHeldRef.current = true; setIsShiftHeld(true); }
     };
     const onUp = (e: KeyboardEvent) => {
-      if (e.key === "Shift") { isShiftHeldRef.current = false; setIsShiftHeld(false); }
+      if (e.key === "Shift") {
+        isShiftHeldRef.current = false;
+        setIsShiftHeld(false);
+        kbSelectAnchorRef.current = null;
+      }
     };
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
@@ -293,8 +339,26 @@ const LoupeView = ({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "g" || e.key === "G") && !e.metaKey && !e.ctrlKey) { onGoToGrid?.(); return; }
-      if (e.key === "ArrowLeft") onSelectImage(Math.max(0, currentIndex - 1));
-      if (e.key === "ArrowRight") onSelectImage(Math.min(totalImages - 1, currentIndex + 1));
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        const dir = e.key === "ArrowLeft" ? -1 : 1;
+        const nextIndex = Math.max(0, Math.min(totalImages - 1, currentIndex + dir));
+        if (nextIndex === currentIndex) return;
+        if (e.shiftKey) {
+          if (kbSelectAnchorRef.current === null) kbSelectAnchorRef.current = currentIndex;
+          const anchor = kbSelectAnchorRef.current;
+          const anchorPos = stripImages.findIndex((img) => img.originalIndex === anchor);
+          const nextPos = stripImages.findIndex((img) => img.originalIndex === nextIndex);
+          const lo = Math.min(anchorPos, nextPos), hi = Math.max(anchorPos, nextPos);
+          const next = new Set<number>();
+          for (let i = lo; i <= hi; i++) next.add(stripImages[i].originalIndex);
+          applySelection(next);
+        } else if (!selectedIndicesRef.current.has(nextIndex)) {
+          // Navigating outside the selection — clear it
+          applySelection(new Set());
+        }
+        onSelectImage(nextIndex);
+        return;
+      }
 
       const digit = parseInt(e.key, 10);
       if (digit >= 0 && digit <= 5) { onRatingChangeRef.current?.(digit); return; }
@@ -1056,6 +1120,8 @@ const LoupeView = ({
         onSelectImage={onSelectImage}
         stripRef={stripRef}
         tileRefs={tileRefs}
+        selectedIndices={selectedIndices}
+        onTileClick={handleFilmstripTileClick}
       />
 
       {/* ── Bottom bar ──────────────────────────────────────────────────────── */}

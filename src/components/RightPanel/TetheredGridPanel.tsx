@@ -13,8 +13,11 @@ interface TetheredGridPanelProps {
   // TetheringTab props
   currentImageSrc?: string;
   isTethering: boolean;
+  isLoupeView?: boolean;
   onStartTethering: () => void;
   onCapture?: (autoAdvance: boolean) => void;
+  initialTetherTab?: boolean;
+  onTabChange?: (tab: PanelTab) => void;
   // GridPanel props (used when activeTopTab === "RETOUCH")
   isScanning: boolean;
   appliedPresets: Record<string, string>;
@@ -37,8 +40,11 @@ const TetheredGridPanel = ({
   activeTopTab,
   currentImageSrc,
   isTethering,
+  isLoupeView = false,
   onStartTethering,
   onCapture,
+  initialTetherTab,
+  onTabChange,
   isScanning,
   appliedPresets,
   removedItems,
@@ -55,7 +61,12 @@ const TetheredGridPanel = ({
   modelSubjectFilter,
   onSuggestObject,
 }: TetheredGridPanelProps) => {
-  const [activeTab, setActiveTab] = useState<PanelTab>("ai");
+  const [activeTab, setActiveTab] = useState<PanelTab>(initialTetherTab ? "tethering" : "ai");
+
+  const handleTabChange = (tab: PanelTab) => {
+    setActiveTab(tab);
+    onTabChange?.(tab);
+  };
 
   const tabClass = (tab: PanelTab) =>
     `flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors text-[13px] font-medium ${
@@ -68,10 +79,10 @@ const TetheredGridPanel = ({
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Tab bar */}
       <div className="flex items-center justify-between px-5 pt-3 shrink-0">
-        <button onClick={() => setActiveTab("ai")} className={tabClass("ai")}>
+        <button onClick={() => handleTabChange("ai")} className={tabClass("ai")}>
           AI
         </button>
-        <button onClick={() => setActiveTab("tethering")} className={tabClass("tethering")}>
+        <button onClick={() => handleTabChange("tethering")} className={tabClass("tethering")}>
           <CameraIcon size={16} />
         </button>
       </div>
@@ -102,6 +113,7 @@ const TetheredGridPanel = ({
           <TetheringTab
             currentImageSrc={currentImageSrc}
             isTethering={isTethering}
+            isLoupeView={isLoupeView}
             onStartTethering={onStartTethering}
             onCapture={onCapture}
           />
