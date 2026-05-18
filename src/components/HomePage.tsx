@@ -13,6 +13,7 @@ import {
   PlusIcon,
   SparkleIcon,
 } from "@phosphor-icons/react";
+import { useState, useEffect } from "react";
 import type { ImportFolder } from "./ImportGate";
 import type { Album } from "@/types/album";
 import { useAlbums } from "@/context/AlbumsContext";
@@ -83,6 +84,33 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
 
 const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
   const { albums } = useAlbums();
+  const [showCoachmark, setShowCoachmark] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [fillStarted, setFillStarted] = useState(false);
+
+  useEffect(() => {
+    if (Math.random() < 0.75) {
+      setShowCoachmark(true);
+      const t = setTimeout(() => setVisible(true), 300);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    const fillTimer = setTimeout(() => setFillStarted(true), 100);
+    const dismissTimer = setTimeout(() => dismissCoachmark(), 10200);
+    return () => {
+      clearTimeout(fillTimer);
+      clearTimeout(dismissTimer);
+    };
+  }, [visible]);
+
+  const dismissCoachmark = () => {
+    setVisible(false);
+    setFillStarted(false);
+    setTimeout(() => setShowCoachmark(false), 350);
+  };
 
   return (
     <div className="h-screen bg-[#111] flex flex-col overflow-hidden">
@@ -311,6 +339,46 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
           </div>
         </div>
       </div>
+
+      {/* Tethering coachmark — slides in from the right */}
+      {showCoachmark && (
+        <div
+          className={`fixed bottom-5 right-5 z-50 w-[320px] bg-white rounded-xl shadow-2xl overflow-hidden transition-all duration-350 ease-out ${
+            visible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0"
+          }`}
+          style={{ transitionProperty: "transform, opacity" }}
+        >
+          <div className="flex flex-col gap-4 px-5 pt-3 pb-5">
+            <div className="flex flex-col gap-1">
+              <p className="text-[#474747] text-base font-semibold leading-5">Nikkon ZII Detected</p>
+              <p className="text-[#71717a] text-sm leading-5">
+                A camera has been detected as connected on this device.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={dismissCoachmark}
+                className="relative px-4 py-2 rounded bg-[rgba(37,99,235,0.12)] text-[#3b82f6] text-sm font-medium overflow-hidden"
+              >
+                <span
+                  className="absolute inset-y-0 left-0 bg-[rgba(37,99,235,0.22)] ease-linear"
+                  style={{
+                    width: fillStarted ? "100%" : "0%",
+                    transition: fillStarted ? "width 10000ms linear" : "none",
+                  }}
+                />
+                <span className="relative">Skip Now</span>
+              </button>
+              <button
+                onClick={() => { dismissCoachmark(); onReady("tethering"); }}
+                className="px-4 py-2 rounded bg-[#2563eb] text-white text-sm font-medium hover:bg-[#1d4ed8] transition-colors"
+              >
+                Try Tethering
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

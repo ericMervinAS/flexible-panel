@@ -800,10 +800,10 @@ const TetherSetupModal = ({
                       : [...fileFormat, fmt];
                     if (next.length > 0) onFileFormatChange(next);
                   }}
-                  className={`px-3 py-1.5 rounded text-[13px] font-medium transition-colors ${
+                  className={`h-[28px] px-2 rounded-[4px] text-[13px] bg-[#242424] transition-colors border-[0.5px] ${
                     selected
-                      ? "bg-[#2563eb] text-white"
-                      : "bg-[#242424] text-[#ababab] hover:bg-[#2e2e2e]"
+                      ? "border-[#777] text-[#e2e2e2]"
+                      : "border-transparent text-[#ababab] hover:border-[#474747]"
                   }`}
                 >
                   {fmt}
