@@ -41,6 +41,15 @@ const WB_OPTIONS = [
   "Custom",
 ] as const;
 const QUALITY_OPTIONS = ["NEF", "JPEG", "NEF + JPEG"] as const;
+const ASPECT_OPTIONS = ["3:2", "1:1", "4:3", "16:9"] as const;
+const FOCUS_OPTIONS = ["AI FOCUS", "MANUAL FOCUS"] as const;
+const SHOOT_OPTIONS = [
+  "Single Shot",
+  "Continous high speed",
+  "Continous low speed",
+  "Timer 10 sec",
+  "Timer 2 sec",
+] as const;
 
 // ─── Editing Profile cards ────────────────────────────────────────────────────
 
@@ -648,10 +657,25 @@ const TetherSetupModal = ({
   const userPrefix = prefixMatch?.[1] ?? "";
 
   // Pattern presets — concrete, named, with their own template strings.
-  const NAMING_PATTERNS: Array<{ id: string; label: string; template: string; needsPrefix?: boolean }> = [
+  const NAMING_PATTERNS: Array<{
+    id: string;
+    label: string;
+    template: string;
+    needsPrefix?: boolean;
+  }> = [
     { id: "date-seq", label: "Date + Sequence", template: "{Date}_{Counter:0001}" },
-    { id: "prefix-seq", label: "Prefix + Sequence", template: "{Prefix:Smith}_{Counter:0001}", needsPrefix: true },
-    { id: "date-prefix-seq", label: "Date + Prefix + Sequence", template: "{Date}_{Prefix:Smith}_{Counter:0001}", needsPrefix: true },
+    {
+      id: "prefix-seq",
+      label: "Prefix + Sequence",
+      template: "{Prefix:Smith}_{Counter:0001}",
+      needsPrefix: true,
+    },
+    {
+      id: "date-prefix-seq",
+      label: "Date + Prefix + Sequence",
+      template: "{Date}_{Prefix:Smith}_{Counter:0001}",
+      needsPrefix: true,
+    },
     { id: "camera-seq", label: "Camera + Sequence", template: "{CameraModel}_{Counter:0001}" },
     { id: "seq-only", label: "Sequence only", template: "IMG_{Counter:0001}" },
   ];
@@ -665,7 +689,7 @@ const TetherSetupModal = ({
     return null;
   })();
 
-  const applyPattern = (p: typeof NAMING_PATTERNS[number]) => {
+  const applyPattern = (p: (typeof NAMING_PATTERNS)[number]) => {
     if (p.needsPrefix && userPrefix) {
       onNamingTemplateChange(p.template.replace(/\{Prefix:[^}]*\}/, `{Prefix:${userPrefix}}`));
     } else {
@@ -676,7 +700,9 @@ const TetherSetupModal = ({
   const updatePrefix = (next: string) => {
     const sanitized = next.replace(/[/\\:*?"<>|{}]/g, "");
     if (namingTemplate.includes("{Prefix:")) {
-      onNamingTemplateChange(namingTemplate.replace(/\{Prefix:[^}]*\}/, `{Prefix:${sanitized || "Smith"}}`));
+      onNamingTemplateChange(
+        namingTemplate.replace(/\{Prefix:[^}]*\}/, `{Prefix:${sanitized || "Smith"}}`)
+      );
     }
   };
 
@@ -884,7 +910,9 @@ const TetherSetupModal = ({
                               active ? "border-[#60a5fa] bg-[#60a5fa]" : "border-[#444]"
                             }`}
                           />
-                          <span className={`text-[12px] font-medium ${active ? "text-[#e2e2e2]" : "text-[#ababab]"}`}>
+                          <span
+                            className={`text-[12px] font-medium ${active ? "text-[#e2e2e2]" : "text-[#ababab]"}`}
+                          >
                             {p.label}
                           </span>
                         </div>
@@ -976,6 +1004,10 @@ const TetheringTab = ({
     if (v === "NEF + JPEG") setFileFormat(["NEF", "JPEG"]);
     else setFileFormat([v]);
   };
+
+  const [aspectRatio, setAspectRatio] = useState<string>(ASPECT_OPTIONS[0]);
+  const [focusMode, setFocusMode] = useState<string>(FOCUS_OPTIONS[0]);
+  const [shootMode, setShootMode] = useState<string>(SHOOT_OPTIONS[0]);
   const [namingTemplate, setNamingTemplate] = useState("{Date}_{Counter:0001}");
   const [autoAdvance, setAutoAdvance] = useState(true);
   const [draggingCard, setDraggingCard] = useState<string | null>(null);
@@ -1009,6 +1041,14 @@ const TetheringTab = ({
                 >
                   <GearIcon size={16} />
                 </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-medium text-[#ababab]">Nikon Z6 III</span>
+              <div className="flex items-center gap-1.5 text-[#ababab]">
+                <BatteryHigh size={16} />
+                <span className="text-[12px] font-medium">78%</span>
               </div>
             </div>
 
@@ -1091,6 +1131,39 @@ const TetheringTab = ({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+                  Aspect Ratio
+                </span>
+                <InlineSelect
+                  value={aspectRatio}
+                  options={ASPECT_OPTIONS}
+                  onChange={setAspectRatio}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+                  Shoot Mode
+                </span>
+                <InlineSelect
+                  value={shootMode}
+                  options={SHOOT_OPTIONS}
+                  onChange={setShootMode}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+                  Focus Mode
+                </span>
+                <InlineSelect
+                  value={focusMode}
+                  options={FOCUS_OPTIONS}
+                  onChange={setFocusMode}
+                />
+              </div>
+
+              {/* <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
                   Model
                 </span>
                 <span className="text-[12px] font-medium text-[#ababab]">Nikon Z6 III</span>
@@ -1103,7 +1176,8 @@ const TetheringTab = ({
                   <BatteryHigh size={16} />
                   <span className="text-[12px] font-medium">78%</span>
                 </div>
-              </div>
+              </div> */}
+
               {isLoupeView ? (
                 <button
                   onClick={() => setAutoAdvance((p) => !p)}

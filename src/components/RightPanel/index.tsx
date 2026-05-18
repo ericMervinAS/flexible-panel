@@ -141,7 +141,7 @@ const RightPanel = ({
               initialTab={
                 initialEditingTab as "sliders" | "crop" | "mask" | "tethering" | undefined
               }
-              tetheringTabActive={tetheringTabActive}
+              tetheringTabActive={activeTopTab === "EDIT" || isTethering ? tetheringTabActive : false}
               onTetheringTabActiveChange={setTetheringTabActive}
               onCancelTethering={onCancelTethering}
             />
@@ -178,7 +178,7 @@ const RightPanel = ({
               isTethering={isTethering}
               onStartTethering={onStartTethering}
               onCapture={onCapture}
-              tetheringTabActive={tetheringTabActive}
+              tetheringTabActive={activeTopTab !== "EDIT" || isTethering ? tetheringTabActive : false}
               onTetheringTabActiveChange={setTetheringTabActive}
               onCancelTethering={onCancelTethering}
             />

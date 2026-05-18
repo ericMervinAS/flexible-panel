@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { PlusCircle, Warning, PushPin } from "@phosphor-icons/react";
+import { Warning, PushPin } from "@phosphor-icons/react";
 import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
-import Accordion from "../../Accordion";
 import PresetDropdown from "../../PresetDropdown";
 import SliderRow from "../../SliderRow";
 import SliderSection from "../../SliderSection";
@@ -69,9 +68,11 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
   // Tracks contexts where a slider was manually moved. These stop inheritance
   // entirely and show no preset — separate from the cascade bypass above.
   const [customized, setCustomized] = useState<Set<string>>(new Set());
+  const [presetStrength, setPresetStrength] = useState(100);
   const [pinnedSliders, setPinnedSliders] = useState<Set<string>>(new Set());
   const [sectionOrder, setSectionOrder] = useState<number[]>(() => SECTIONS.map((_, i) => i));
   const scrollRef = useRef<HTMLDivElement>(null);
+  const presetRowRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -472,40 +473,43 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
           );
         })()}
 
-        {/* Preset accordion */}
-        <Accordion
-          title="Preset"
-          actions={
-            <button className="flex items-center justify-center text-[#777] hover:text-[#ababab] transition-colors">
-              <PlusCircle size={16} />
-            </button>
-          }
-        >
-          <PresetDropdown
-            value={effectivePreset}
-            genderFilter={
-              selectedModelFace !== null
-                ? modelSubjects?.find((s) => s.id === selectedModelFace)?.category
-                : !selectedChip
-                  ? undefined
-                  : selectedChip === "Individual"
-                    ? (singleFace !== undefined ? subjectGender[singleFace] : undefined)
-                    : selectedChip
-            }
-            onChange={(v) => {
-              if (selectedModelFace !== null) {
-                const preset = findPreset(v);
-                const presetSliders = preset ? presetToSectionValues(preset) : nullLayer();
-                setLocalPresets((prev) => ({ ...prev, [`model-${selectedModelFace}`]: v }));
-                setCustomized((prev) => { const s = new Set(prev); s.delete(`model-${selectedModelFace}`); return s; });
-                setSliderLayers((prev) => ({ ...prev, [`model-${selectedModelFace}`]: presetSliders }));
-              } else {
-                if (!selectedChip) return;
-                setPresetForChip(selectedChip, v, singleFace);
+        {/* Preset section */}
+        <div className="flex flex-col gap-4">
+          <div ref={presetRowRef} className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] leading-3">Preset</span>
+            <PresetDropdown
+              compact
+              anchorRef={presetRowRef}
+              value={effectivePreset}
+              genderFilter={
+                selectedModelFace !== null
+                  ? modelSubjects?.find((s) => s.id === selectedModelFace)?.category
+                  : !selectedChip
+                    ? undefined
+                    : selectedChip === "Individual"
+                      ? (singleFace !== undefined ? subjectGender[singleFace] : undefined)
+                      : selectedChip
               }
-            }}
+              onChange={(v) => {
+                if (selectedModelFace !== null) {
+                  const preset = findPreset(v);
+                  const presetSliders = preset ? presetToSectionValues(preset) : nullLayer();
+                  setLocalPresets((prev) => ({ ...prev, [`model-${selectedModelFace}`]: v }));
+                  setCustomized((prev) => { const s = new Set(prev); s.delete(`model-${selectedModelFace}`); return s; });
+                  setSliderLayers((prev) => ({ ...prev, [`model-${selectedModelFace}`]: presetSliders }));
+                } else {
+                  if (!selectedChip) return;
+                  setPresetForChip(selectedChip, v, singleFace);
+                }
+              }}
+            />
+          </div>
+          <SliderRow
+            label="Strength"
+            value={presetStrength}
+            onChange={setPresetStrength}
           />
-        </Accordion>
+        </div>
 
         <div className="h-[1px] mt-[-8px] w-full bg-[#e2e2e20d]" />
       </div>

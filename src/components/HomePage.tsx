@@ -89,7 +89,7 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
   const [fillStarted, setFillStarted] = useState(false);
 
   useEffect(() => {
-    if (Math.random() < 0.75) {
+    if (Math.random() < 0.9) {
       setShowCoachmark(true);
       const t = setTimeout(() => setVisible(true), 300);
       return () => clearTimeout(t);
@@ -350,7 +350,9 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
         >
           <div className="flex flex-col gap-4 px-5 pt-3 pb-5">
             <div className="flex flex-col gap-1">
-              <p className="text-[#474747] text-base font-semibold leading-5">Nikkon ZII Detected</p>
+              <p className="text-[#474747] text-base font-semibold leading-5">
+                Nikon Z6 III Detected
+              </p>
               <p className="text-[#71717a] text-sm leading-5">
                 A camera has been detected as connected on this device.
               </p>
@@ -370,7 +372,10 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
                 <span className="relative">Skip Now</span>
               </button>
               <button
-                onClick={() => { dismissCoachmark(); onReady("tethering"); }}
+                onClick={() => {
+                  dismissCoachmark();
+                  onReady("tethering");
+                }}
                 className="px-4 py-2 rounded bg-[#2563eb] text-white text-sm font-medium hover:bg-[#1d4ed8] transition-colors"
               >
                 Try Tethering
