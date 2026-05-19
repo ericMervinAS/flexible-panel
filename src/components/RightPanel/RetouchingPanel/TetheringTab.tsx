@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useSessionState } from "@/hooks/useSessionState";
+import PinnedSlidersCard from "../../PinnedSlidersCard";
 import {
   FolderSimpleIcon,
   CaretDown,
@@ -15,9 +17,12 @@ import {
   LockSimple,
   ShieldCheck,
   ArrowRight,
+  MagnifyingGlassIcon,
+  CropSimple,
 } from "@phosphor-icons/react";
 import Accordion from "../../Accordion";
 import PresetDropdown from "../../PresetDropdown";
+import SliderRow from "../../SliderRow";
 import Tooltip from "../../Tooltip";
 import editorial_style from "@/assets/profile/editorial_style.webp";
 import graicard from "@/assets/profile/graicard.jpg";
@@ -40,9 +45,8 @@ const WB_OPTIONS = [
   "Flash",
   "Custom",
 ] as const;
-const QUALITY_OPTIONS = ["NEF", "JPEG", "NEF + JPEG"] as const;
 const ASPECT_OPTIONS = ["3:2", "1:1", "4:3", "16:9"] as const;
-const FOCUS_OPTIONS = ["AI FOCUS", "MANUAL FOCUS"] as const;
+const FOCUS_OPTIONS = ["AI Focus", "Manual Focus"] as const;
 const SHOOT_OPTIONS = [
   "Single Shot",
   "Continous high speed",
@@ -51,28 +55,118 @@ const SHOOT_OPTIONS = [
   "Timer 2 sec",
 ] as const;
 
-// ─── Editing Profile cards ────────────────────────────────────────────────────
+// ─── Camera format config ─────────────────────────────────────────────────────
 
-const EDITING_PROFILES = [
-  { group: "Custom Profiles", names: ["Editorial Style", "Graicard", "Matcha", "Porta 400"] },
+interface CameraSpec {
+  raw: string;
+  jpegQualities: string[];
+}
+
+const CAMERA_SPEC_MAP: Array<{ pattern: RegExp; spec: CameraSpec }> = [
+  { pattern: /nikon/i, spec: { raw: "NEF", jpegQualities: ["Fine", "Normal", "Basic"] } },
+  // EOS R / EOS M (2018+) use CR3; older Canon DSLRs use CR2
   {
-    group: "Aftershoot Profiles",
-    names: [
-      "Wedding — Natural Light",
-      "Wedding — Reception",
-      "Portrait — Studio",
-      "Portrait — Outdoor",
-      "Event",
+    pattern: /canon.*(eos r\d|eos r$|r\d+.*mark|rebel sl3|eos m\d{2})/i,
+    spec: { raw: "CR3", jpegQualities: ["Fine", "Normal"] },
+  },
+  { pattern: /canon/i, spec: { raw: "CR2", jpegQualities: ["Fine", "Normal"] } },
+  {
+    pattern: /sony/i,
+    spec: { raw: "ARW", jpegQualities: ["Extra Fine", "Fine", "Standard"] },
+  },
+  { pattern: /fujifilm|fuji x/i, spec: { raw: "RAF", jpegQualities: ["Fine", "Normal"] } },
+  {
+    pattern: /olympus|om system/i,
+    spec: { raw: "ORF", jpegQualities: ["Fine", "Normal", "Basic"] },
+  },
+  {
+    pattern: /panasonic|lumix/i,
+    spec: { raw: "RW2", jpegQualities: ["Fine", "Standard"] },
+  },
+  { pattern: /leica/i, spec: { raw: "DNG", jpegQualities: ["Fine", "Basic"] } },
+  {
+    pattern: /pentax|ricoh gr/i,
+    spec: { raw: "PEF", jpegQualities: ["Fine", "Normal"] },
+  },
+];
+
+const DEFAULT_CAMERA_SPEC: CameraSpec = { raw: "RAW", jpegQualities: ["Fine", "Normal"] };
+
+const getCameraSpec = (cameraName: string): CameraSpec => {
+  for (const { pattern, spec } of CAMERA_SPEC_MAP) {
+    if (pattern.test(cameraName)) return spec;
+  }
+  return DEFAULT_CAMERA_SPEC;
+};
+
+const getFormatOptions = ({ raw, jpegQualities }: CameraSpec): string[] => [
+  raw,
+  ...jpegQualities.map((q) => `JPEG ${q}`),
+  ...jpegQualities.map((q) => `${raw} + JPEG ${q}`),
+];
+
+// Cameras the mock detection will "find" (ordered by USB priority)
+const MOCK_DETECTED_CAMERAS = ["Nikon Z6 III", "Canon EOS R6 Mark II"];
+
+// ─── Editing Profile data ─────────────────────────────────────────────────────
+
+interface ProfileItem {
+  name: string;
+  format: "JPEG" | "RAW";
+  img: string | null;
+}
+
+interface ProfileSectionData {
+  group: string;
+  profiles: ProfileItem[];
+}
+
+const PROFILE_SECTIONS_DATA: ProfileSectionData[] = [
+  {
+    group: "Professional AI Profile(s)",
+    profiles: [{ name: "Testing", format: "RAW", img: null }],
+  },
+  {
+    group: "Downloaded",
+    profiles: [
+      { name: "Editorial Style", format: "JPEG", img: editorial_style },
+      { name: "Graicard", format: "JPEG", img: graicard },
+      { name: "Matcha", format: "JPEG", img: matcha },
+      { name: "Porta 400", format: "JPEG", img: porta_400 },
     ],
   },
 ];
 
-const PROFILE_CARD_DATA: { name: string; img: string }[] = [
-  { name: "Editorial Style", img: editorial_style },
-  { name: "Graicard", img: graicard },
-  { name: "Matcha", img: matcha },
-  { name: "Porta 400", img: porta_400 },
-];
+const ALL_PROFILES_FLAT = PROFILE_SECTIONS_DATA.flatMap((s) => s.profiles);
+
+const LrcBadge = () => (
+  <span className="text-[12px] font-semibold text-[#74b9d4] leading-none shrink-0">LrC</span>
+);
+
+const FormatBadge = ({ format }: { format: "JPEG" | "RAW" }) => (
+  <span
+    className={`text-[11px] font-semibold px-2 py-[3px] rounded leading-none shrink-0 ${
+      format === "JPEG" ? "bg-[#2563eb] text-white" : "bg-[#166534]/60 text-[#4ade80]"
+    }`}
+  >
+    {format}
+  </span>
+);
+
+const ProfileThumb = ({ img, size = "md" }: { img: string | null; size?: "sm" | "md" }) => {
+  const cls = size === "sm" ? "w-[56px] h-[38px]" : "w-[66px] h-[44px]";
+  return (
+    <div className={`${cls} rounded-[4px] overflow-hidden shrink-0 bg-[#2a2a2a]`}>
+      {img ? (
+        <img src={img} className="w-full h-full object-cover" alt="" />
+      ) : (
+        <div className="w-full h-full bg-[#7c3f58] flex items-center justify-center">
+          <span className="text-[#e8a0bf] text-[18px] font-bold leading-none">ā</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface ProfileDropdownProps {
   value: string | null;
@@ -82,17 +176,13 @@ interface ProfileDropdownProps {
   maxVisible?: number;
 }
 
-const ProfileDropdown = ({
-  value,
-  onChange,
-  currentImageSrc,
-  cols = 3,
-  maxVisible,
-}: ProfileDropdownProps) => {
+const ProfileDropdown = ({ value, onChange }: ProfileDropdownProps) => {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const selectedProfile = ALL_PROFILES_FLAT.find((p) => p.name === value) ?? null;
 
   const updatePosition = () => {
     if (!containerRef.current) return;
@@ -101,7 +191,7 @@ const ProfileDropdown = ({
       position: "fixed",
       top: rect.bottom + 4,
       left: rect.left,
-      width: rect.width,
+      width: Math.max(rect.width, 300),
       zIndex: 9999,
     });
   };
@@ -125,93 +215,82 @@ const ProfileDropdown = ({
   }, [open]);
 
   return (
-    <div ref={containerRef} className="flex flex-col gap-2 w-full">
-      <div
-        className={`grid gap-3 w-full`}
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+    <div ref={containerRef} className="w-full">
+      {/* Trigger */}
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className="w-full flex items-center gap-3 px-3 py-2 bg-[#1c1c1c] border border-[#303030] rounded-[8px] hover:border-[#474747] transition-colors"
       >
-        {(maxVisible != null ? PROFILE_CARD_DATA.slice(0, maxVisible) : PROFILE_CARD_DATA).map(
-          (profile) => {
-            const selected = value === profile.name;
-            return (
-              <button
-                key={profile.name}
-                onClick={() => onChange(selected ? null : profile.name)}
-                className="flex flex-col gap-1 items-start w-full shrink-0 text-left"
-              >
-                <div
-                  className={`relative w-full overflow-hidden shrink-0 ${selected ? "rounded-[5px] p-px bg-white" : "rounded-[4px]"}`}
-                  style={{ aspectRatio: "69/46" }}
-                >
-                  <img
-                    src={currentImageSrc ?? profile.img}
-                    alt={profile.name}
-                    className="w-full h-full object-cover rounded-[4px]"
-                  />
-                  {selected && (
-                    <div className="absolute inset-[3px] rounded-[3px] ring-1 ring-[#1c1c1c] pointer-events-none" />
-                  )}
-                </div>
-                <span
-                  className={`text-[11px] font-medium leading-[12px] truncate w-full ${selected ? "text-[#e2e2e2]" : "text-[#777]"}`}
-                >
-                  {profile.name}
-                </span>
-              </button>
-            );
-          }
-        )}
-
-        {/* View All */}
-        <button
-          onClick={() => setOpen((p) => !p)}
-          className="flex flex-col gap-1 items-start w-full shrink-0 text-left"
-        >
-          <div
-            className="relative w-full rounded-[4px] overflow-hidden bg-[#242424] flex items-center justify-center shrink-0"
-            style={{ aspectRatio: "69/46" }}
-          >
-            <div className="grid grid-cols-2 gap-[3px]">
-              {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="w-[14px] h-[14px] rounded-[2px] bg-[#2e2e2e]" />
-              ))}
-            </div>
-          </div>
-          <span className="text-[10px] font-medium leading-[12px] text-[#777] truncate w-full">
-            View All
+        <ProfileThumb img={selectedProfile?.img ?? null} size="sm" />
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <LrcBadge />
+          <span className="text-[14px] font-medium text-[#e2e2e2] flex-1 truncate text-left">
+            {selectedProfile?.name ?? "Select a profile"}
           </span>
-        </button>
-      </div>
+          {selectedProfile && <FormatBadge format={selectedProfile.format} />}
+        </div>
+        <CaretDown
+          className={`w-4 h-4 shrink-0 text-[#777] transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
 
+      {/* Dropdown menu */}
       {open &&
         createPortal(
           <div
             ref={menuRef}
-            style={menuStyle}
-            className="bg-[#242424] border border-[#474747] rounded-lg p-1 flex flex-col gap-0.5 max-h-72 overflow-y-auto"
+            style={{ ...menuStyle, scrollbarWidth: "none" } as React.CSSProperties}
+            className="bg-[#1e1e1e] border border-[#303030] rounded-[10px] p-1 flex flex-col max-h-[420px] overflow-y-auto shadow-xl"
           >
-            {EDITING_PROFILES.map((section, si) => (
+            {/* Explore */}
+            <button
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-[6px] hover:bg-white/5 transition-colors"
+            >
+              <MagnifyingGlassIcon size={16} className="text-[#777] shrink-0" />
+              <span className="text-[14px] text-[#ababab]">Explore AI Profiles…</span>
+            </button>
+
+            {/* Crop & Straighten */}
+            <button
+              onClick={() => {
+                onChange("Crop & Straighten only");
+                setOpen(false);
+              }}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-[6px] hover:bg-white/5 transition-colors"
+            >
+              <CropSimple size={16} className="text-[#777] shrink-0" />
+              <span className="text-[14px] text-[#ababab]">Crop &amp; Straighten only</span>
+            </button>
+
+            {/* Profile sections */}
+            {PROFILE_SECTIONS_DATA.map((section, si) => (
               <div key={section.group}>
-                {si > 0 && <div className="h-px bg-[#474747] mx-1 my-0.5" />}
-                <div className="px-2 py-2">
-                  <span className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#777] leading-4">
+                <div className={`h-px bg-[#2a2a2a] mx-2 ${si === 0 ? "my-1" : "mt-1 mb-0"}`} />
+                <div className="px-3 pt-2.5 pb-1.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#555]">
                     {section.group}
                   </span>
                 </div>
-                {section.names.map((name) => (
+                {section.profiles.map((profile) => (
                   <button
-                    key={name}
+                    key={profile.name}
                     onClick={() => {
-                      onChange(name);
+                      onChange(profile.name);
                       setOpen(false);
                     }}
-                    className={`w-full text-left px-2 py-2.5 rounded text-[13px] font-medium transition-colors ${
-                      name === value
-                        ? "text-[#e2e2e2] bg-white/5"
-                        : "text-[#ababab] hover:bg-white/5"
+                    className={`w-full flex items-center gap-3 px-2 py-2 rounded-[6px] transition-colors ${
+                      value === profile.name ? "bg-white/5" : "hover:bg-white/5"
                     }`}
                   >
-                    {name}
+                    <ProfileThumb img={profile.img} size="md" />
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <LrcBadge />
+                      <span className="text-[14px] font-medium text-[#e2e2e2] flex-1 truncate text-left">
+                        {profile.name}
+                      </span>
+                      <FormatBadge format={profile.format} />
+                    </div>
                   </button>
                 ))}
               </div>
@@ -514,11 +593,90 @@ const TetherWelcomeModal = ({ onClose }: TetherWelcomeModalProps) => {
   );
 };
 
+// ─── Tether Camera Select Modal ───────────────────────────────────────────────
+
+interface TetherCameraSelectModalProps {
+  onCancel: () => void;
+  onSelect: (camera: string) => void;
+}
+
+const TetherCameraSelectModal = ({ onCancel, onSelect }: TetherCameraSelectModalProps) => {
+  const cameras = [
+    { name: "Nikon Z6 III", subtitle: "Connected via USB" },
+    { name: "Canon EOS R6 Mark II", subtitle: "Connected via USB" },
+  ];
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+      <div className="bg-[#1c1c1c] border border-[#303030] rounded-[16px] p-6 flex flex-col gap-6 w-[480px]">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-[20px] font-semibold text-[#e2e2e2] leading-6">
+              Two cameras detected
+            </h3>
+            <p className="text-[14px] text-[#777] leading-5">
+              Choose which one to use for this session.
+            </p>
+          </div>
+          <button
+            onClick={onCancel}
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
+          >
+            <X className="w-4 h-4 text-[#777]" />
+          </button>
+        </div>
+
+        {/* Camera cards */}
+        <div className="flex gap-3">
+          {cameras.map((cam) => (
+            <button
+              key={cam.name}
+              onClick={() => onSelect(cam.name)}
+              className="group flex flex-col items-center gap-4 flex-1 py-8 px-4 rounded-xl border border-[#161616] bg-[#161616] hover:border-[#212121] hover:bg-[#1e1e1e] transition-colors cursor-pointer"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#666"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="group-hover:stroke-[#ababab] transition-colors"
+              >
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+              <div className="flex flex-col gap-1 text-center">
+                <span className="text-[14px] font-medium text-[#d8d8d8]">{cam.name}</span>
+                {/* <span className="text-[12px] text-[#555] group-hover:text-[#777] transition-colors">{cam.subtitle}</span> */}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2.5 rounded-[8px] bg-[#2a2a2a] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#333] transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
 // ─── Tether Detect Modal ─────────────────────────────────────────────────────
 
 interface TetherDetectModalProps {
   onCancel: () => void;
-  onDetected: () => void;
+  onDetected: (cameras: string[]) => void;
 }
 
 const TetherDetectModal = ({ onCancel, onDetected }: TetherDetectModalProps) => {
@@ -531,7 +689,10 @@ const TetherDetectModal = ({ onCancel, onDetected }: TetherDetectModalProps) => 
       // First attempt fails 2/3 of the time. Any retry always succeeds.
       const shouldFail = attempt === 0 && Math.random() < 2 / 3;
       if (shouldFail) setPhase("not-found");
-      else onDetected();
+      else {
+        // TODO: restore to MOCK_DETECTED_CAMERAS.slice(0, 1) after testing
+        onDetected(MOCK_DETECTED_CAMERAS);
+      }
     }, 3000);
     return () => clearTimeout(t);
   }, [phase, attempt, onDetected]);
@@ -623,10 +784,13 @@ interface TetherSetupModalProps {
   mode?: "setup" | "preferences";
   editingProfile: string | null;
   onEditingProfileChange: (v: string | null) => void;
+  cameraName: string;
   retouchPreset: string | null;
   onRetouchPresetChange: (v: string | null) => void;
-  fileFormat: string[];
-  onFileFormatChange: (v: string[]) => void;
+  retouchPresetStrength: number;
+  onRetouchPresetStrengthChange: (v: number) => void;
+  fileFormat: string;
+  onFileFormatChange: (v: string) => void;
   namingTemplate: string;
   onNamingTemplateChange: (v: string) => void;
   destination: string;
@@ -638,10 +802,13 @@ const TetherSetupModal = ({
   onStart,
   currentImageSrc,
   mode = "setup",
+  cameraName,
   editingProfile,
   onEditingProfileChange,
   retouchPreset,
   onRetouchPresetChange,
+  retouchPresetStrength,
+  onRetouchPresetStrengthChange,
   fileFormat,
   onFileFormatChange,
   namingTemplate,
@@ -650,6 +817,8 @@ const TetherSetupModal = ({
   onDestinationChange,
 }: TetherSetupModalProps) => {
   const isPreferences = mode === "preferences";
+  const cameraSpec = getCameraSpec(cameraName);
+  const formatOptions = getFormatOptions(cameraSpec);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Extract the user's prefix from a {Prefix}_… template (if present).
@@ -711,8 +880,8 @@ const TetherSetupModal = ({
       .replace("{Date}", "2026-05-15")
       .replace(/\{Prefix:([^}]*)\}/, (_m, p) => userPrefix || p)
       .replace(/\{Counter(?::[^}]*)?\}/, "0001")
-      .replace("{CameraModel}", "NikonZ6III")
-      .concat(".NEF");
+      .replace("{CameraModel}", cameraName.replace(/\s+/g, ""))
+      .concat(`.${cameraSpec.raw}`);
 
   const activePattern = NAMING_PATTERNS.find((p) => p.id === activePatternId);
   const showPrefixInput = !!activePattern?.needsPrefix;
@@ -771,11 +940,11 @@ const TetherSetupModal = ({
             Camera
           </span>
           <div className="flex items-center justify-between px-3 py-3 bg-[#242424] rounded-[8px]">
+            <span className="text-[14px] font-medium text-[#e2e2e2]">{cameraName}</span>
             <div className="flex items-center gap-2">
+              <span className="text-[12px] text-[#e2e2e2]">Connected</span>
               <div className="w-2 h-2 rounded-full bg-[#4ade80] shrink-0" />
-              <span className="text-[14px] font-medium text-[#e2e2e2]">Nikon Z6 III</span>
             </div>
-            <span className="text-[13px] text-[#777]">Connected</span>
           </div>
         </div>
 
@@ -785,76 +954,46 @@ const TetherSetupModal = ({
             <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
               Editing Profile
             </span>
-            <span className="text-[11px] text-[#555]">Auto applied</span>
+            <ProfileDropdown
+              compact
+              menuWidth={300}
+              triggerTextSize="13px"
+              value={editingProfile}
+              onChange={onEditingProfileChange}
+            />
           </div>
-          <ProfileDropdown
-            value={editingProfile}
-            onChange={onEditingProfileChange}
-            cols={4}
-            maxVisible={3}
-            currentImageSrc={currentImageSrc}
-          />
         </div>
 
         {/* Retouching Preset */}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
               Retouching Preset
             </span>
-            <span className="text-[11px] text-[#555]">Auto applied</span>
+
+            <PresetDropdown
+              compact
+              menuWidth={300}
+              value={retouchPreset}
+              onChange={(v) => onRetouchPresetChange(v)}
+            />
           </div>
-          <PresetDropdown value={retouchPreset} onChange={onRetouchPresetChange} />
+          {retouchPreset && (
+            <SliderRow
+              label="Strength"
+              value={retouchPresetStrength}
+              onChange={onRetouchPresetStrengthChange}
+              noPinArea
+            />
+          )}
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
-              File Format
-            </span>
-          </div>
-
-          <div className="flex gap-2">
-            {(["NEF", "JPEG"] as const).map((fmt) => {
-              const selected = fileFormat.includes(fmt);
-              return (
-                <button
-                  key={fmt}
-                  onClick={() => {
-                    const next = selected
-                      ? fileFormat.filter((f) => f !== fmt)
-                      : [...fileFormat, fmt];
-                    if (next.length > 0) onFileFormatChange(next);
-                  }}
-                  className={`h-[28px] px-2 rounded-[4px] text-[13px] bg-[#242424] transition-colors border-[0.5px] ${
-                    selected
-                      ? "border-[#777] text-[#e2e2e2]"
-                      : "border-transparent text-[#ababab] hover:border-[#474747]"
-                  }`}
-                >
-                  {fmt}
-                </button>
-              );
-            })}
-          </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+            File Format
+          </span>
+          <InlineSelect value={fileFormat} options={formatOptions} onChange={onFileFormatChange} />
         </div>
-
-        {/* Info banner */}
-        {/* <div className="px-2 py-1.5 bg-[#242424] rounded-[8px] border border-[#303030]">
-          <span className="text-[13px] text-[#ffffff] opacity-50">Presets auto-apply to every image. Change later in sidebar.</span>
-        </div> */}
-
-        {/* Safety badges */}
-        {/* <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 text-[#555]">
-            <LockSimple size={13} />
-            <span className="text-[12px]">Originals are safe.</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-[#555]">
-            <ShieldCheck size={13} />
-            <span className="text-[12px]">No edits are destructively applied.</span>
-          </div>
-        </div> */}
 
         {/* Advanced toggle */}
         <div className="flex flex-col gap-6">
@@ -879,7 +1018,6 @@ const TetherSetupModal = ({
                 </span>
                 <button
                   onClick={pickFolder}
-                  // className="group flex items-center gap-2 px-3 py-2.5 bg-[#242424] hover:bg-[#2a2a2a] border border-[#303030] hover:border-[#444] rounded-[8px] text-left transition-colors"
                   className={`group flex w-full text-left gap-2 items-center justify-between px-2.5 py-2 bg-[#242424] rounded hover:bg-[#2a2a2a] transition-colors`}
                 >
                   <span className="text-[13px] text-[#e2e2e2] truncate flex-1">{destination}</span>
@@ -956,7 +1094,6 @@ const TetherSetupModal = ({
             className="flex items-center gap-2 px-4 py-2.5 bg-[#2563eb] hover:bg-[#3b7af5] active:bg-[#1d4ed8] rounded-[8px] text-[14px] font-medium text-white transition-colors"
           >
             {isPreferences ? "Save Preferences" : "Start Shooting"}
-            {/* {!isPreferences && <ArrowRight size={15} weight="bold" />} */}
           </button>
         </div>
       </div>
@@ -986,6 +1123,25 @@ const TetheringTab = ({
   onCancelTethering,
   onCapture,
 }: TetheringTabProps) => {
+  const [pinnedSliders, setPinnedSliders] = useSessionState<Set<string>>(
+    "subjectTab:pinnedSliders",
+    new Set(),
+    { serialize: (s) => [...s], deserialize: (a) => new Set(a as string[]) }
+  );
+  const [favValues, setFavValues] = useSessionState<Record<string, number>>(
+    "favorites:values",
+    {}
+  );
+
+  const togglePin = (sIdx: number, sliderIdx: number) => {
+    const key = `${sIdx}:${sliderIdx}`;
+    setPinnedSliders((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   const [apertureIdx, setApertureIdx] = useState(5); // f/5.6
   const [shutterIdx, setShutterIdx] = useState(4); // 1/300
   const [isoIdx, setIsoIdx] = useState(1); // 200
@@ -993,17 +1149,15 @@ const TetheringTab = ({
   const [destination, setDestination] = useState("/Users/photographer/Desktop/Shoot");
   const [editingProfile, setEditingProfile] = useState<string | null>(null);
   const [retouchPreset, setRetouchPreset] = useState<string | null>(null);
-  const [fileFormat, setFileFormat] = useState<string[]>(["NEF", "JPEG"]);
-
-  const qualityLabel =
-    fileFormat.includes("NEF") && fileFormat.includes("JPEG")
-      ? "NEF + JPEG"
-      : (fileFormat[0] ?? "NEF");
-
-  const handleQualityChange = (v: string) => {
-    if (v === "NEF + JPEG") setFileFormat(["NEF", "JPEG"]);
-    else setFileFormat([v]);
-  };
+  const [retouchPresetStrength, setRetouchPresetStrength] = useState(100);
+  const retouchPresetRowRef = useRef<HTMLDivElement>(null);
+  const [cameraName, setCameraName] = useState("Nikon Z6 III");
+  const cameraSpec = getCameraSpec(cameraName);
+  const formatOptions = getFormatOptions(cameraSpec);
+  const [fileFormat, setFileFormat] = useState(() => {
+    const spec = getCameraSpec("Nikon Z6 III");
+    return `${spec.raw} + JPEG ${spec.jpegQualities[0]}`;
+  });
 
   const [aspectRatio, setAspectRatio] = useState<string>(ASPECT_OPTIONS[0]);
   const [focusMode, setFocusMode] = useState<string>(FOCUS_OPTIONS[0]);
@@ -1014,6 +1168,7 @@ const TetheringTab = ({
   const [autoAdvanceHovered, setAutoAdvanceHovered] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showDetect, setShowDetect] = useState(!isTethering);
+  const [showCameraSelect, setShowCameraSelect] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
 
   return (
@@ -1045,10 +1200,10 @@ const TetheringTab = ({
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-[12px] font-medium text-[#ababab]">Nikon Z6 III</span>
+              <span className="text-[14px] font-medium text-[#ababab]">{cameraName}</span>
               <div className="flex items-center gap-1.5 text-[#ababab]">
                 <BatteryHigh size={16} />
-                <span className="text-[12px] font-medium">78%</span>
+                <span className="text-[14px] font-medium">78%</span>
               </div>
             </div>
 
@@ -1102,14 +1257,15 @@ const TetheringTab = ({
             </div>
 
             {/* Capture button */}
-            <button
-              data-coachmark="capture-btn"
-              onClick={() => onCapture?.(autoAdvance)}
-              className="w-full py-2 pl-2 pr-3 bg-[#2563eb] hover:bg-[#3b7af5] active:bg-[#1d4ed8] rounded flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <CameraIcon size={16} />
-              <span className="text-[12px] font-medium text-white">Capture</span>
-            </button>
+            <div className="flex justify-center py-1">
+              <button
+                data-coachmark="capture-btn"
+                onClick={() => onCapture?.(autoAdvance)}
+                className="w-16 h-16 rounded-full border-[3px] border-white/30 flex items-center justify-center transition-all active:scale-95 group"
+              >
+                <div className="w-[52px] h-[52px] rounded-full bg-white group-hover:bg-white/90 group-active:bg-white/75 transition-colors" />
+              </button>
+            </div>
 
             {/* Settings rows */}
             <div className="flex flex-col gap-3">
@@ -1121,13 +1277,9 @@ const TetheringTab = ({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                  Quality
+                  Format
                 </span>
-                <InlineSelect
-                  value={qualityLabel}
-                  options={QUALITY_OPTIONS}
-                  onChange={handleQualityChange}
-                />
+                <InlineSelect value={fileFormat} options={formatOptions} onChange={setFileFormat} />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
@@ -1144,39 +1296,15 @@ const TetheringTab = ({
                 <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
                   Shoot Mode
                 </span>
-                <InlineSelect
-                  value={shootMode}
-                  options={SHOOT_OPTIONS}
-                  onChange={setShootMode}
-                />
+                <InlineSelect value={shootMode} options={SHOOT_OPTIONS} onChange={setShootMode} />
               </div>
 
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
                   Focus Mode
                 </span>
-                <InlineSelect
-                  value={focusMode}
-                  options={FOCUS_OPTIONS}
-                  onChange={setFocusMode}
-                />
+                <InlineSelect value={focusMode} options={FOCUS_OPTIONS} onChange={setFocusMode} />
               </div>
-
-              {/* <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                  Model
-                </span>
-                <span className="text-[12px] font-medium text-[#ababab]">Nikon Z6 III</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                  Battery
-                </span>
-                <div className="flex items-center gap-1.5 text-[#ababab]">
-                  <BatteryHigh size={16} />
-                  <span className="text-[12px] font-medium">78%</span>
-                </div>
-              </div> */}
 
               {isLoupeView ? (
                 <button
@@ -1219,11 +1347,17 @@ const TetheringTab = ({
                 <span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>
               }
             >
-              <ProfileDropdown
-                value={editingProfile}
-                onChange={setEditingProfile}
-                currentImageSrc={currentImageSrc}
-              />
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] leading-3">
+                  Profile
+                </span>
+                <ProfileDropdown
+                  compact
+                  menuWidth={300}
+                  value={editingProfile}
+                  onChange={setEditingProfile}
+                />
+              </div>
             </Accordion>
           </div>
 
@@ -1231,15 +1365,43 @@ const TetheringTab = ({
 
           {/* ── Retouching Preset ── */}
           <div data-coachmark="retouch-preset">
-            <Accordion
-              title="Retouching Preset"
-              actions={
-                <span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>
-              }
-            >
-              <PresetDropdown value={retouchPreset} onChange={setRetouchPreset} />
-            </Accordion>
+            <div className="flex flex-col gap-4">
+              <div ref={retouchPresetRowRef} className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] leading-3">
+                  Retouch Preset
+                </span>
+                <PresetDropdown
+                  compact
+                  anchorRef={retouchPresetRowRef}
+                  value={retouchPreset}
+                  onChange={setRetouchPreset}
+                />
+              </div>
+              {retouchPreset && (
+                <SliderRow
+                  label="Strength"
+                  value={retouchPresetStrength}
+                  onChange={setRetouchPresetStrength}
+                  noPinArea
+                />
+              )}
+            </div>
           </div>
+
+          {/* Favorite sliders */}
+          {pinnedSliders.size > 0 && (
+            <>
+              <div className="h-px bg-[#e2e2e20d]" />
+              <PinnedSlidersCard
+                pinnedSliders={pinnedSliders}
+                onTogglePin={togglePin}
+                getValue={(sIdx, sliderIdx) => favValues[`${sIdx}:${sliderIdx}`] ?? 0}
+                onChange={(sIdx, sliderIdx, v) =>
+                  setFavValues((prev) => ({ ...prev, [`${sIdx}:${sliderIdx}`]: v }))
+                }
+              />
+            </>
+          )}
         </>
       )}
 
@@ -1251,8 +1413,27 @@ const TetheringTab = ({
             if (onCancelTethering) onCancelTethering();
             else onCancelSetup?.();
           }}
-          onDetected={() => {
+          onDetected={(cameras) => {
             setShowDetect(false);
+            if (cameras.length >= 2) {
+              setShowCameraSelect(true);
+            } else {
+              if (cameras[0]) setCameraName(cameras[0]);
+              setShowSetup(true);
+            }
+          }}
+        />
+      )}
+      {showCameraSelect && (
+        <TetherCameraSelectModal
+          onCancel={() => {
+            setShowCameraSelect(false);
+            if (onCancelTethering) onCancelTethering();
+            else onCancelSetup?.();
+          }}
+          onSelect={(cam) => {
+            setCameraName(cam);
+            setShowCameraSelect(false);
             setShowSetup(true);
           }}
         />
@@ -1272,10 +1453,13 @@ const TetheringTab = ({
           }}
           currentImageSrc={currentImageSrc}
           mode={isTethering ? "preferences" : "setup"}
+          cameraName={cameraName}
           editingProfile={editingProfile}
           onEditingProfileChange={setEditingProfile}
           retouchPreset={retouchPreset}
           onRetouchPresetChange={setRetouchPreset}
+          retouchPresetStrength={retouchPresetStrength}
+          onRetouchPresetStrengthChange={setRetouchPresetStrength}
           fileFormat={fileFormat}
           onFileFormatChange={setFileFormat}
           namingTemplate={namingTemplate}

@@ -29,6 +29,7 @@ interface HomePageProps {
 }
 
 function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
+  const isTethered = album.source === "tethering";
   return (
     <div className="flex flex-col w-full">
       <div
@@ -74,7 +75,7 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
             onClick={onOpen}
             className="bg-[#303030] text-[#e2e2e2] text-xs font-medium px-3 py-2 rounded shrink-0 ml-3 hover:bg-[#3a3a3a] transition-colors"
           >
-            Retouch Now
+            {isTethered ? "Continue Tethering" : "Retouch Now"}
           </button>
         </div>
       </div>

@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { Warning, PushPin } from "@phosphor-icons/react";
-import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { useSessionState } from "@/hooks/useSessionState";
+import { Warning } from "@phosphor-icons/react";
+import PinnedSlidersCard from "../../PinnedSlidersCard";
+import {
+  DndContext,
+  closestCenter,
+  DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import PresetDropdown from "../../PresetDropdown";
@@ -15,10 +24,9 @@ import type { SubjectCategory } from "@/lib/faceDetection";
 
 const chips = ["All Subjects", "Masculine", "Feminine", "Elderly", "Child", "Individual"];
 
-const subjectModules = import.meta.glob(
-  "../../../assets/subjects/*.png",
-  { eager: true }
-) as Record<string, { default: string }>;
+const subjectModules = import.meta.glob("../../../assets/subjects/*.png", {
+  eager: true,
+}) as Record<string, { default: string }>;
 
 const subjects = Object.entries(subjectModules)
   .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
@@ -47,7 +55,17 @@ interface SubjectTabProps {
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
-const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {}, onStateChange, pasteSignal, loupeResetSignal, modelSubjects, modelImageMap, isModelDetecting }: SubjectTabProps) => {
+const SubjectTab = ({
+  onScrollChange,
+  currentImageIndex = 0,
+  syncedPresets = {},
+  onStateChange,
+  pasteSignal,
+  loupeResetSignal,
+  modelSubjects,
+  modelImageMap,
+  isModelDetecting,
+}: SubjectTabProps) => {
   const [selectedChip, setSelectedChip] = useState<string | null>("All Subjects");
   const [selectedFaces, setSelectedFaces] = useState<Set<number>>(new Set());
   const [selectedModelFace, setSelectedModelFace] = useState<number | null>(null);
@@ -69,7 +87,14 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
   // entirely and show no preset — separate from the cascade bypass above.
   const [customized, setCustomized] = useState<Set<string>>(new Set());
   const [presetStrength, setPresetStrength] = useState(100);
-  const [pinnedSliders, setPinnedSliders] = useState<Set<string>>(new Set());
+  const [pinnedSliders, setPinnedSliders] = useSessionState<Set<string>>(
+    "subjectTab:pinnedSliders",
+    new Set(),
+    {
+      serialize: (s) => [...s],
+      deserialize: (a) => new Set(a as string[]),
+    }
+  );
   const [sectionOrder, setSectionOrder] = useState<number[]>(() => SECTIONS.map((_, i) => i));
   const scrollRef = useRef<HTMLDivElement>(null);
   const presetRowRef = useRef<HTMLDivElement>(null);
@@ -80,7 +105,8 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
     const key = `${sIdx}:${sliderIdx}`;
     setPinnedSliders((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -121,28 +147,31 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
   const nullLayer = () => SECTIONS.map((s) => s.sliders.map(() => null as number | null));
 
   const rawIndices = getSubjectIndices(currentImageIndex);
-  const visibleSubjects = rawIndices !== null
-    ? rawIndices.filter((i) => i < subjects.length).map((i) => ({ ...subjects[i], subjectIndex: i }))
-    : subjects.map((s, i) => ({ ...s, subjectIndex: i }));
+  const visibleSubjects =
+    rawIndices !== null
+      ? rawIndices
+          .filter((i) => i < subjects.length)
+          .map((i) => ({ ...subjects[i], subjectIndex: i }))
+      : subjects.map((s, i) => ({ ...s, subjectIndex: i }));
 
   const modelClusterIds = modelImageMap?.get(currentImageIndex) ?? [];
 
   // Gender groups present — prefer model-detected categories over hardcoded mapping
-  const activeGenders: Set<string> = modelSubjects?.length && modelImageMap
-    ? new Set(
-      modelClusterIds
-        .map((cid) => modelSubjects.find((s) => s.id === cid)?.category)
-        .filter((c): c is SubjectCategory => !!c)
-    )
-    : new Set(
-      (rawIndices ?? subjects.map((_, i) => i))
-        .map((i) => subjectGender[i])
-        .filter(Boolean)
-    );
+  const activeGenders: Set<string> =
+    modelSubjects?.length && modelImageMap
+      ? new Set(
+          modelClusterIds
+            .map((cid) => modelSubjects.find((s) => s.id === cid)?.category)
+            .filter((c): c is SubjectCategory => !!c)
+        )
+      : new Set(
+          (rawIndices ?? subjects.map((_, i) => i)).map((i) => subjectGender[i]).filter(Boolean)
+        );
 
   const isChipEnabled = (chip: string) => {
     if (chip === "All Subjects") return true;
-    if (chip === "Individual") return modelSubjects?.length && modelImageMap ? modelClusterIds.length > 0 : true;
+    if (chip === "Individual")
+      return modelSubjects?.length && modelImageMap ? modelClusterIds.length > 0 : true;
     return activeGenders.has(chip as any);
   };
 
@@ -176,7 +205,7 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
         if (v2 === STOP) return null;
         if (v2 !== undefined) return v2;
       }
-      const v3 = pick('group-All Subjects');
+      const v3 = pick("group-All Subjects");
       if (v3 === STOP) return null;
       return v3 ?? null;
     }
@@ -212,14 +241,24 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
     if (chip === "All Subjects") {
       if (!preset || preset.tags.includes("All Subjects")) {
         const next: Record<string, string | null> = { "group-All Subjects": value };
-        ["Masculine", "Feminine", "Elderly", "Child"].forEach((g) => { next[`group-${g}`] = null; });
-        subjects.forEach((_, i) => { next[`subject-${i}`] = null; });
+        ["Masculine", "Feminine", "Elderly", "Child"].forEach((g) => {
+          next[`group-${g}`] = null;
+        });
+        subjects.forEach((_, i) => {
+          next[`subject-${i}`] = null;
+        });
         setLocalPresets(next);
         setCustomized(new Set());
         setSliderLayers(() => {
-          const layers: Record<string, (number | null)[][]> = { "group-All Subjects": presetSliders };
-          ["Masculine", "Feminine", "Elderly", "Child"].forEach((g) => { layers[`group-${g}`] = nullLayer(); });
-          subjects.forEach((_, i) => { layers[`subject-${i}`] = nullLayer(); });
+          const layers: Record<string, (number | null)[][]> = {
+            "group-All Subjects": presetSliders,
+          };
+          ["Masculine", "Feminine", "Elderly", "Child"].forEach((g) => {
+            layers[`group-${g}`] = nullLayer();
+          });
+          subjects.forEach((_, i) => {
+            layers[`subject-${i}`] = nullLayer();
+          });
           return layers;
         });
       } else {
@@ -237,7 +276,9 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
           const next = { ...prev };
           matchingGenders.forEach((g) => {
             next[`group-${g}`] = value;
-            subjects.forEach((_, i) => { if (subjectGender[i] === g) next[`subject-${i}`] = null; });
+            subjects.forEach((_, i) => {
+              if (subjectGender[i] === g) next[`subject-${i}`] = null;
+            });
           });
           return next;
         });
@@ -245,7 +286,9 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
           const s = new Set(prev);
           matchingGenders.forEach((g) => {
             s.delete(`group-${g}`);
-            subjects.forEach((_, i) => { if (subjectGender[i] === g) s.delete(`subject-${i}`); });
+            subjects.forEach((_, i) => {
+              if (subjectGender[i] === g) s.delete(`subject-${i}`);
+            });
           });
           return s;
         });
@@ -253,7 +296,9 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
           const next = { ...prev };
           matchingGenders.forEach((g) => {
             next[`group-${g}`] = presetSliders;
-            subjects.forEach((_, i) => { if (subjectGender[i] === g) next[`subject-${i}`] = nullLayer(); });
+            subjects.forEach((_, i) => {
+              if (subjectGender[i] === g) next[`subject-${i}`] = nullLayer();
+            });
           });
           return next;
         });
@@ -263,7 +308,11 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
       }
     } else if (chip === "Individual" && faceIndex !== undefined) {
       setLocalPresets((prev) => ({ ...prev, [`subject-${faceIndex}`]: value }));
-      setCustomized((prev) => { const s = new Set(prev); s.delete(`subject-${faceIndex}`); return s; });
+      setCustomized((prev) => {
+        const s = new Set(prev);
+        s.delete(`subject-${faceIndex}`);
+        return s;
+      });
       setSliderLayers((prev) => ({ ...prev, [`subject-${faceIndex}`]: presetSliders }));
     } else {
       setLocalPresets((prev) => {
@@ -276,7 +325,9 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
       setCustomized((prev) => {
         const s = new Set(prev);
         s.delete(`group-${chip}`);
-        subjects.forEach((_, i) => { if (subjectGender[i] === chip) s.delete(`subject-${i}`); });
+        subjects.forEach((_, i) => {
+          if (subjectGender[i] === chip) s.delete(`subject-${i}`);
+        });
         return s;
       });
       setSliderLayers((prev) => {
@@ -290,9 +341,12 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
   };
 
   const singleFace = selectedFaces.size === 1 ? Array.from(selectedFaces)[0] : undefined;
-  const effectivePreset = selectedModelFace !== null
-    ? resolvePreset("Individual", undefined)
-    : selectedChip ? resolvePreset(selectedChip, singleFace) : null;
+  const effectivePreset =
+    selectedModelFace !== null
+      ? resolvePreset("Individual", undefined)
+      : selectedChip
+        ? resolvePreset(selectedChip, singleFace)
+        : null;
 
   const currentContextKey =
     selectedModelFace !== null
@@ -310,7 +364,7 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
         const v2 = sliderLayers[`group-${category}`]?.[sIdx]?.[sliderIdx];
         if (v2 !== null && v2 !== undefined) return v2;
       }
-      const v3 = sliderLayers['group-All Subjects']?.[sIdx]?.[sliderIdx];
+      const v3 = sliderLayers["group-All Subjects"]?.[sIdx]?.[sliderIdx];
       return v3 !== null && v3 !== undefined ? v3 : 0;
     }
     const keys: string[] = [];
@@ -340,7 +394,11 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
       return { ...prev, [currentContextKey]: layer };
     });
     setCustomized((prev) => new Set([...prev, currentContextKey]));
-    setLocalPresets((prev) => { const next = { ...prev }; delete next[currentContextKey]; return next; });
+    setLocalPresets((prev) => {
+      const next = { ...prev };
+      delete next[currentContextKey];
+      return next;
+    });
   };
 
   const resetSection = (sIdx: number) => {
@@ -350,7 +408,11 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
       return { ...prev, [currentContextKey]: layer };
     });
     setCustomized((prev) => new Set([...prev, currentContextKey]));
-    setLocalPresets((prev) => { const next = { ...prev }; delete next[currentContextKey]; return next; });
+    setLocalPresets((prev) => {
+      const next = { ...prev };
+      delete next[currentContextKey];
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -419,12 +481,13 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
                     }
                   }
                 }}
-                className={`h-6 px-2 text-[13px] leading-4 rounded border transition-colors ${!enabled
-                  ? "border-transparent bg-[#242424] text-[#474747] cursor-not-allowed"
-                  : selected
-                    ? "border-[#777] bg-[#242424] text-[#e2e2e2]"
-                    : "border-transparent bg-[#242424] text-[#ababab] hover:text-[#e2e2e2]"
-                  }`}
+                className={`h-6 px-2 text-[13px] leading-4 rounded border transition-colors ${
+                  !enabled
+                    ? "border-transparent bg-[#242424] text-[#474747] cursor-not-allowed"
+                    : selected
+                      ? "border-[#777] bg-[#242424] text-[#e2e2e2]"
+                      : "border-transparent bg-[#242424] text-[#ababab] hover:text-[#e2e2e2]"
+                }`}
               >
                 {label}
               </button>
@@ -446,37 +509,41 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
           </div>
         )}
 
-        {selectedChip === "Individual" && !isModelDetecting && (() => {
-          if (!modelClusterIds.length || !modelSubjects?.length) return null;
-          return (
-            <div className="grid grid-cols-5 gap-2">
-              {modelClusterIds.map((cid) => {
-                const subject = modelSubjects.find((s) => s.id === cid);
-                if (!subject) return null;
-                const isSelected = selectedModelFace === cid;
-                return (
-                  <div key={cid} className="flex flex-col items-center gap-0.5">
-                    <button
-                      onClick={() => toggleModelFace(cid)}
-                      className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${isSelected ? "border-white" : "border-[#47474700] hover:border-[#5e5e5e]"}`}
-                    >
-                      <img
-                        src={subject.keyFaceDataUrl}
-                        alt={`Person ${cid + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
+        {selectedChip === "Individual" &&
+          !isModelDetecting &&
+          (() => {
+            if (!modelClusterIds.length || !modelSubjects?.length) return null;
+            return (
+              <div className="grid grid-cols-5 gap-2">
+                {modelClusterIds.map((cid) => {
+                  const subject = modelSubjects.find((s) => s.id === cid);
+                  if (!subject) return null;
+                  const isSelected = selectedModelFace === cid;
+                  return (
+                    <div key={cid} className="flex flex-col items-center gap-0.5">
+                      <button
+                        onClick={() => toggleModelFace(cid)}
+                        className={`w-14 h-14 rounded-full overflow-hidden border-[1.5px] transition-colors ${isSelected ? "border-white" : "border-[#47474700] hover:border-[#5e5e5e]"}`}
+                      >
+                        <img
+                          src={subject.keyFaceDataUrl}
+                          alt={`Person ${cid + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
         {/* Preset section */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 my-2">
           <div ref={presetRowRef} className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] leading-3">Preset</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] leading-3">
+              Preset
+            </span>
             <PresetDropdown
               compact
               anchorRef={presetRowRef}
@@ -487,7 +554,9 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
                   : !selectedChip
                     ? undefined
                     : selectedChip === "Individual"
-                      ? (singleFace !== undefined ? subjectGender[singleFace] : undefined)
+                      ? singleFace !== undefined
+                        ? subjectGender[singleFace]
+                        : undefined
                       : selectedChip
               }
               onChange={(v) => {
@@ -495,8 +564,15 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
                   const preset = findPreset(v);
                   const presetSliders = preset ? presetToSectionValues(preset) : nullLayer();
                   setLocalPresets((prev) => ({ ...prev, [`model-${selectedModelFace}`]: v }));
-                  setCustomized((prev) => { const s = new Set(prev); s.delete(`model-${selectedModelFace}`); return s; });
-                  setSliderLayers((prev) => ({ ...prev, [`model-${selectedModelFace}`]: presetSliders }));
+                  setCustomized((prev) => {
+                    const s = new Set(prev);
+                    s.delete(`model-${selectedModelFace}`);
+                    return s;
+                  });
+                  setSliderLayers((prev) => ({
+                    ...prev,
+                    [`model-${selectedModelFace}`]: presetSliders,
+                  }));
                 } else {
                   if (!selectedChip) return;
                   setPresetForChip(selectedChip, v, singleFace);
@@ -504,11 +580,14 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
               }}
             />
           </div>
-          <SliderRow
-            label="Strength"
-            value={presetStrength}
-            onChange={setPresetStrength}
-          />
+          {effectivePreset && (
+            <SliderRow
+              label="Strength"
+              value={presetStrength}
+              onChange={setPresetStrength}
+              noPinArea
+            />
+          )}
         </div>
 
         <div className="h-[1px] mt-[-8px] w-full bg-[#e2e2e20d]" />
@@ -524,42 +603,20 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
         </div>
       )}
 
-      {/* ── Scrollable section: pinned card + section cards ── */}
+      {/* ── Scrollable section: section cards + pinned card ── */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-5 pb-2 flex flex-col gap-4"
         style={{ scrollbarWidth: "none" }}
         onScroll={checkBottom}
       >
-        {/* Pinned card */}
-        {pinnedSliders.size > 0 && (
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2 h-6">
-              <div className="w-3 h-3 flex items-center justify-center shrink-0">
-                <PushPin size={12} weight="fill" className="text-[#777]" />
-              </div>
-              <span className="flex-1 text-[11px] font-semibold text-[#ababab] uppercase tracking-[0.5px]">Favorite Sliders</span>
-            </div>
-            <div className="pt-2.5 pb-2.5 flex flex-col gap-3">
-              {Array.from(pinnedSliders).map((key) => {
-                const [sIdx, sliderIdx] = key.split(":").map(Number);
-                return (
-                  <SliderRow
-                    key={key}
-                    label={SECTIONS[sIdx].sliders[sliderIdx].name}
-                    value={effectiveSectionValues[sIdx][sliderIdx]}
-                    onChange={(v) => setSlider(sIdx, sliderIdx, v)}
-                    pinned
-                    onTogglePin={() => togglePin(sIdx, sliderIdx)}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Sortable section groups */}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+        >
           <SortableContext items={sectionOrder.map(String)} strategy={verticalListSortingStrategy}>
             {sectionOrder.map((sIdx) => {
               const section = SECTIONS[sIdx];
@@ -580,6 +637,14 @@ const SubjectTab = ({ onScrollChange, currentImageIndex = 0, syncedPresets = {},
             })}
           </SortableContext>
         </DndContext>
+
+        {/* Pinned card — at bottom */}
+        <PinnedSlidersCard
+          pinnedSliders={pinnedSliders}
+          onTogglePin={togglePin}
+          getValue={(sIdx, sliderIdx) => effectiveSectionValues[sIdx][sliderIdx]}
+          onChange={(sIdx, sliderIdx, v) => setSlider(sIdx, sliderIdx, v)}
+        />
       </div>
     </div>
   );

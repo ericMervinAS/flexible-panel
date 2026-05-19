@@ -26,6 +26,7 @@ interface SliderRowProps {
   onChange: (value: number) => void;
   pinned?: boolean;
   onTogglePin?: () => void;
+  noPinArea?: boolean;
   badge?: BadgeType;
   badgeLabel?: string;
 }
@@ -41,6 +42,7 @@ const SliderRow = ({
   onChange,
   pinned,
   onTogglePin,
+  noPinArea,
   badge,
   badgeLabel,
 }: SliderRowProps) => {
@@ -112,16 +114,16 @@ const SliderRow = ({
       onMouseEnter={() => setRowHovered(true)}
       onMouseLeave={() => setRowHovered(false)}
     >
-      {/* {onTogglePin ? (
+      {onTogglePin ? (
         <button
           onClick={onTogglePin}
           className={`mr-1.5 w-3 h-3 flex items-center justify-center transition-colors shrink-0 ${pinned ? "text-[#e2e2e2] hover:text-[#ababab]" : "text-[#474747] hover:text-[#ababab] opacity-0 group-hover:opacity-100"}`}
         >
           <PushPinSimpleIcon size={12} weight="fill" />
         </button>
-      ) : (
+      ) : !noPinArea ? (
         <div className="ml-1.5 w-4 shrink-0" />
-      )} */}
+      ) : null}
 
       <div className="w-[106px] shrink-0 flex items-center gap-1">
         <span

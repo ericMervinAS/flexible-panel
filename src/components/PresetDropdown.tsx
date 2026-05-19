@@ -17,9 +17,23 @@ interface PresetDropdownProps {
   compact?: boolean;
   /** When compact, use this ref as the menu anchor for width/position (e.g. the full preset row) */
   anchorRef?: React.RefObject<HTMLElement>;
+  /** Override the dropdown menu width in px */
+  menuWidth?: number;
+  /** Override the compact trigger font size (default "12px") */
+  triggerTextSize?: string;
 }
 
-const PresetDropdown = ({ value, onChange, onNewPreset, onDeletePreset, genderFilter, compact, anchorRef }: PresetDropdownProps) => {
+const PresetDropdown = ({
+  value,
+  onChange,
+  onNewPreset,
+  onDeletePreset,
+  genderFilter,
+  compact,
+  anchorRef,
+  menuWidth,
+  triggerTextSize = "12px",
+}: PresetDropdownProps) => {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -46,7 +60,7 @@ const PresetDropdown = ({ value, onChange, onNewPreset, onDeletePreset, genderFi
       position: "fixed",
       top: rect.bottom + 4,
       left: rect.left,
-      width: rect.width,
+      width: menuWidth ?? rect.width,
       zIndex: 9999,
     });
   };
@@ -78,7 +92,8 @@ const PresetDropdown = ({ value, onChange, onNewPreset, onDeletePreset, genderFi
         <button
           ref={triggerRef}
           onClick={() => setOpen((prev) => !prev)}
-          className="flex items-center gap-1 text-[12px] font-medium text-[#ababab] hover:text-[#e2e2e2] transition-colors"
+          className="flex items-center gap-1 font-medium text-[#ababab] hover:text-[#e2e2e2] transition-colors"
+          style={{ fontSize: triggerTextSize }}
         >
           <span>{value || "Select Preset"}</span>
           <CaretDownIcon className="w-4 h-4 shrink-0" />
@@ -100,7 +115,10 @@ const PresetDropdown = ({ value, onChange, onNewPreset, onDeletePreset, genderFi
                     </span>
                     {section.title === "Custom Presets" && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); onNewPreset?.(); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onNewPreset?.();
+                        }}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#333] hover:bg-[#3d3d3d] text-[#e2e2e2] text-[12px] font-medium transition-colors"
                       >
                         + New
@@ -117,15 +135,25 @@ const PresetDropdown = ({ value, onChange, onNewPreset, onDeletePreset, genderFi
                       >
                         <button
                           disabled={!applicable}
-                          onClick={() => { onChange(opt.name); setOpen(false); }}
+                          onClick={() => {
+                            onChange(opt.name);
+                            setOpen(false);
+                          }}
                           className={`flex-1 text-left px-2 py-2.5 flex flex-col gap-0.5 ${applicable ? "cursor-pointer" : "cursor-not-allowed"}`}
                         >
-                          <span className="text-[14px] font-medium text-[#e2e2e2] leading-5">{opt.name}</span>
-                          <span className="text-[12px] text-[#777] leading-4">{opt.tags.join(" · ")}</span>
+                          <span className="text-[14px] font-medium text-[#e2e2e2] leading-5">
+                            {opt.name}
+                          </span>
+                          <span className="text-[12px] text-[#777] leading-4">
+                            {opt.tags.join(" · ")}
+                          </span>
                         </button>
                         {isCustom && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); onDeletePreset?.(opt.name); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeletePreset?.(opt.name);
+                            }}
                             className="opacity-0 group-hover:opacity-100 shrink-0 mr-2 p-1 rounded text-[#555] hover:text-[#e2e2e2] transition-all"
                           >
                             <TrashIcon className="w-4 h-4" />
@@ -170,7 +198,10 @@ const PresetDropdown = ({ value, onChange, onNewPreset, onDeletePreset, genderFi
                   </span>
                   {section.title === "Custom Presets" && onNewPreset && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); onNewPreset(); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onNewPreset();
+                      }}
                       className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#333] hover:bg-[#3d3d3d] text-[#e2e2e2] text-[12px] font-medium transition-colors"
                     >
                       + New
