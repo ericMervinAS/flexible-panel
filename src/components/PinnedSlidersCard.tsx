@@ -1,4 +1,3 @@
-import { PushPin } from "@phosphor-icons/react";
 import { SECTIONS } from "@/data/presetMapping";
 import SliderRow from "./SliderRow";
 
@@ -19,15 +18,7 @@ const PinnedSlidersCard = ({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center gap-2 h-6">
-        <div className="w-3 h-3 flex items-center justify-center shrink-0">
-          <PushPin size={12} weight="fill" className="text-[#777]" />
-        </div>
-        <span className="flex-1 text-[11px] font-semibold text-[#ababab] uppercase tracking-[0.5px]">
-          Favorite Sliders
-        </span>
-      </div>
-      <div className="pt-2.5 pb-2.5 flex flex-col gap-3">
+      <div className="pt-0 pb-0 flex flex-col gap-3">
         {Array.from(pinnedSliders).map((key) => {
           const [sIdx, sliderIdx] = key.split(":").map(Number);
           const section = SECTIONS[sIdx];

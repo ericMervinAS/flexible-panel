@@ -57,11 +57,13 @@ const PresetDropdown = ({
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
     const width = menuWidth ?? rect.width;
-    const wouldOverflow = rect.left + width > window.innerWidth - 8;
+    // Compact mode without an anchorRef means the trigger is a small right-side button —
+    // right-align the menu to its right edge so it doesn't overflow the parent container.
+    const rightAlign = compact && !anchorRef;
     setMenuStyle({
       position: "fixed",
       top: rect.bottom + 4,
-      ...(wouldOverflow
+      ...(rightAlign
         ? { right: window.innerWidth - rect.right, width }
         : { left: rect.left, width }),
       zIndex: 9999,
@@ -116,11 +118,11 @@ const PresetDropdown = ({
                     <span className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#777] leading-4">
                       {section.title}
                     </span>
-                    {section.title === "Custom Presets" && (
+                    {section.title === "Custom Presets" && onNewPreset && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onNewPreset?.();
+                          onNewPreset();
                         }}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#333] hover:bg-[#3d3d3d] text-[#e2e2e2] text-[12px] font-medium transition-colors"
                       >

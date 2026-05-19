@@ -610,6 +610,12 @@ const SubjectTab = ({
         style={{ scrollbarWidth: "none" }}
         onScroll={checkBottom}
       >
+        <PinnedSlidersCard
+          pinnedSliders={pinnedSliders}
+          onTogglePin={togglePin}
+          getValue={(sIdx, sliderIdx) => effectiveSectionValues[sIdx][sliderIdx]}
+          onChange={(sIdx, sliderIdx, v) => setSlider(sIdx, sliderIdx, v)}
+        />
         {/* Sortable section groups */}
         <DndContext
           sensors={sensors}
@@ -637,14 +643,6 @@ const SubjectTab = ({
             })}
           </SortableContext>
         </DndContext>
-
-        {/* Pinned card — at bottom */}
-        <PinnedSlidersCard
-          pinnedSliders={pinnedSliders}
-          onTogglePin={togglePin}
-          getValue={(sIdx, sliderIdx) => effectiveSectionValues[sIdx][sliderIdx]}
-          onChange={(sIdx, sliderIdx, v) => setSlider(sIdx, sliderIdx, v)}
-        />
       </div>
     </div>
   );
