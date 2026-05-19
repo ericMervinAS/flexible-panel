@@ -17,8 +17,7 @@ import {
   LockSimple,
   ShieldCheck,
   ArrowRight,
-  MagnifyingGlassIcon,
-  CropSimple,
+  CropIcon,
 } from "@phosphor-icons/react";
 import Accordion from "../../Accordion";
 import PresetDropdown from "../../PresetDropdown";
@@ -214,6 +213,8 @@ const ProfileDropdown = ({ value, onChange }: ProfileDropdownProps) => {
     };
   }, [open]);
 
+  const isCropOnly = value === "Crop & Straighten only";
+
   return (
     <div ref={containerRef} className="w-full">
       {/* Trigger */}
@@ -221,13 +222,19 @@ const ProfileDropdown = ({ value, onChange }: ProfileDropdownProps) => {
         onClick={() => setOpen((p) => !p)}
         className="w-full flex items-center gap-3 px-3 py-2 bg-[#1c1c1c] border border-[#303030] rounded-[8px] hover:border-[#474747] transition-colors"
       >
-        <ProfileThumb img={selectedProfile?.img ?? null} size="sm" />
+        {isCropOnly ? (
+          <div className="w-[56px] h-[38px] rounded-[4px] bg-[#2a2a2a] flex items-center justify-center shrink-0">
+            <CropIcon size={18} className="text-[#777]" />
+          </div>
+        ) : selectedProfile ? (
+          <ProfileThumb img={selectedProfile.img} size="sm" />
+        ) : null}
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <LrcBadge />
+          {(isCropOnly || selectedProfile) && !isCropOnly && <LrcBadge />}
           <span className="text-[14px] font-medium text-[#e2e2e2] flex-1 truncate text-left">
-            {selectedProfile?.name ?? "Select a profile"}
+            {isCropOnly ? "Crop & Straighten only" : (selectedProfile?.name ?? "Select a profile")}
           </span>
-          {selectedProfile && <FormatBadge format={selectedProfile.format} />}
+          {selectedProfile && !isCropOnly && <FormatBadge format={selectedProfile.format} />}
         </div>
         <CaretDown
           className={`w-4 h-4 shrink-0 text-[#777] transition-transform ${open ? "rotate-180" : ""}`}
@@ -242,24 +249,15 @@ const ProfileDropdown = ({ value, onChange }: ProfileDropdownProps) => {
             style={{ ...menuStyle, scrollbarWidth: "none" } as React.CSSProperties}
             className="bg-[#1e1e1e] border border-[#303030] rounded-[10px] p-1 flex flex-col max-h-[420px] overflow-y-auto shadow-xl"
           >
-            {/* Explore */}
-            <button
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-[6px] hover:bg-white/5 transition-colors"
-            >
-              <MagnifyingGlassIcon size={16} className="text-[#777] shrink-0" />
-              <span className="text-[14px] text-[#ababab]">Explore AI Profiles…</span>
-            </button>
-
             {/* Crop & Straighten */}
             <button
               onClick={() => {
                 onChange("Crop & Straighten only");
                 setOpen(false);
               }}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-[6px] hover:bg-white/5 transition-colors"
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-[6px] transition-colors ${isCropOnly ? "bg-white/5" : "hover:bg-white/5"}`}
             >
-              <CropSimple size={16} className="text-[#777] shrink-0" />
+              <CropIcon size={16} className="text-[#777] shrink-0" />
               <span className="text-[14px] text-[#ababab]">Crop &amp; Straighten only</span>
             </button>
 
@@ -820,6 +818,12 @@ const TetherSetupModal = ({
   const cameraSpec = getCameraSpec(cameraName);
   const formatOptions = getFormatOptions(cameraSpec);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [aiCropping, setAiCropping] = useState(true);
+  const [cropStyle, setCropStyle] = useState("Loose");
+  const [cropOrientation, setCropOrientation] = useState("Default");
+  const [aiStraightening, setAiStraightening] = useState(true);
+  const [aiMasking, setAiMasking] = useState(true);
+  const [maskMode, setMaskMode] = useState("Subject Mask with Edits");
 
   // Extract the user's prefix from a {Prefix}_… template (if present).
   const prefixMatch = namingTemplate.match(/\{Prefix:([^}]*)\}/);
@@ -950,17 +954,57 @@ const TetherSetupModal = ({
 
         {/* Editing Profile */}
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col items-start gap-2 justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
               Editing Profile
             </span>
-            <ProfileDropdown
-              compact
-              menuWidth={300}
-              triggerTextSize="13px"
-              value={editingProfile}
-              onChange={onEditingProfileChange}
-            />
+            <ProfileDropdown value={editingProfile} onChange={onEditingProfileChange} />
+            {editingProfile && (
+              <div className="flex flex-col gap-3 mt-1">
+                {/* AI Cropping */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] font-medium text-[#e2e2e2]">AI Cropping</span>
+                    <button onClick={() => setAiCropping((p) => !p)} className="shrink-0">
+                      <div className="relative w-8 h-[18px] rounded-full transition-colors" style={{ backgroundColor: aiCropping ? "#2563eb" : "#383838" }}>
+                        <div style={{ transform: aiCropping ? "translateX(18px)" : "translateX(2px)" }} className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform" />
+                      </div>
+                    </button>
+                  </div>
+                  {aiCropping && (
+                    <div className="flex gap-2">
+                      <InlineSelect value={cropStyle} options={["Loose", "Balanced", "Tight"] as const} onChange={setCropStyle} />
+                      <InlineSelect value={cropOrientation} options={["Default", "Portrait", "Landscape"] as const} onChange={setCropOrientation} />
+                    </div>
+                  )}
+                </div>
+                {/* AI Straightening */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[13px] font-medium text-[#e2e2e2]">AI Straightening</span>
+                  <button onClick={() => setAiStraightening((p) => !p)} className="shrink-0">
+                    <div className="relative w-8 h-[18px] rounded-full transition-colors" style={{ backgroundColor: aiStraightening ? "#2563eb" : "#383838" }}>
+                      <div style={{ transform: aiStraightening ? "translateX(18px)" : "translateX(2px)" }} className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform" />
+                    </div>
+                  </button>
+                </div>
+                {/* AI Masking — not for Crop & Straighten only */}
+                {editingProfile !== "Crop & Straighten only" && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] font-medium text-[#e2e2e2]">AI Masking</span>
+                      <button onClick={() => setAiMasking((p) => !p)} className="shrink-0">
+                        <div className="relative w-8 h-[18px] rounded-full transition-colors" style={{ backgroundColor: aiMasking ? "#2563eb" : "#383838" }}>
+                          <div style={{ transform: aiMasking ? "translateX(18px)" : "translateX(2px)" }} className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform" />
+                        </div>
+                      </button>
+                    </div>
+                    {aiMasking && (
+                      <InlineSelect value={maskMode} options={["Subject Mask with Edits", "Subject Mask", "Background Mask"] as const} onChange={setMaskMode} />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1128,16 +1172,14 @@ const TetheringTab = ({
     new Set(),
     { serialize: (s) => [...s], deserialize: (a) => new Set(a as string[]) }
   );
-  const [favValues, setFavValues] = useSessionState<Record<string, number>>(
-    "favorites:values",
-    {}
-  );
+  const [favValues, setFavValues] = useSessionState<Record<string, number>>("favorites:values", {});
 
   const togglePin = (sIdx: number, sliderIdx: number) => {
     const key = `${sIdx}:${sliderIdx}`;
     setPinnedSliders((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -1164,6 +1206,12 @@ const TetheringTab = ({
   const [shootMode, setShootMode] = useState<string>(SHOOT_OPTIONS[0]);
   const [namingTemplate, setNamingTemplate] = useState("{Date}_{Counter:0001}");
   const [autoAdvance, setAutoAdvance] = useState(true);
+  const [tabAiCropping, setTabAiCropping] = useState(true);
+  const [tabCropStyle, setTabCropStyle] = useState("Loose");
+  const [tabCropOrientation, setTabCropOrientation] = useState("Default");
+  const [tabAiStraightening, setTabAiStraightening] = useState(true);
+  const [tabAiMasking, setTabAiMasking] = useState(true);
+  const [tabMaskMode, setTabMaskMode] = useState("Subject Mask with Edits");
   const [draggingCard, setDraggingCard] = useState<string | null>(null);
   const [autoAdvanceHovered, setAutoAdvanceHovered] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -1347,16 +1395,59 @@ const TetheringTab = ({
                 <span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>
               }
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] leading-3">
-                  Profile
-                </span>
-                <ProfileDropdown
-                  compact
-                  menuWidth={300}
-                  value={editingProfile}
-                  onChange={setEditingProfile}
-                />
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] leading-3">
+                    Profile
+                  </span>
+                  <ProfileDropdown value={editingProfile} onChange={setEditingProfile} />
+                </div>
+                {editingProfile && (
+                  <div className="flex flex-col gap-3">
+                    {/* AI Cropping */}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[13px] font-medium text-[#e2e2e2]">AI Cropping</span>
+                        <button onClick={() => setTabAiCropping((p) => !p)} className="shrink-0">
+                          <div className="relative w-8 h-[18px] rounded-full transition-colors" style={{ backgroundColor: tabAiCropping ? "#2563eb" : "#383838" }}>
+                            <div style={{ transform: tabAiCropping ? "translateX(18px)" : "translateX(2px)" }} className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform" />
+                          </div>
+                        </button>
+                      </div>
+                      {tabAiCropping && (
+                        <div className="flex gap-2">
+                          <InlineSelect value={tabCropStyle} options={["Loose", "Balanced", "Tight"] as const} onChange={setTabCropStyle} />
+                          <InlineSelect value={tabCropOrientation} options={["Default", "Portrait", "Landscape"] as const} onChange={setTabCropOrientation} />
+                        </div>
+                      )}
+                    </div>
+                    {/* AI Straightening */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] font-medium text-[#e2e2e2]">AI Straightening</span>
+                      <button onClick={() => setTabAiStraightening((p) => !p)} className="shrink-0">
+                        <div className="relative w-8 h-[18px] rounded-full transition-colors" style={{ backgroundColor: tabAiStraightening ? "#2563eb" : "#383838" }}>
+                          <div style={{ transform: tabAiStraightening ? "translateX(18px)" : "translateX(2px)" }} className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform" />
+                        </div>
+                      </button>
+                    </div>
+                    {/* AI Masking */}
+                    {editingProfile !== "Crop & Straighten only" && (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[13px] font-medium text-[#e2e2e2]">AI Masking</span>
+                          <button onClick={() => setTabAiMasking((p) => !p)} className="shrink-0">
+                            <div className="relative w-8 h-[18px] rounded-full transition-colors" style={{ backgroundColor: tabAiMasking ? "#2563eb" : "#383838" }}>
+                              <div style={{ transform: tabAiMasking ? "translateX(18px)" : "translateX(2px)" }} className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform" />
+                            </div>
+                          </button>
+                        </div>
+                        {tabAiMasking && (
+                          <InlineSelect value={tabMaskMode} options={["Subject Mask with Edits", "Subject Mask", "Background Mask"] as const} onChange={setTabMaskMode} />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </Accordion>
           </div>
@@ -1392,14 +1483,21 @@ const TetheringTab = ({
           {pinnedSliders.size > 0 && (
             <>
               <div className="h-px bg-[#e2e2e20d]" />
-              <PinnedSlidersCard
-                pinnedSliders={pinnedSliders}
-                onTogglePin={togglePin}
-                getValue={(sIdx, sliderIdx) => favValues[`${sIdx}:${sliderIdx}`] ?? 0}
-                onChange={(sIdx, sliderIdx, v) =>
-                  setFavValues((prev) => ({ ...prev, [`${sIdx}:${sliderIdx}`]: v }))
+              <Accordion
+                title="Edit Profile"
+                actions={
+                  <span className="text-[11px] font-medium text-[#777]">Auto Applied on next</span>
                 }
-              />
+              >
+                <PinnedSlidersCard
+                  pinnedSliders={pinnedSliders}
+                  onTogglePin={togglePin}
+                  getValue={(sIdx, sliderIdx) => favValues[`${sIdx}:${sliderIdx}`] ?? 0}
+                  onChange={(sIdx, sliderIdx, v) =>
+                    setFavValues((prev) => ({ ...prev, [`${sIdx}:${sliderIdx}`]: v }))
+                  }
+                />
+              </Accordion>
             </>
           )}
         </>

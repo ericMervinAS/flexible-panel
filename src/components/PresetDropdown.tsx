@@ -53,14 +53,17 @@ const PresetDropdown = ({
   ].filter((s) => s.options.length > 0);
 
   const updatePosition = () => {
-    const anchor = compact ? (anchorRef?.current ?? containerRef.current) : triggerRef.current;
+    const anchor = compact ? (anchorRef?.current ?? triggerRef.current) : triggerRef.current;
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
+    const width = menuWidth ?? rect.width;
+    const wouldOverflow = rect.left + width > window.innerWidth - 8;
     setMenuStyle({
       position: "fixed",
       top: rect.bottom + 4,
-      left: rect.left,
-      width: menuWidth ?? rect.width,
+      ...(wouldOverflow
+        ? { right: window.innerWidth - rect.right, width }
+        : { left: rect.left, width }),
       zIndex: 9999,
     });
   };
