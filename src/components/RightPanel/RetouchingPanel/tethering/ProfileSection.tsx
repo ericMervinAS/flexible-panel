@@ -304,8 +304,8 @@ export const ProfileSection = ({
 }: ProfileSectionProps) => {
   const { isDual, rawLabel, jpegLabel } = parseDualFormat(fileFormat);
   const showTabs = alwaysShowTabs || isDual;
-  const tabRawLabel = isDual ? rawLabel : (rawFormatLabel || "RAW");
-  const tabJpegLabel = isDual ? jpegLabel : "JPEG";
+  const tabRawLabel = isDual ? "RAW" : (rawFormatLabel || "RAW");
+  const tabJpegLabel = "JPEG";
 
   useEffect(() => {
     if (!isDual && alwaysShowTabs) {

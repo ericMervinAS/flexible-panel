@@ -19,6 +19,7 @@ import type { Album } from "@/types/album";
 import { useAlbums } from "@/context/AlbumsContext";
 import heroPortrait from "../assets/UI/home-hero-portrait.png";
 import tetheringEntry from "../assets/UI/tethering-entry.png";
+import tetheringPortrait from "../assets/UI/home-tethering-portrait.png";
 import logoImg from "../assets/UI/logo.png";
 import userImg from "../assets/UI/user.png";
 
@@ -209,7 +210,7 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
               </div>
             </div>
 
-            <div
+            {/* <div
               onClick={() => onReady("tethering")}
               className="w-[380px] h-[144px] rounded-[10px] overflow-hidden relative shrink-0 hover:cursor-pointer"
               style={{
@@ -218,7 +219,6 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
                 backgroundPosition: "center top",
               }}
             >
-              {/* Left content */}
               <div className="absolute inset-0 flex flex-col justify-center px-4 py-3 w-[240px]">
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-1">
@@ -234,7 +234,7 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
                   </button>
                 </div>
               </div>
-            </div>
+            </div> */}
           </div>
 
           {/* My Albums heading */}
@@ -253,10 +253,10 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
         {/* Right Sidebar */}
         <div className="w-[361px] border-l border-[#1c1c1c] flex flex-col gap-2 p-2 overflow-y-auto shrink-0">
           {/* Tethering promo card */}
-          {/* <div
+          <div
             className="rounded-[4px] px-5 relative overflow-hidden shrink-0 flex items-center"
             style={{
-              minHeight: "160px",
+              minHeight: "140px",
               backgroundImage: `url(${tetheringPortrait})`,
               backgroundSize: "cover",
               backgroundPosition: "right top",
@@ -271,14 +271,14 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleStartTethering}
+                  onClick={() => onReady("tethering")}
                   className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
                 >
                   Try Now
                 </button>
               </div>
             </div>
-          </div> */}
+          </div>
 
           {/* You & Aftershoot stats card */}
           <div className="bg-[#1c1c1c] rounded-[4px] p-5 flex flex-col gap-6 shrink-0">

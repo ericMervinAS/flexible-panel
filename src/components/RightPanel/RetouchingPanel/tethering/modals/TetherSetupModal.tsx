@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { FolderSimpleIcon, CaretDown, X } from "@phosphor-icons/react";
 import PresetDropdown from "@/components/PresetDropdown";
 import SliderRow from "@/components/SliderRow";
-import { getCameraSpec, getFormatOptions } from "../constants";
+import { getCameraSpec, getFormatOptions, parseDualFormat } from "../constants";
 import { InlineSelect } from "../InlineSelect";
 import { ProfileSection, type ProfileSectionProps } from "../ProfileSection";
 
@@ -18,6 +18,10 @@ interface TetherSetupModalProps extends Omit<ProfileSectionProps, "alwaysShowTab
   retouchPresetStrength: number;
   onRetouchPresetStrengthChange: (v: number) => void;
   onFileFormatChange: (v: string) => void;
+  importRaw: boolean;
+  onImportRawChange: (v: boolean) => void;
+  importJpeg: boolean;
+  onImportJpegChange: (v: boolean) => void;
   namingTemplate: string;
   onNamingTemplateChange: (v: string) => void;
   destination: string;
@@ -58,6 +62,10 @@ export const TetherSetupModal = ({
   onRetouchPresetStrengthChange,
   fileFormat,
   onFileFormatChange,
+  importRaw,
+  onImportRawChange,
+  importJpeg,
+  onImportJpegChange,
   namingTemplate,
   onNamingTemplateChange,
   destination,
@@ -67,6 +75,16 @@ export const TetherSetupModal = ({
   const isPreferences = mode === "preferences";
   const cameraSpec = getCameraSpec(cameraName);
   const formatOptions = getFormatOptions(cameraSpec);
+  const { isDual, rawLabel, jpegLabel } = parseDualFormat(fileFormat);
+  const isJpegOnly = !isDual && fileFormat.toLowerCase().startsWith("jpeg");
+  const isRawOnly = !isDual && !isJpegOnly;
+  const effectiveFileFormat = (() => {
+    if (!isDual) return fileFormat;
+    if (importRaw && importJpeg) return fileFormat;
+    if (importRaw) return rawLabel;
+    if (importJpeg) return jpegLabel;
+    return fileFormat;
+  })();
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const prefixMatch = namingTemplate.match(/\{Prefix:([^}]*)\}/);
@@ -179,12 +197,90 @@ export const TetherSetupModal = ({
           <InlineSelect value={fileFormat} options={formatOptions} onChange={onFileFormatChange} />
         </div>
 
+        {/* Import */}
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
+            Import
+          </span>
+          <div className="flex items-center gap-3">
+            {/* RAW checkbox */}
+            <button
+              onClick={() => isDual && onImportRawChange(!importRaw)}
+              disabled={!isDual}
+              className={`flex items-center gap-1.5 ${!isDual && isJpegOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
+            >
+              <div
+                className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
+                  isRawOnly || (isDual && importRaw)
+                    ? "bg-[#2563eb] border-[#2563eb]"
+                    : "border-[#444] bg-transparent"
+                }`}
+              >
+                {(isRawOnly || (isDual && importRaw)) && (
+                  <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+                    <path
+                      d="M1 4L3.5 6.5L9 1"
+                      stroke="white"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+              </div>
+              <span
+                className={`text-[13px] font-medium ${!isDual && isJpegOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
+              >
+                {/* {rawLabel || cameraSpec.raw} */}
+                RAW
+              </span>
+            </button>
+
+            {/* JPEG checkbox */}
+            <button
+              onClick={() => isDual && onImportJpegChange(!importJpeg)}
+              disabled={!isDual}
+              className={`flex items-center gap-1.5 ${!isDual && isRawOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
+            >
+              <div
+                className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
+                  isJpegOnly || (isDual && importJpeg)
+                    ? "bg-[#2563eb] border-[#2563eb]"
+                    : "border-[#444] bg-transparent"
+                }`}
+              >
+                {(isJpegOnly || (isDual && importJpeg)) && (
+                  <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+                    <path
+                      d="M1 4L3.5 6.5L9 1"
+                      stroke="white"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+              </div>
+              <span
+                className={`text-[13px] font-medium ${!isDual && isRawOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
+              >
+                JPEG
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div className="h-px w-full bg-[#333]" />
+
         {/* Editing Profile */}
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
             Editing Profile
           </span>
-          <ProfileSection fileFormat={fileFormat} {...profileProps} />
+          <ProfileSection
+            fileFormat={effectiveFileFormat}
+            {...profileProps}
+          />
         </div>
 
         {/* Retouching Preset */}
@@ -196,6 +292,7 @@ export const TetherSetupModal = ({
             <PresetDropdown
               compact
               menuWidth={300}
+              triggerTextSize="13px"
               value={retouchPreset}
               onChange={(v) => onRetouchPresetChange(v)}
             />

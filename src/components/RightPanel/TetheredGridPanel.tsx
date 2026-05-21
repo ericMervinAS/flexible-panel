@@ -79,12 +79,12 @@ const TetheredGridPanel = ({
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Tab bar */}
       <div className="flex items-center justify-between px-5 pt-3 shrink-0">
-        <button onClick={() => handleTabChange("ai")} className={tabClass("ai")}>
+        {/* <button onClick={() => handleTabChange("ai")} className={tabClass("ai")}>
           AI
-        </button>
-        <button onClick={() => handleTabChange("tethering")} className={tabClass("tethering")}>
+        </button> */}
+        {/* <button onClick={() => handleTabChange("tethering")} className={tabClass("tethering")}>
           <CameraIcon size={16} />
-        </button>
+        </button> */}
       </div>
 
       {/* Tab content */}

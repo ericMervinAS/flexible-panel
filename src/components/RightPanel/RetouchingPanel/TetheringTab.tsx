@@ -93,6 +93,8 @@ const TetheringTab = ({
   const [focusMode, setFocusMode] = useState<string>(FOCUS_OPTIONS[0]);
   const [shootMode, setShootMode] = useState<string>(SHOOT_OPTIONS[0]);
   const [namingTemplate, setNamingTemplate] = useState("{Date}_{Counter:0001}");
+  const [importRaw, setImportRaw] = useState(true);
+  const [importJpeg, setImportJpeg] = useState(true);
   const [autoAdvance, setAutoAdvance] = useState(true);
   const [editEffectsMode, setEditEffectsMode] = useState<"Custom" | "Sync with Previous">("Custom");
   const [draggingCard, setDraggingCard] = useState<string | null>(null);
@@ -433,6 +435,10 @@ const TetheringTab = ({
           onNamingTemplateChange={setNamingTemplate}
           destination={destination}
           onDestinationChange={setDestination}
+          importRaw={importRaw}
+          onImportRawChange={setImportRaw}
+          importJpeg={importJpeg}
+          onImportJpegChange={setImportJpeg}
         />
       )}
     </div>
