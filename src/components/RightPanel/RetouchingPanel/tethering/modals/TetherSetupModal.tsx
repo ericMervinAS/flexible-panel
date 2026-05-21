@@ -207,7 +207,7 @@ export const TetherSetupModal = ({
             <button
               onClick={() => isDual && onImportRawChange(!importRaw)}
               disabled={!isDual}
-              className={`flex items-center gap-1.5 ${!isDual && isJpegOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
+              className={`flex items-center gap-1.5 ${isDual ? "cursor-pointer" : "cursor-not-allowed"} ${!isDual && isJpegOnly ? "opacity-30" : ""}`}
             >
               <div
                 className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
@@ -240,7 +240,7 @@ export const TetherSetupModal = ({
             <button
               onClick={() => isDual && onImportJpegChange(!importJpeg)}
               disabled={!isDual}
-              className={`flex items-center gap-1.5 ${!isDual && isRawOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
+              className={`flex items-center gap-1.5 ${isDual ? "cursor-pointer" : "cursor-not-allowed"} ${!isDual && isRawOnly ? "opacity-30" : ""}`}
             >
               <div
                 className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
