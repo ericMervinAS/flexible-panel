@@ -30,6 +30,7 @@ const AppContent = () => {
   const [initialTopTab, setInitialTopTab] = useState<string | undefined>();
   const [skipTetheringDetect, setSkipTetheringDetect] = useState(false);
   const [directPanel, setDirectPanel] = useState(false);
+  const [pendingDirectPanel, setPendingDirectPanel] = useState(false);
   const { addAlbum } = useAlbums();
 
   const handleImportReady = (folder: ImportFolder, topTab?: string) => {
@@ -46,8 +47,9 @@ const AppContent = () => {
     setScreen(folder);
   };
 
-  const handleTetheringStart = (skipDetect = false, isDirectPanel = false) => {
-    setSkipTetheringDetect(skipDetect);
+  const handleTetheringStart = (skipDetect = false) => {
+    const isDirectPanel = pendingDirectPanel;
+    setSkipTetheringDetect(isDirectPanel ? false : skipDetect);
     setDirectPanel(isDirectPanel);
     const id = `tether-${Date.now()}`;
     const now = new Date();
@@ -84,8 +86,8 @@ const AppContent = () => {
     <>
       {screen === "pending" ? (
         <ImportGate onReady={(src) => {
-          if (src === "tethering") setScreen("home");
-          else if (src === "tethering-direct") handleTetheringStart(false, true);
+          if (src === "tethering") { setPendingDirectPanel(false); setScreen("home"); }
+          else if (src === "tethering-direct") { setPendingDirectPanel(true); setScreen("home"); }
           else setScreen(src as Screen);
         }} />
       ) : screen === "home" ? (

@@ -329,12 +329,14 @@ const TetheringTab = ({
                   <LinkBreakIcon size={16} />
                 </button>
 
-                <button
-                  onClick={() => setShowSetup(true)}
-                  className="text-[#666] hover:text-[#ababab] transition-colors pl-2 py-2"
-                >
-                  <GearIcon size={16} />
-                </button>
+                {!directPanel && (
+                  <button
+                    onClick={() => setShowSetup(true)}
+                    className="text-[#666] hover:text-[#ababab] transition-colors pl-2 py-2"
+                  >
+                    <GearIcon size={16} />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -564,7 +566,7 @@ const TetheringTab = ({
               {directPanel && <div className="h-px bg-[#e2e2e20d]" />}
 
               {directPanel && (
-                <Accordion title="Save Options">
+                <Accordion title="File Options">
                   <div className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1.5">
                       <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
