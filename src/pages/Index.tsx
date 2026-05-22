@@ -64,13 +64,16 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
 
   const handleCapture = (
     autoAdvance: boolean,
-    captureInfo: { addRaw: boolean; addJpeg: boolean } = { addRaw: true, addJpeg: false }
+    captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt?: string } = { addRaw: true, addJpeg: false }
   ) => {
     const baseImage = sampleImages[Math.floor(Math.random() * sampleImages.length)];
     const newIndex = imagesLengthRef.current;
 
+    const rawExt = captureInfo.rawExt ?? "RAW";
+    const rawFilename = baseImage.filename.replace(/\.[^.]+$/, `.${rawExt}`);
+
     const toAdd: ImageData[] = [];
-    if (captureInfo.addRaw) toAdd.push({ ...baseImage, isRaw: true });
+    if (captureInfo.addRaw) toAdd.push({ ...baseImage, filename: rawFilename, isRaw: true });
     if (captureInfo.addJpeg) toAdd.push({ ...baseImage, isRaw: false });
 
     setImages((prev) => {
@@ -206,6 +209,7 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
                 filteredImages={filteredImages}
                 currentIndex={selectedIndex}
                 totalImages={images.length}
+                albumName={albumName ?? (importSource === "sample" ? "Juliana Wedding" : typeof importSource === "object" ? importSource.name : undefined)}
                 onSelectImage={setSelectedIndex}
                 onGoToGrid={() => setView("grid")}
                 isPatchActive={loupeActiveTab === "patch"}

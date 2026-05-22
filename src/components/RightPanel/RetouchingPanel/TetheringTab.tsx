@@ -57,7 +57,7 @@ interface TetheringTabProps {
   onStartTethering: () => void;
   onCancelSetup?: () => void;
   onCancelTethering?: () => void;
-  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean }) => void;
+  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt: string }) => void;
   skipDetect?: boolean;
   directPanel?: boolean;
 }
@@ -255,6 +255,7 @@ const TetheringTab = ({
             onCapture?.(autoAdvance, {
               addRaw: isDual ? importRaw : isRawOnly,
               addJpeg: isDual ? importJpeg : isJpegOnly,
+              rawExt: cameraSpec.raw,
             });
             return null;
           }
@@ -265,6 +266,7 @@ const TetheringTab = ({
       onCapture?.(autoAdvance, {
         addRaw: isDual ? importRaw : isRawOnly,
         addJpeg: isDual ? importJpeg : isJpegOnly,
+        rawExt: cameraSpec.raw,
       });
     }
   };

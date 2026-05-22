@@ -23,7 +23,7 @@ interface EditingPanelProps {
   isTethering?: boolean;
   showTetheringTab?: boolean;
   onStartTethering?: () => void;
-  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean }) => void;
+  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt: string }) => void;
   initialTab?: EditingTab;
   tetheringTabActive?: boolean;
   onTetheringTabActiveChange?: (active: boolean) => void;

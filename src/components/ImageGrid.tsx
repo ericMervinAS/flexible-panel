@@ -11,6 +11,18 @@ export interface ImageData {
   stars: number;
   colorTag: ColorTag;
   isRaw?: boolean;
+  // EXIF metadata
+  camera?: string;
+  lens?: string;
+  shutterSpeed?: string;
+  aperture?: string;
+  iso?: number;
+  focalLength?: string;
+  captureTime?: string;
+  captureDate?: string;
+  width?: number;
+  height?: number;
+  fileSize?: number;
 }
 
 const sampleModules = import.meta.glob(
@@ -79,13 +91,40 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
       files.map(async (file): Promise<ImageData> => {
         const src = URL.createObjectURL(file);
         let stars = 0;
+        let camera: string | undefined;
+        let lens: string | undefined;
+        let shutterSpeed: string | undefined;
+        let aperture: string | undefined;
+        let iso: number | undefined;
+        let focalLength: string | undefined;
+        let captureTime: string | undefined;
+        let captureDate: string | undefined;
+        const fileSize = file.size;
         try {
-          const meta = await exifr.parse(file, { xmp: true });
+          const meta = await exifr.parse(file, { xmp: true, exif: true, tiff: true });
           if (typeof meta?.Rating === "number") {
             stars = Math.min(5, Math.max(0, Math.round(meta.Rating)));
           }
+          const make = meta?.Make?.trim();
+          const model = meta?.Model?.trim();
+          if (make && model) camera = model.startsWith(make) ? model : `${make} ${model}`;
+          else camera = model ?? make;
+          lens = meta?.LensModel?.trim() ?? meta?.Lens?.trim();
+          if (typeof meta?.ExposureTime === "number" && meta.ExposureTime > 0) {
+            shutterSpeed = meta.ExposureTime < 1
+              ? `1 / ${Math.round(1 / meta.ExposureTime)}s`
+              : `${meta.ExposureTime}s`;
+          }
+          if (typeof meta?.FNumber === "number") aperture = `f/${meta.FNumber}`;
+          if (typeof meta?.ISO === "number") iso = meta.ISO;
+          if (typeof meta?.FocalLength === "number") focalLength = `${Math.round(meta.FocalLength)} mm`;
+          const dt: Date | undefined = meta?.DateTimeOriginal ?? meta?.CreateDate;
+          if (dt instanceof Date && !isNaN(dt.getTime())) {
+            captureTime = dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+            captureDate = dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          }
         } catch { /* no metadata */ }
-        return { src, filename: toJpegName(file.name), stars, colorTag: "none" };
+        return { src, filename: toJpegName(file.name), stars, colorTag: "none", camera, lens, shutterSpeed, aperture, iso, focalLength, captureTime, captureDate, fileSize };
       })
     );
     onImagesChangeRef.current?.([...imagesRef.current, ...newImages]);

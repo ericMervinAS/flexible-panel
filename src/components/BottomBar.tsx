@@ -1,7 +1,7 @@
 import { type RefObject, useRef, useState, useCallback } from "react";
 import {
   Eye, Keyboard, Star, Flag, Info,
-  ArrowCounterClockwise, Columns, CaretDown,
+  ArrowCounterClockwise, Columns, CaretDown, ArrowSquareOut,
 } from "@phosphor-icons/react";
 import type { ImageData, ColorTag } from "./ImageGrid";
 
@@ -100,6 +100,7 @@ type GridProps = {
 type LoupeProps = {
   mode: "loupe";
   image: ImageData;
+  albumName?: string;
   currentIndex: number;
   totalImages: number;
   isFit: boolean;
@@ -115,10 +116,95 @@ type LoupeProps = {
 
 type BottomBarProps = GridProps | LoupeProps;
 
+// ─── InfoPopover ─────────────────────────────────────────────────────────────
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
+  return `${bytes} B`;
+};
+
+interface InfoPopoverProps {
+  image: ImageData;
+  albumName?: string;
+}
+
+const InfoPopover = ({ image, albumName }: InfoPopoverProps) => {
+  const hasCamera = image.camera || image.lens;
+  const hasShooting = image.shutterSpeed || image.aperture || image.iso || image.focalLength;
+  const hasExif = hasCamera || hasShooting;
+  const hasTimestamp = image.captureTime || image.captureDate;
+  const hasMeta = image.width || image.height || image.fileSize;
+
+  return (
+    <div className="absolute bottom-[calc(100%+8px)] left-0 bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-4 z-50 w-[280px] shadow-xl flex flex-col gap-4 pointer-events-auto">
+      {/* Filename + view in folder */}
+      <div className="flex flex-col gap-1">
+        {albumName && (
+          <span className="text-[11px] font-medium text-[#777] leading-[12px]">{albumName}</span>
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[13px] text-[#e2e2e2] font-normal truncate leading-[16px]">
+            {image.filename}
+          </span>
+          <button className="flex items-center gap-1 text-[12px] font-medium text-[#ababab] hover:text-[#e2e2e2] transition-colors shrink-0">
+            View in Folder
+            <ArrowSquareOut size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* EXIF card */}
+      {hasExif && (
+        <div className="bg-white/5 rounded-[6px] p-3 flex flex-col gap-3">
+          {hasCamera && (
+            <div className="flex flex-col gap-1 text-[13px] text-[#e2e2e2] leading-[16px]">
+              {image.camera && <span>{image.camera}</span>}
+              {image.lens && <span>{image.lens}</span>}
+            </div>
+          )}
+          {hasCamera && hasShooting && (
+            <div className="h-px bg-[#e2e2e2]/10" />
+          )}
+          {hasShooting && (
+            <div className="flex items-center justify-between text-[13px] text-[#e2e2e2] leading-[16px]">
+              {image.shutterSpeed && <span>{image.shutterSpeed}</span>}
+              {image.aperture && <span>{image.aperture}</span>}
+              {image.iso != null && <span>ISO {image.iso}</span>}
+              {image.focalLength && <span>{image.focalLength}</span>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Timestamp + dimensions */}
+      {(hasTimestamp || hasMeta) && (
+        <div className="flex items-center justify-between text-[11px] font-medium text-[#ababab] leading-[12px]">
+          {hasTimestamp && (
+            <div className="flex items-center gap-1">
+              {image.captureTime && <span>{image.captureTime}</span>}
+              {image.captureTime && image.captureDate && <span>•</span>}
+              {image.captureDate && <span>{image.captureDate}</span>}
+            </div>
+          )}
+          {hasMeta && (
+            <div className="flex items-center gap-1 ml-auto">
+              {image.width && image.height && <span>{image.width} x {image.height}</span>}
+              {image.width && image.height && image.fileSize && <span>•</span>}
+              {image.fileSize != null && <span>{formatFileSize(image.fileSize)}</span>}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const BottomBar = (props: BottomBarProps) => {
   const isLoupe = props.mode === "loupe";
+  const [showInfoPopover, setShowInfoPopover] = useState(false);
 
   return (
     <footer className="flex items-center justify-between h-10 px-3 bg-[#1c1c1c] shrink-0">
@@ -130,7 +216,21 @@ const BottomBar = (props: BottomBarProps) => {
             <span className="text-[13px] text-[#e2e2e2] font-normal truncate">
               {props.image.filename}
             </span>
-            <Info className="w-4 h-4 text-[#777] shrink-0" />
+            <div className="relative shrink-0">
+              <button
+                className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors"
+                onMouseEnter={() => setShowInfoPopover(true)}
+                onMouseLeave={() => setShowInfoPopover(false)}
+              >
+                <Info size={16} />
+              </button>
+              {showInfoPopover && (
+                <InfoPopover
+                  image={props.image}
+                  albumName={props.albumName}
+                />
+              )}
+            </div>
           </div>
         ) : (
           <div className="flex items-center gap-3 min-w-0">

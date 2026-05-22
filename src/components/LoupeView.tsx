@@ -13,6 +13,7 @@ interface LoupeViewProps {
   filteredImages?: Array<ImageData & { originalIndex: number }>;
   currentIndex: number;
   totalImages: number;
+  albumName?: string;
   onSelectImage: (index: number) => void;
   onGoToGrid?: () => void;
   isPatchActive?: boolean;
@@ -36,6 +37,7 @@ const LoupeView = ({
   filteredImages,
   currentIndex,
   totalImages,
+  albumName,
   onSelectImage,
   onGoToGrid,
   isPatchActive = false,
@@ -1137,6 +1139,7 @@ const LoupeView = ({
       <BottomBar
         mode="loupe"
         image={image}
+        albumName={albumName}
         currentIndex={currentIndex}
         totalImages={totalImages}
         isFit={isFit}

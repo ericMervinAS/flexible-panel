@@ -22,7 +22,7 @@ interface LoupePanelProps {
   isTethering?: boolean;
   showTetheringTab?: boolean;
   onStartTethering?: () => void;
-  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean }) => void;
+  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt: string }) => void;
   tetheringTabActive?: boolean;
   onTetheringTabActiveChange?: (active: boolean) => void;
   appliedPresets: Record<string, string>;

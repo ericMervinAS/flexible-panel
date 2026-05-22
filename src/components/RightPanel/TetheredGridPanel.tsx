@@ -15,7 +15,7 @@ interface TetheredGridPanelProps {
   isTethering: boolean;
   isLoupeView?: boolean;
   onStartTethering: () => void;
-  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean }) => void;
+  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt: string }) => void;
   initialTetherTab?: boolean;
   onTabChange?: (tab: PanelTab) => void;
   // GridPanel props (used when activeTopTab === "RETOUCH")
