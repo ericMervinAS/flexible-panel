@@ -25,10 +25,10 @@ export interface ImageData {
   fileSize?: number;
 }
 
-const sampleModules = import.meta.glob(
-  "../assets/samples/*.webp",
-  { eager: true }
-) as Record<string, { default: string }>;
+const sampleModules = import.meta.glob("../assets/samples/*.webp", { eager: true }) as Record<
+  string,
+  { default: string }
+>;
 
 const toJpegName = (name: string) => name.replace(/\.[^.]+$/, ".jpeg");
 
@@ -52,7 +52,16 @@ interface ImageGridProps {
   initialSelectedIndex?: number;
 }
 
-const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter, modelImageMap, initialSelectedIndex }: ImageGridProps) => {
+const ImageGrid = ({
+  images,
+  columns,
+  isScanning,
+  onImageDoubleClick,
+  onImagesChange,
+  subjectFilter,
+  modelImageMap,
+  initialSelectedIndex,
+}: ImageGridProps) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(
     initialSelectedIndex != null ? new Set([initialSelectedIndex]) : new Set()
@@ -77,7 +86,7 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
     if (pos === -1) return;
     const tile = scrollRef.current.children[pos] as HTMLElement | undefined;
     tile?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSelectedIndex]);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
@@ -111,20 +120,46 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
           else camera = model ?? make;
           lens = meta?.LensModel?.trim() ?? meta?.Lens?.trim();
           if (typeof meta?.ExposureTime === "number" && meta.ExposureTime > 0) {
-            shutterSpeed = meta.ExposureTime < 1
-              ? `1 / ${Math.round(1 / meta.ExposureTime)}s`
-              : `${meta.ExposureTime}s`;
+            shutterSpeed =
+              meta.ExposureTime < 1
+                ? `1 / ${Math.round(1 / meta.ExposureTime)}s`
+                : `${meta.ExposureTime}s`;
           }
           if (typeof meta?.FNumber === "number") aperture = `f/${meta.FNumber}`;
           if (typeof meta?.ISO === "number") iso = meta.ISO;
-          if (typeof meta?.FocalLength === "number") focalLength = `${Math.round(meta.FocalLength)} mm`;
+          if (typeof meta?.FocalLength === "number")
+            focalLength = `${Math.round(meta.FocalLength)} mm`;
           const dt: Date | undefined = meta?.DateTimeOriginal ?? meta?.CreateDate;
           if (dt instanceof Date && !isNaN(dt.getTime())) {
-            captureTime = dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-            captureDate = dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+            captureTime = dt.toLocaleTimeString("en-GB", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            });
+            captureDate = dt.toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            });
           }
-        } catch { /* no metadata */ }
-        return { src, filename: toJpegName(file.name), stars, colorTag: "none", camera, lens, shutterSpeed, aperture, iso, focalLength, captureTime, captureDate, fileSize };
+        } catch {
+          /* no metadata */
+        }
+        return {
+          src,
+          filename: toJpegName(file.name),
+          stars,
+          colorTag: "none",
+          camera,
+          lens,
+          shutterSpeed,
+          aperture,
+          iso,
+          focalLength,
+          captureTime,
+          captureDate,
+          fileSize,
+        };
       })
     );
     onImagesChangeRef.current?.([...imagesRef.current, ...newImages]);
@@ -153,7 +188,8 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
     } else if (e.metaKey || e.ctrlKey) {
       setSelectedIndices((prev) => {
         const next = new Set(prev);
-        if (next.has(index)) next.delete(index); else next.add(index);
+        if (next.has(index)) next.delete(index);
+        else next.add(index);
         return next;
       });
       setAnchorIndex((prev) => (prev === null ? index : prev));
@@ -188,7 +224,12 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
     }
 
     const colorKeyMap: Record<string, ColorTag> = {
-      "6": "red", "7": "yellow", "8": "green", "9": "blue", "-": "purple", "=": "none",
+      "6": "red",
+      "7": "yellow",
+      "8": "green",
+      "9": "blue",
+      "-": "purple",
+      "=": "none",
     };
     if (e.key in colorKeyMap && selectedIndices.size > 0) {
       const colorTag = colorKeyMap[e.key];
@@ -200,9 +241,8 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
     }
 
     const total = displayImages.length;
-    const curDisplayPos = focusIndex !== null
-      ? displayImages.findIndex((img) => img.originalIndex === focusIndex)
-      : 0;
+    const curDisplayPos =
+      focusIndex !== null ? displayImages.findIndex((img) => img.originalIndex === focusIndex) : 0;
     const cur = curDisplayPos === -1 ? 0 : curDisplayPos;
 
     let nextDisplayPos: number;
@@ -249,7 +289,10 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
         ref={scrollRef}
         tabIndex={0}
         className="grid gap-px flex-1 overflow-y-auto content-start outline-none select-none"
-        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, contain: "layout style" }}
+        style={{
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          contain: "layout style",
+        }}
         onKeyDown={handleKeyDown}
       >
         {displayImages.map(({ src, filename, stars, colorTag, originalIndex }) => (
