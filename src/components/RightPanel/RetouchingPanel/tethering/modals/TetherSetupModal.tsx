@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { FolderSimpleIcon, CaretDown, X } from "@phosphor-icons/react";
-import PresetDropdown from "@/components/PresetDropdown";
-import SliderRow from "@/components/SliderRow";
+import { FolderSimpleIcon, CaretDown, X, BatteryHighIcon } from "@phosphor-icons/react";
 import { getCameraSpec, getFormatOptions, parseDualFormat } from "../constants";
 import { InlineSelect } from "../InlineSelect";
 import { ProfileSection, type ProfileSectionProps } from "../ProfileSection";
@@ -13,10 +11,6 @@ interface TetherSetupModalProps extends Omit<ProfileSectionProps, "alwaysShowTab
   currentImageSrc?: string;
   mode?: "setup" | "preferences";
   cameraName: string;
-  retouchPreset: string | null;
-  onRetouchPresetChange: (v: string | null) => void;
-  retouchPresetStrength: number;
-  onRetouchPresetStrengthChange: (v: number) => void;
   onFileFormatChange: (v: string) => void;
   importRaw: boolean;
   onImportRawChange: (v: boolean) => void;
@@ -56,10 +50,6 @@ export const TetherSetupModal = ({
   onStart,
   mode = "setup",
   cameraName,
-  retouchPreset,
-  onRetouchPresetChange,
-  retouchPresetStrength,
-  onRetouchPresetStrengthChange,
   fileFormat,
   onFileFormatChange,
   importRaw,
@@ -176,15 +166,23 @@ export const TetherSetupModal = ({
         </div>
 
         {/* Camera */}
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
+        <div className="flex flex-col gap-1.5 ">
+          {/* <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
             Camera
-          </span>
-          <div className="flex items-center justify-between px-3 py-3 bg-[#242424] rounded-[8px]">
-            <span className="text-[14px] font-medium text-[#e2e2e2]">{cameraName}</span>
-            <div className="flex items-center gap-2">
+          </span> */}
+
+          <div className="flex items-center justify-between px-3 py-3 bg-[#242424] border border-[#383838] rounded-[8px]">
+            <div className="flex flex-row items-center gap-2">
+              <span className="text-[14px] font-medium text-[#e2e2e2]">{cameraName}</span>
+              <div className="w-2 h-2 rounded-full bg-[#4ade80] shrink-0" />
+            </div>
+            {/* <div className="flex items-center gap-2">
               <span className="text-[12px] text-[#e2e2e2]">Connected</span>
               <div className="w-2 h-2 rounded-full bg-[#4ade80] shrink-0" />
+            </div> */}
+            <div className="flex items-center gap-1.5 text-[#ababab]">
+              <BatteryHighIcon size={16} />
+              <span className="text-[14px] font-medium">78%</span>
             </div>
           </div>
         </div>
@@ -205,9 +203,9 @@ export const TetherSetupModal = ({
           <div className="flex items-center gap-3">
             {/* RAW checkbox */}
             <button
-              onClick={() => isDual && onImportRawChange(!importRaw)}
+              onClick={() => isDual && (importJpeg || !importRaw) && onImportRawChange(!importRaw)}
               disabled={!isDual}
-              className={`flex items-center gap-1.5 ${isDual ? "cursor-pointer" : "cursor-not-allowed"} ${!isDual && isJpegOnly ? "opacity-30" : ""}`}
+              className={`flex items-center gap-1.5 ${!isDual && isJpegOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
             >
               <div
                 className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
@@ -238,9 +236,11 @@ export const TetherSetupModal = ({
 
             {/* JPEG checkbox */}
             <button
-              onClick={() => isDual && onImportJpegChange(!importJpeg)}
+              onClick={() =>
+                isDual && (importRaw || !importJpeg) && onImportJpegChange(!importJpeg)
+              }
               disabled={!isDual}
-              className={`flex items-center gap-1.5 ${isDual ? "cursor-pointer" : "cursor-not-allowed"} ${!isDual && isRawOnly ? "opacity-30" : ""}`}
+              className={`flex items-center gap-1.5 ${!isDual && isRawOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
             >
               <div
                 className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
@@ -270,66 +270,37 @@ export const TetherSetupModal = ({
           </div>
         </div>
 
-        <div className="h-px w-full bg-[#333]" />
-
         {/* Editing Profile */}
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
-            Editing Profile
+            Edit Effects
           </span>
-          <ProfileSection
-            fileFormat={effectiveFileFormat}
-            {...profileProps}
-          />
-        </div>
-
-        {/* Retouching Preset */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
-              Retouching Preset
-            </span>
-            <PresetDropdown
-              compact
-              menuWidth={300}
-              triggerTextSize="13px"
-              value={retouchPreset}
-              onChange={(v) => onRetouchPresetChange(v)}
-            />
-          </div>
-          {/* {retouchPreset && (
-            <SliderRow
-              label="Strength"
-              value={retouchPresetStrength}
-              onChange={onRetouchPresetStrengthChange}
-              noPinArea
-            />
-          )} */}
+          <ProfileSection fileFormat={effectiveFileFormat} {...profileProps} />
         </div>
 
         {/* Advanced toggle */}
         <div className="flex flex-col gap-6">
           <button
             onClick={() => setShowAdvanced((p) => !p)}
-            className="flex items-center gap-1.5 self-start text-[12px] font-medium text-[#ababab] hover:text-[#fff] transition-colors"
+            className="flex items-center gap-1.5 self-start text-[13px] font-medium text-[#ababab] hover:text-[#fff] transition-colors"
           >
             <CaretDown
               size={12}
               weight="bold"
               className={`transition-transform ${showAdvanced ? "rotate-0" : "-rotate-90"}`}
             />
-            Advanced
+            Advanced Preferences
           </button>
 
           {showAdvanced && (
             <>
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
                   Destination Folder
                 </span>
                 <button
                   onClick={pickFolder}
-                  className="group flex w-full text-left gap-2 items-center justify-between px-2.5 py-2 bg-[#242424] rounded hover:bg-[#2a2a2a] transition-colors"
+                  className="group flex w-50 text-left gap-2 items-center justify-between px-2.5 py-2 bg-[#242424] rounded hover:bg-[#2a2a2a] transition-colors"
                 >
                   <span className="text-[13px] text-[#e2e2e2] truncate flex-1">{destination}</span>
                   <FolderSimpleIcon size={16} className="text-[#777] shrink-0" />
@@ -337,44 +308,26 @@ export const TetherSetupModal = ({
               </div>
 
               <div className="flex flex-col gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#777]">
-                  File Naming
-                </span>
-
-                <div className="flex flex-col gap-1 rounded-[8px] bg-[#161616] border border-[#2a2a2a] p-1">
-                  {NAMING_PATTERNS.map((p) => {
-                    const active = p.id === activePatternId;
-                    return (
-                      <button
-                        key={p.id}
-                        onClick={() => applyPattern(p)}
-                        className={`flex items-center justify-between gap-3 px-2.5 py-2 rounded-[6px] text-left transition-colors ${
-                          active ? "bg-[#1e3a5f]/40" : "hover:bg-white/[0.03]"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span
-                            className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${
-                              active ? "border-[#60a5fa] bg-[#60a5fa]" : "border-[#444]"
-                            }`}
-                          />
-                          <span
-                            className={`text-[12px] font-medium ${active ? "text-[#e2e2e2]" : "text-[#ababab]"}`}
-                          >
-                            {p.label}
-                          </span>
-                        </div>
-                        <span className="text-[11px] font-mono text-[#777] truncate">
-                          {previewFor(p.template)}
-                        </span>
-                      </button>
-                    );
-                  })}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
+                    File Naming
+                  </span>
+                  <InlineSelect
+                    value={activePattern?.label ?? NAMING_PATTERNS[0].label}
+                    options={NAMING_PATTERNS.map((p) => p.label)}
+                    onChange={(label) => {
+                      const p = NAMING_PATTERNS.find((p) => p.label === label);
+                      if (p) applyPattern(p);
+                    }}
+                  />
                 </div>
 
                 {showPrefixInput && (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-[#161616] border border-[#2a2a2a] rounded-[8px]">
-                    <span className="text-[11px] uppercase tracking-[0.5px] text-[#777] shrink-0">
+                  <div
+                    className="flex items-center justify-between px-2.5 py-2 bg-[#242424] rounded hover:bg-[#2a2a2a] transition-colors"
+                    // className="group flex w-50 text-left gap-2 items-center justify-between px-2.5 py-2
+                  >
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB] shrink-0">
                       Prefix
                     </span>
                     <input
@@ -382,10 +335,14 @@ export const TetherSetupModal = ({
                       value={userPrefix}
                       placeholder="Smith"
                       onChange={(e) => updatePrefix(e.target.value)}
-                      className="flex-1 bg-transparent outline-none text-[13px] text-[#e2e2e2] placeholder:text-[#3a3a3a] font-mono"
+                      className="bg-transparent outline-none text-[13px] text-[#e2e2e2] placeholder:text-[#3a3a3a] text-right"
                     />
                   </div>
                 )}
+
+                <span className="text-[12px] text-[#555] truncate">
+                  e.g. {previewFor(activePattern?.template ?? NAMING_PATTERNS[0].template)}
+                </span>
               </div>
             </>
           )}

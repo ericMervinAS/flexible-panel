@@ -1,7 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSessionState } from "@/hooks/useSessionState";
 import PinnedSlidersCard from "../../PinnedSlidersCard";
-import { BatteryHigh, GearIcon } from "@phosphor-icons/react";
+import { BatteryHigh, GearIcon, LinkBreakIcon, FolderSimpleIcon } from "@phosphor-icons/react";
 import Accordion from "../../Accordion";
 import PresetDropdown from "../../PresetDropdown";
 import SliderRow from "../../SliderRow";
@@ -16,6 +16,7 @@ import {
   SHOOT_OPTIONS,
   getCameraSpec,
   getFormatOptions,
+  parseDualFormat,
 } from "./tethering/constants";
 import { Toggle } from "./tethering/Toggle";
 import { InlineSelect } from "./tethering/InlineSelect";
@@ -26,6 +27,29 @@ import { TetherCameraSelectModal } from "./tethering/modals/TetherCameraSelectMo
 import { TetherDetectModal } from "./tethering/modals/TetherDetectModal";
 import { TetherSetupModal } from "./tethering/modals/TetherSetupModal";
 
+const NAMING_PATTERNS: Array<{
+  id: string;
+  label: string;
+  template: string;
+  needsPrefix?: boolean;
+}> = [
+  { id: "date-seq", label: "Date + Sequence", template: "{Date}_{Counter:0001}" },
+  {
+    id: "prefix-seq",
+    label: "Prefix + Sequence",
+    template: "{Prefix:Smith}_{Counter:0001}",
+    needsPrefix: true,
+  },
+  {
+    id: "date-prefix-seq",
+    label: "Date + Prefix + Sequence",
+    template: "{Date}_{Prefix:Smith}_{Counter:0001}",
+    needsPrefix: true,
+  },
+  { id: "camera-seq", label: "Camera + Sequence", template: "{CameraModel}_{Counter:0001}" },
+  { id: "seq-only", label: "Sequence only", template: "IMG_{Counter:0001}" },
+];
+
 interface TetheringTabProps {
   currentImageSrc?: string;
   isTethering: boolean;
@@ -33,7 +57,9 @@ interface TetheringTabProps {
   onStartTethering: () => void;
   onCancelSetup?: () => void;
   onCancelTethering?: () => void;
-  onCapture?: (autoAdvance: boolean) => void;
+  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean }) => void;
+  skipDetect?: boolean;
+  directPanel?: boolean;
 }
 
 const TetheringTab = ({
@@ -44,6 +70,8 @@ const TetheringTab = ({
   onCancelSetup,
   onCancelTethering,
   onCapture,
+  skipDetect = false,
+  directPanel = false,
 }: TetheringTabProps) => {
   const [pinnedSliders, setPinnedSliders] = useSessionState<Set<string>>(
     "subjectTab:pinnedSliders",
@@ -74,6 +102,9 @@ const TetheringTab = ({
     const spec = getCameraSpec("Nikon Z6 III");
     return `${spec.raw} + JPEG ${spec.jpegQualities[0]}`;
   });
+  const { isDual, rawLabel: _rawLabel, jpegLabel: _jpegLabel } = parseDualFormat(fileFormat);
+  const isJpegOnly = !isDual && fileFormat.toLowerCase().startsWith("jpeg");
+  const isRawOnly = !isDual && !isJpegOnly;
 
   const [rawProfile, setRawProfile] = useState<string | null>(null);
   const [jpegProfile, setJpegProfile] = useState<string | null>(null);
@@ -93,16 +124,161 @@ const TetheringTab = ({
   const [focusMode, setFocusMode] = useState<string>(FOCUS_OPTIONS[0]);
   const [shootMode, setShootMode] = useState<string>(SHOOT_OPTIONS[0]);
   const [namingTemplate, setNamingTemplate] = useState("{Date}_{Counter:0001}");
+
+  const namingPrefixMatch = namingTemplate.match(/\{Prefix:([^}]*)\}/);
+  const namingUserPrefix = namingPrefixMatch?.[1] ?? "";
+  const activeNamingPatternId = (() => {
+    const stripped = namingTemplate.replace(/\{Prefix:[^}]*\}/g, "{Prefix}");
+    for (const p of NAMING_PATTERNS) {
+      const pStripped = p.template.replace(/\{Prefix:[^}]*\}/g, "{Prefix}");
+      if (pStripped === stripped) return p.id;
+    }
+    return null;
+  })();
+  const activeNamingPattern = NAMING_PATTERNS.find((p) => p.id === activeNamingPatternId);
+  const showNamingPrefixInput = !!activeNamingPattern?.needsPrefix;
+
+  const applyNamingPattern = (p: (typeof NAMING_PATTERNS)[number]) => {
+    if (p.needsPrefix && namingUserPrefix) {
+      setNamingTemplate(p.template.replace(/\{Prefix:[^}]*\}/, `{Prefix:${namingUserPrefix}}`));
+    } else {
+      setNamingTemplate(p.template);
+    }
+  };
+
+  const updateNamingPrefix = (next: string) => {
+    const sanitized = next.replace(/[/\\:*?"<>|{}]/g, "");
+    if (namingTemplate.includes("{Prefix:")) {
+      setNamingTemplate(
+        namingTemplate.replace(/\{Prefix:[^}]*\}/, `{Prefix:${sanitized || "Smith"}}`)
+      );
+    }
+  };
+
+  const namingPreview = (tpl: string) =>
+    tpl
+      .replace("{Date}", "2026-05-15")
+      .replace(/\{Prefix:([^}]*)\}/, (_m, p) => namingUserPrefix || p)
+      .replace(/\{Counter(?::[^}]*)?\}/, "0001")
+      .replace("{CameraModel}", cameraName.replace(/\s+/g, ""))
+      .concat(`.${getCameraSpec(cameraName).raw}`);
+
+  const pickFolder = async () => {
+    const w = window as unknown as { showDirectoryPicker?: () => Promise<{ name: string }> };
+    if (w.showDirectoryPicker) {
+      try {
+        const handle = await w.showDirectoryPicker();
+        setDestination(`~/Pictures/${handle.name}`);
+      } catch {
+        /* user cancelled */
+      }
+    } else {
+      const next = window.prompt("Destination folder path", destination);
+      if (next) setDestination(next);
+    }
+  };
+
   const [importRaw, setImportRaw] = useState(true);
   const [importJpeg, setImportJpeg] = useState(true);
   const [autoAdvance, setAutoAdvance] = useState(true);
-  const [editEffectsMode, setEditEffectsMode] = useState<"Custom" | "Sync with Previous">("Custom");
+  const [editEffectsMode, setEditEffectsMode] = useSessionState<"Presets" | "Sync with Prev">(
+    "tethering:editEffectsMode",
+    "Presets"
+  );
   const [draggingCard, setDraggingCard] = useState<string | null>(null);
   const [autoAdvanceHovered, setAutoAdvanceHovered] = useState(false);
+  const [timerCount, setTimerCount] = useState<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  type EditSnapshot = {
+    rawProfile: string | null;
+    jpegProfile: string | null;
+    aiCropping: boolean;
+    cropStyle: string;
+    cropOrientation: string;
+    aiStraightening: boolean;
+    aiMasking: boolean;
+    maskMode: string;
+    retouchPreset: string | null;
+    retouchPresetStrength: number;
+  };
+
+  const lastCaptureSnapshotRef = useRef<EditSnapshot | null>(null);
+
+  const takeSnapshot = (): EditSnapshot => ({
+    rawProfile,
+    jpegProfile,
+    aiCropping,
+    cropStyle,
+    cropOrientation,
+    aiStraightening,
+    aiMasking,
+    maskMode,
+    retouchPreset,
+    retouchPresetStrength,
+  });
+
+  const applySnapshot = (snap: EditSnapshot) => {
+    setRawProfile(snap.rawProfile);
+    setJpegProfile(snap.jpegProfile);
+    setAiCropping(snap.aiCropping);
+    setCropStyle(snap.cropStyle);
+    setCropOrientation(snap.cropOrientation);
+    setAiStraightening(snap.aiStraightening);
+    setAiMasking(snap.aiMasking);
+    setMaskMode(snap.maskMode);
+    setRetouchPreset(snap.retouchPreset);
+    setRetouchPresetStrength(snap.retouchPresetStrength);
+  };
+
+  const getTimerSeconds = () => {
+    if (shootMode === "Timer 10 sec") return 10;
+    if (shootMode === "Timer 2 sec") return 2;
+    return null;
+  };
+
+  const handleCapture = () => {
+    if (editEffectsMode === "Sync with Prev" && lastCaptureSnapshotRef.current !== null) {
+      applySnapshot(lastCaptureSnapshotRef.current);
+    } else {
+      lastCaptureSnapshotRef.current = takeSnapshot();
+    }
+
+    const seconds = getTimerSeconds();
+    if (seconds !== null && timerCount === null) {
+      setTimerCount(seconds);
+      timerRef.current = setInterval(() => {
+        setTimerCount((prev) => {
+          if (prev === null || prev <= 1) {
+            clearInterval(timerRef.current!);
+            timerRef.current = null;
+            onCapture?.(autoAdvance, {
+              addRaw: isDual ? importRaw : isRawOnly,
+              addJpeg: isDual ? importJpeg : isJpegOnly,
+            });
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (seconds === null) {
+      onCapture?.(autoAdvance, {
+        addRaw: isDual ? importRaw : isRawOnly,
+        addJpeg: isDual ? importJpeg : isJpegOnly,
+      });
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
   const [showWelcome, setShowWelcome] = useState(false);
-  const [showDetect, setShowDetect] = useState(!isTethering);
+  const [showDetect, setShowDetect] = useState(!isTethering && !skipDetect);
   const [showCameraSelect, setShowCameraSelect] = useState(false);
-  const [showSetup, setShowSetup] = useState(false);
+  const [showSetup, setShowSetup] = useState(!isTethering && skipDetect);
 
   const sharedProfileProps = {
     fileFormat,
@@ -124,6 +300,8 @@ const TetheringTab = ({
     onAiMaskingChange: setAiMasking,
     maskMode,
     onMaskModeChange: setMaskMode,
+    retouchPreset,
+    onRetouchPresetChange: setRetouchPreset,
   };
 
   return (
@@ -136,14 +314,21 @@ const TetheringTab = ({
           <div className="flex flex-col gap-3">
             {/* Header */}
             <div className="flex items-center justify-between">
-              <span className="text-[14px] font-medium text-[#e2e2e2]">Camera Info</span>
+              <span className="text-[14px] font-medium text-[#e2e2e2]">Camera</span>
               <div className="flex items-center">
-                <div className="flex items-center gap-1 px-1.5 py-1 rounded border border-[rgba(21,128,61,0.4)] bg-[rgba(21,128,61,0.12)] backdrop-blur-[2px]">
+                {/* <div className="flex items-center gap-1 px-1.5 py-1 rounded border border-[rgba(21,128,61,0.4)] bg-[rgba(21,128,61,0.12)] backdrop-blur-[2px]">
                   <div className="w-3 h-3 flex items-center justify-center shrink-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+                    
                   </div>
                   <span className="text-[11px] font-medium text-[#e2e2e2]">Connected</span>
-                </div>
+                </div> */}
+                <button
+                  onClick={() => setShowSetup(false)}
+                  className="text-[#666] hover:text-[#ababab] transition-colors pl-2 py-2"
+                >
+                  <LinkBreakIcon size={16} />
+                </button>
+
                 <button
                   onClick={() => setShowSetup(true)}
                   className="text-[#666] hover:text-[#ababab] transition-colors pl-2 py-2"
@@ -154,7 +339,10 @@ const TetheringTab = ({
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-[14px] font-medium text-[#ababab]">{cameraName}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[14px] font-medium text-[#ababab]">{cameraName}</span>
+                <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+              </div>
               <div className="flex items-center gap-1.5 text-[#ababab]">
                 <BatteryHigh size={16} />
                 <span className="text-[14px] font-medium">78%</span>
@@ -234,10 +422,17 @@ const TetheringTab = ({
                 <div className="px-4">
                   <button
                     data-coachmark="capture-btn"
-                    onClick={() => onCapture?.(autoAdvance)}
-                    className="w-16 h-16 rounded-full border-[3px] border-white/30 flex items-center justify-center transition-all active:scale-95 group"
+                    onClick={handleCapture}
+                    className="w-16 h-16 rounded-full border-[3px] border-white/30 flex items-center justify-center transition-all active:scale-95 group relative"
                   >
-                    <div className="w-[52px] h-[52px] rounded-full bg-white group-hover:bg-white/90 group-active:bg-white/75 transition-colors" />
+                    <div
+                      className={`w-[52px] h-[52px] rounded-full transition-colors ${timerCount !== null ? "bg-white/30" : "bg-white group-hover:bg-white/90 group-active:bg-white/75"}`}
+                    />
+                    {timerCount !== null && (
+                      <span className="absolute inset-0 flex items-center justify-center text-[22px] font-bold text-white tabular-nums leading-none">
+                        {timerCount}
+                      </span>
+                    )}
                   </button>
                 </div>
               </div>
@@ -251,6 +446,77 @@ const TetheringTab = ({
                 </span>
                 <InlineSelect value={fileFormat} options={formatOptions} onChange={setFileFormat} />
               </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+                  Import
+                </span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => isDual && (importJpeg || !importRaw) && setImportRaw(!importRaw)}
+                    disabled={!isDual}
+                    className={`flex items-center gap-1.5 ${!isDual && isJpegOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
+                  >
+                    <div
+                      className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
+                        isRawOnly || (isDual && importRaw)
+                          ? "bg-[#2563eb] border-[#2563eb]"
+                          : "border-[#444] bg-transparent"
+                      }`}
+                    >
+                      {(isRawOnly || (isDual && importRaw)) && (
+                        <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+                          <path
+                            d="M1 4L3.5 6.5L9 1"
+                            stroke="white"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <span
+                      className={`text-[13px] font-medium ${!isDual && isJpegOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
+                    >
+                      RAW
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      isDual && (importRaw || !importJpeg) && setImportJpeg(!importJpeg)
+                    }
+                    disabled={!isDual}
+                    className={`flex items-center gap-1.5 ${!isDual && isRawOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
+                  >
+                    <div
+                      className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
+                        isJpegOnly || (isDual && importJpeg)
+                          ? "bg-[#2563eb] border-[#2563eb]"
+                          : "border-[#444] bg-transparent"
+                      }`}
+                    >
+                      {(isJpegOnly || (isDual && importJpeg)) && (
+                        <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+                          <path
+                            d="M1 4L3.5 6.5L9 1"
+                            stroke="white"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                    <span
+                      className={`text-[13px] font-medium ${!isDual && isRawOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
+                    >
+                      JPEG
+                    </span>
+                  </button>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
                   Aspect Ratio
@@ -275,9 +541,9 @@ const TetheringTab = ({
               </div>
 
               {isLoupeView && (
-                <button
+                <div
                   onClick={() => setAutoAdvance((p) => !p)}
-                  className="flex items-center justify-between w-full"
+                  className="flex items-center justify-between w-full cursor-pointer"
                 >
                   <span
                     onMouseEnter={() => setAutoAdvanceHovered(true)}
@@ -292,30 +558,104 @@ const TetheringTab = ({
                     Auto Advance
                   </span>
                   <Toggle value={autoAdvance} onChange={setAutoAdvance} />
-                </button>
+                </div>
               )}
 
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                  Edit Effects
-                </span>
-                <InlineSelect
-                  value={editEffectsMode}
-                  options={["Custom", "Sync with Previous"] as const}
-                  onChange={setEditEffectsMode}
-                />
-              </div>
+              {directPanel && <div className="h-px bg-[#e2e2e20d]" />}
+
+              {directPanel && (
+                <Accordion title="Save Options">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+                        Destination
+                      </span>
+                      <button
+                        onClick={pickFolder}
+                        className="group flex w-full text-left gap-2 items-center justify-between px-2.5 py-2 bg-[#242424] rounded hover:bg-[#2a2a2a] transition-colors"
+                      >
+                        <span className="text-[13px] text-[#e2e2e2] truncate flex-1">
+                          {destination}
+                        </span>
+                        <FolderSimpleIcon size={16} className="text-[#777] shrink-0" />
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+                          File Naming
+                        </span>
+                        <InlineSelect
+                          value={activeNamingPattern?.label ?? NAMING_PATTERNS[0].label}
+                          options={NAMING_PATTERNS.map((p) => p.label)}
+                          onChange={(label) => {
+                            const p = NAMING_PATTERNS.find((p) => p.label === label);
+                            if (p) applyNamingPattern(p);
+                          }}
+                        />
+                      </div>
+                      {showNamingPrefixInput && (
+                        <div className="flex items-center justify-between px-2.5 py-2 bg-[#242424] rounded">
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] shrink-0">
+                            Prefix
+                          </span>
+                          <input
+                            type="text"
+                            value={namingUserPrefix}
+                            placeholder="Smith"
+                            onChange={(e) => updateNamingPrefix(e.target.value)}
+                            className="bg-transparent outline-none text-[13px] text-[#e2e2e2] placeholder:text-[#3a3a3a] text-right"
+                          />
+                        </div>
+                      )}
+                      <span className="text-[12px] text-[#555] truncate">
+                        e.g.{" "}
+                        {namingPreview(
+                          activeNamingPattern?.template ?? NAMING_PATTERNS[0].template
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </Accordion>
+              )}
             </div>
           </div>
 
           <div className="h-px bg-[#e2e2e20d]" />
 
-          {editEffectsMode === "Custom" && (
-            <>
-              <div className="h-px bg-[#e2e2e20d]" />
+          <div data-coachmark="edit-profile" className="flex flex-row justify-between gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
+              Edit Effects
+            </span>
+            <div className="flex gap-3">
+              {(["Presets", "Sync with Prev"] as const).map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setEditEffectsMode(option)}
+                  className="flex items-center gap-[4px] group"
+                >
+                  <div
+                    className={`w-3 h-3 rounded-full border bg-[#303030] flex items-center justify-center shrink-0 transition-colors overflow-hidden ${editEffectsMode === option ? "border-[#474747] p-[2px]" : "border-[#474747] group-hover:border-[#777] p-0"}`}
+                  >
+                    <div
+                      className={`w-[6px] h-[6px] rounded-full shrink-0 transition-colors ${editEffectsMode === option ? "bg-[#3b82f6]" : "bg-transparent"}`}
+                    />
+                  </div>
+                  <span className="text-[12px] font-normal text-[#ababab] leading-4 whitespace-nowrap">
+                    {option}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
 
+          {editEffectsMode === "Presets" && (
+            <>
+              {/* <div className="h-px bg-[#e2e2e20d]" /> */}
+              <ProfileSection {...sharedProfileProps} alwaysShowTabs />
               {/* Edit Profile */}
-              <div data-coachmark="edit-profile">
+              {/* <div data-coachmark="edit-profile">
                 <Accordion
                   title="Edit Profile"
                   actions={
@@ -328,10 +668,10 @@ const TetheringTab = ({
                 </Accordion>
               </div>
 
-              <div className="h-px bg-[#e2e2e20d]" />
+              <div className="h-px bg-[#e2e2e20d]" /> */}
 
               {/* Retouching Preset */}
-              <div data-coachmark="retouch-preset">
+              {/* <div data-coachmark="retouch-preset">
                 <div className="flex flex-col gap-4">
                   <div ref={retouchPresetRowRef} className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] leading-3">
@@ -353,7 +693,7 @@ const TetheringTab = ({
                     />
                   )}
                 </div>
-              </div>
+              </div> */}
             </>
           )}
 
@@ -427,8 +767,6 @@ const TetheringTab = ({
           cameraName={cameraName}
           {...sharedProfileProps}
           onFileFormatChange={setFileFormat}
-          retouchPreset={retouchPreset}
-          onRetouchPresetChange={setRetouchPreset}
           retouchPresetStrength={retouchPresetStrength}
           onRetouchPresetStrengthChange={setRetouchPresetStrength}
           namingTemplate={namingTemplate}

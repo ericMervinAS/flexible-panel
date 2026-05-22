@@ -18,7 +18,7 @@ export const WB_OPTIONS = [
   "Custom",
 ] as const;
 export const ASPECT_OPTIONS = ["3:2", "1:1", "4:3", "16:9"] as const;
-export const FOCUS_OPTIONS = ["AI Focus", "Manual Focus"] as const;
+export const FOCUS_OPTIONS = ["Auto", "Manual"] as const;
 export const SHOOT_OPTIONS = [
   "Single Shot",
   "Continous high speed",

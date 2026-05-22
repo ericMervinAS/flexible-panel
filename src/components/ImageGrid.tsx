@@ -10,6 +10,7 @@ export interface ImageData {
   filename: string;
   stars: number;
   colorTag: ColorTag;
+  isRaw?: boolean;
 }
 
 const sampleModules = import.meta.glob(
@@ -142,6 +143,18 @@ const ImageGrid = ({ images, columns, isScanning, onImageDoubleClick, onImagesCh
     if (digit >= 0 && digit <= 5 && selectedIndices.size > 0) {
       const updated = imagesRef.current.map((img, i) =>
         selectedIndices.has(i) ? { ...img, stars: digit } : img
+      );
+      onImagesChangeRef.current?.(updated);
+      return;
+    }
+
+    const colorKeyMap: Record<string, ColorTag> = {
+      "6": "red", "7": "yellow", "8": "green", "9": "blue", "-": "purple", "=": "none",
+    };
+    if (e.key in colorKeyMap && selectedIndices.size > 0) {
+      const colorTag = colorKeyMap[e.key];
+      const updated = imagesRef.current.map((img, i) =>
+        selectedIndices.has(i) ? { ...img, colorTag } : img
       );
       onImagesChangeRef.current?.(updated);
       return;

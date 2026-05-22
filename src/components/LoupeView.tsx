@@ -23,6 +23,7 @@ interface LoupeViewProps {
   highlightedDetections?: DistractionDetection[];
   hoveredDetections?: DistractionDetection[];
   onRatingChange?: (rating: number) => void;
+  onColorTagChange?: (colorTag: import("./ImageGrid").ColorTag) => void;
   /** Fired after a canvas-side brush removal completes (timer-driven). */
   onCanvasRemoveSuccess?: () => void;
   /** Fired whenever the filmstrip multi-selection changes. */
@@ -45,6 +46,7 @@ const LoupeView = ({
   highlightedDetections = [],
   hoveredDetections = [],
   onRatingChange,
+  onColorTagChange,
   onCanvasRemoveSuccess,
   onSelectionChange,
 }: LoupeViewProps) => {
@@ -334,6 +336,8 @@ const LoupeView = ({
 
   const onRatingChangeRef = useRef(onRatingChange);
   onRatingChangeRef.current = onRatingChange;
+  const onColorTagChangeRef = useRef(onColorTagChange);
+  onColorTagChangeRef.current = onColorTagChange;
 
   // ── Keyboard navigation + spacebar zoom toggle ───────────────────────────────
   useEffect(() => {
@@ -362,6 +366,11 @@ const LoupeView = ({
 
       const digit = parseInt(e.key, 10);
       if (digit >= 0 && digit <= 5) { onRatingChangeRef.current?.(digit); return; }
+
+      const colorKeyMap: Record<string, import("./ImageGrid").ColorTag> = {
+        "6": "red", "7": "yellow", "8": "green", "9": "blue", "-": "purple", "=": "none",
+      };
+      if (e.key in colorKeyMap) { onColorTagChangeRef.current?.(colorKeyMap[e.key]); return; }
 
       if (e.key === " ") {
         e.preventDefault();

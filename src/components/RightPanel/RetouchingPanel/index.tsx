@@ -20,8 +20,9 @@ interface LoupePanelProps {
   currentImageIndex: number;
   currentImageSrc?: string;
   isTethering?: boolean;
+  showTetheringTab?: boolean;
   onStartTethering?: () => void;
-  onCapture?: (autoAdvance: boolean) => void;
+  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean }) => void;
   tetheringTabActive?: boolean;
   onTetheringTabActiveChange?: (active: boolean) => void;
   appliedPresets: Record<string, string>;
@@ -49,12 +50,14 @@ interface LoupePanelProps {
   onStateChange?: (index: number, state: LoupeRetouchState) => void;
   onCancelTethering?: () => void;
   filmstripSelection?: Set<number>;
+  directPanel?: boolean;
 }
 
 const RetouchingPanel = ({
   currentImageIndex,
   currentImageSrc,
   isTethering = false,
+  showTetheringTab = false,
   onStartTethering,
   onCapture,
   tetheringTabActive,
@@ -83,6 +86,7 @@ const RetouchingPanel = ({
   forceSubjectTabSignal,
   onCancelTethering,
   filmstripSelection,
+  directPanel = false,
 }: LoupePanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [perImageState, setPerImageState] = useState<Record<number, LoupeRetouchState>>({});
@@ -173,7 +177,7 @@ const RetouchingPanel = ({
             </button>
           ))}
         </div>
-        {(() => {
+        {showTetheringTab && (() => {
           const { id, Icon } = LOUPE_TABS[LOUPE_TABS.length - 1];
           return (
             <button
@@ -235,6 +239,7 @@ const RetouchingPanel = ({
             onCancelSetup={handleCancelSetup}
             onCancelTethering={onCancelTethering}
             onCapture={onCapture}
+            directPanel={directPanel}
           />
         )}
       </div>

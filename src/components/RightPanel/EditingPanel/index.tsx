@@ -21,23 +21,29 @@ type EditingTab = (typeof EDITING_TABS)[number]["id"] | "tethering";
 interface EditingPanelProps {
   currentImageSrc?: string;
   isTethering?: boolean;
+  showTetheringTab?: boolean;
   onStartTethering?: () => void;
-  onCapture?: (autoAdvance: boolean) => void;
+  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean }) => void;
   initialTab?: EditingTab;
   tetheringTabActive?: boolean;
   onTetheringTabActiveChange?: (active: boolean) => void;
   onCancelTethering?: () => void;
+  skipTetheringDetect?: boolean;
+  directPanel?: boolean;
 }
 
 const EditingPanel = ({
   currentImageSrc,
   isTethering = false,
+  showTetheringTab = false,
   onStartTethering,
   onCapture,
   initialTab,
   tetheringTabActive,
   onTetheringTabActiveChange,
   onCancelTethering,
+  skipTetheringDetect = false,
+  directPanel = false,
 }: EditingPanelProps) => {
   const [activeTab, setActiveTab] = useState<EditingTab>(initialTab ?? "sliders");
   const previousTabRef = useRef<EditingTab>("sliders");
@@ -77,16 +83,18 @@ const EditingPanel = ({
             </button>
           ))}
         </div>
-        <button
-          onClick={() => handleTabChange("tethering")}
-          className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${
-            activeTab === "tethering"
-              ? "border-[#e2e2e2] text-[#e2e2e2]"
-              : "border-transparent text-[#777] hover:text-[#ababab]"
-          }`}
-        >
-          <CameraIcon size={16} />
-        </button>
+        {showTetheringTab && (
+          <button
+            onClick={() => handleTabChange("tethering")}
+            className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${
+              activeTab === "tethering"
+                ? "border-[#e2e2e2] text-[#e2e2e2]"
+                : "border-transparent text-[#777] hover:text-[#ababab]"
+            }`}
+          >
+            <CameraIcon size={16} />
+          </button>
+        )}
       </div>
 
       {/* Tab content */}
@@ -103,6 +111,8 @@ const EditingPanel = ({
             onCancelSetup={handleCancelSetup}
             onCancelTethering={onCancelTethering}
             onCapture={onCapture}
+            skipDetect={skipTetheringDetect}
+            directPanel={directPanel}
           />
         )}
       </div>

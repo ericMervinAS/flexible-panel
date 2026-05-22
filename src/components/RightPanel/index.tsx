@@ -4,7 +4,6 @@ import GridPanel from "./GridPanel";
 import RetouchingPanel, { LoupeTab } from "./RetouchingPanel";
 import EditingPanel from "./EditingPanel";
 import AIEditingGridPanel from "./AIEditingGridPanel";
-import TetheredGridPanel from "./TetheredGridPanel";
 import type { ModelSubject } from "@/hooks/useFaceDetection";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 
@@ -37,11 +36,14 @@ interface RightPanelProps {
   flexibleWidth?: boolean;
   activeTopTab?: string;
   isTethering?: boolean;
+  showTetheringTab?: boolean;
   onStartTethering?: () => void;
-  onCapture?: (autoAdvance: boolean) => void;
+  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean }) => void;
   initialEditingTab?: string;
   onCancelTethering?: () => void;
   filmstripSelection?: Set<number>;
+  skipTetheringDetect?: boolean;
+  directPanel?: boolean;
 }
 
 const RightPanel = ({
@@ -73,11 +75,14 @@ const RightPanel = ({
   flexibleWidth = false,
   activeTopTab = "RETOUCH",
   isTethering = false,
+  showTetheringTab = false,
   onStartTethering,
   onCapture,
   initialEditingTab,
   onCancelTethering,
   filmstripSelection,
+  skipTetheringDetect = false,
+  directPanel = false,
 }: RightPanelProps) => {
   const [appliedPresets, setAppliedPresets] = useState<Record<string, string>>({});
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
@@ -136,6 +141,7 @@ const RightPanel = ({
             <EditingPanel
               currentImageSrc={currentImageSrc}
               isTethering={isTethering}
+              showTetheringTab={showTetheringTab}
               onStartTethering={onStartTethering}
               onCapture={onCapture}
               initialTab={
@@ -144,6 +150,8 @@ const RightPanel = ({
               tetheringTabActive={activeTopTab === "EDIT" || isTethering ? tetheringTabActive : false}
               onTetheringTabActiveChange={setTetheringTabActive}
               onCancelTethering={onCancelTethering}
+              skipTetheringDetect={skipTetheringDetect}
+              directPanel={directPanel}
             />
           </div>
           <div
@@ -176,40 +184,16 @@ const RightPanel = ({
               onScrollChange={setIsScrolledToBottom}
               forceSubjectTabSignal={forceSubjectTabSignal}
               isTethering={isTethering}
+              showTetheringTab={showTetheringTab}
               onStartTethering={onStartTethering}
               onCapture={onCapture}
               tetheringTabActive={activeTopTab !== "EDIT" || isTethering ? tetheringTabActive : false}
               onTetheringTabActiveChange={setTetheringTabActive}
               onCancelTethering={onCancelTethering}
+              directPanel={directPanel}
             />
           </div>
         </>
-      ) : isTethering ? (
-        <TetheredGridPanel
-          activeTopTab={activeTopTab}
-          currentImageSrc={currentImageSrc}
-          isTethering={isTethering}
-          isLoupeView={isLoupeView}
-          onStartTethering={onStartTethering ?? (() => {})}
-          onCapture={onCapture}
-          initialTetherTab={tetheringTabActive}
-          onTabChange={(tab) => setTetheringTabActive(tab === "tethering")}
-          isScanning={isScanning}
-          appliedPresets={appliedPresets}
-          removedItems={removedItems}
-          onAppliedPresetsChange={setAppliedPresets}
-          onRemovedItemsSet={setRemovedItems}
-          onResetRemovedItem={handleResetRemovedItem}
-          distractionMap={distractionMap}
-          isDistractionScanning={isDistractionScanning}
-          onDistractionRerun={onDistractionRerun}
-          visibleSubjectIndices={visibleSubjectIndices}
-          modelSubjects={modelSubjects}
-          isModelDetecting={isModelDetecting}
-          modelStatusMessage={modelStatusMessage}
-          modelSubjectFilter={modelSubjectFilter}
-          onSuggestObject={onSuggestObject}
-        />
       ) : activeTopTab === "EDIT" ? (
         <AIEditingGridPanel />
       ) : (

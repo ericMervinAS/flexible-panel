@@ -8,7 +8,7 @@ export interface ImportFolder {
 }
 
 interface ImportGateProps {
-  onReady: (source: "sample" | "tethering" | ImportFolder) => void;
+  onReady: (source: "sample" | "tethering" | "tethering-direct" | ImportFolder) => void;
 }
 
 const toJpegName = (name: string) => name.replace(/\.[^.]+$/, ".jpeg");
@@ -68,7 +68,7 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
         </div>
       ) : (
         <div className="flex gap-4">
-          <button
+          {/* <button
             onClick={() => inputRef.current?.click()}
             className="group flex flex-col items-center gap-4 w-[268px] py-12 px-8 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
           >
@@ -79,9 +79,9 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
               <span className="text-[18px] font-medium text-[#d8d8d8]">Upload Folder</span>
               <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">First 24 Images from folder</span>
             </div>
-          </button>
+          </button> */}
 
-          <button
+          {/* <button
             onClick={() => onReady("sample")}
             className="group flex flex-col items-center gap-4 w-[268px] py-12 px-8 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
           >
@@ -94,7 +94,7 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
               <span className="text-[18px] font-medium text-[#d8d8d8]">Sample Album</span>
               <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">Juliana Wedding</span>
             </div>
-          </button>
+          </button> */}
 
           <button
             onClick={() => onReady("tethering")}
@@ -105,8 +105,22 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
               <circle cx="12" cy="13" r="4" />
             </svg>
             <div className="flex flex-col gap-1 text-center">
-              <span className="text-[18px] font-medium text-[#d8d8d8]">Tethering</span>
+              <span className="text-[18px] font-medium text-[#d8d8d8]">Tethering v1.1</span>
               <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">Connect your camera</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => onReady("tethering-direct")}
+            className="group flex flex-col items-center gap-4 w-[268px] py-12 px-8 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#ababab] transition-colors">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            <div className="flex flex-col gap-1 text-center">
+              <span className="text-[18px] font-medium text-[#d8d8d8]">Tethering v1.2</span>
+              <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">Direct panel, no setup</span>
             </div>
           </button>
         </div>

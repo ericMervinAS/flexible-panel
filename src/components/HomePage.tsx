@@ -27,6 +27,7 @@ interface HomePageProps {
   onReady: (source: "sample" | "tethering" | ImportFolder) => void;
   onOpenAlbum: (album: Album) => void;
   onCreateAlbum: () => void;
+  onTryTethering?: () => void;
 }
 
 function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
@@ -84,7 +85,7 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
   );
 }
 
-const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
+const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum, onTryTethering }: HomePageProps) => {
   const { albums } = useAlbums();
   const [showCoachmark, setShowCoachmark] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -272,7 +273,7 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => onReady("tethering")}
-                  className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
+                  className="flex items-center gap-1 bg-[#303030] hover:bg-[#474747] text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
                 >
                   Try Now
                 </button>
@@ -375,7 +376,7 @@ const HomePage = ({ onReady, onOpenAlbum, onCreateAlbum }: HomePageProps) => {
               <button
                 onClick={() => {
                   dismissCoachmark();
-                  onReady("tethering");
+                  onTryTethering ? onTryTethering() : onReady("tethering");
                 }}
                 className="px-4 py-2 rounded bg-[#2563eb] text-white text-sm font-medium hover:bg-[#1d4ed8] transition-colors"
               >

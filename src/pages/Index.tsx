@@ -22,9 +22,11 @@ interface IndexProps {
   onCancelTethering?: () => void;
   albumId?: string;
   initialTopTab?: string;
+  skipTetheringDetect?: boolean;
+  directPanel?: boolean;
 }
 
-const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopTab }: IndexProps) => {
+const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopTab, skipTetheringDetect, directPanel = false }: IndexProps) => {
   const { albums, updateAlbum } = useAlbums();
   const albumName = albumId
     ? (albums.find((a) => a.id === albumId)?.name ?? null)
@@ -60,13 +62,21 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
   );
   imagesLengthRef.current = images.length;
 
-  const handleCapture = (autoAdvance: boolean) => {
-    const newImage = sampleImages[Math.floor(Math.random() * sampleImages.length)];
+  const handleCapture = (
+    autoAdvance: boolean,
+    captureInfo: { addRaw: boolean; addJpeg: boolean } = { addRaw: true, addJpeg: false }
+  ) => {
+    const baseImage = sampleImages[Math.floor(Math.random() * sampleImages.length)];
     const newIndex = imagesLengthRef.current;
+
+    const toAdd: ImageData[] = [];
+    if (captureInfo.addRaw) toAdd.push({ ...baseImage, isRaw: true });
+    if (captureInfo.addJpeg) toAdd.push({ ...baseImage, isRaw: false });
+
     setImages((prev) => {
-      const next = [...prev, newImage];
+      const next = [...prev, ...toAdd];
       if (albumId) {
-        updateAlbum(albumId, { coverSrc: newImage.src, imageCount: next.length, capturedImages: next });
+        updateAlbum(albumId, { coverSrc: baseImage.src, imageCount: next.length, capturedImages: next });
       }
       return next;
     });
@@ -212,14 +222,19 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
                     prev.map((img, i) => i === selectedIndex ? { ...img, stars: rating } : img)
                   )
                 }
+                onColorTagChange={(colorTag) =>
+                  setImages((prev) =>
+                    prev.map((img, i) => i === selectedIndex ? { ...img, colorTag } : img)
+                  )
+                }
               />
             </div>
           )}
         </div>
-        <RightPanel filmstripSelection={filmstripSelection} isScanning={isScanning} isLoupeView={view === "loupe"} activeTopTab={activeTopTab} isTethering={isTethering} onStartTethering={() => {
+        <RightPanel filmstripSelection={filmstripSelection} isScanning={isScanning} isLoupeView={view === "loupe"} activeTopTab={activeTopTab} isTethering={isTethering} showTetheringTab={importSource === "tethering"} directPanel={directPanel} onStartTethering={() => {
           setIsTethering(true);
           if (albumId) updateAlbum(albumId, { tetheringStarted: true });
-        }} onCapture={handleCapture} currentImageIndex={selectedIndex} currentImageSrc={images[selectedIndex]?.src} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionRerunCurrent={() => rerunDistractionDetectionForImage(selectedIndex)} onDistractionSelectionChange={setHighlightedLabels} onDistractionHoverChange={setHoveredLabel} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} initialEditingTab={importSource === "tethering" ? "tethering" : undefined} onCancelTethering={importSource === "tethering" ? onCancelTethering : undefined} />
+        }} onCapture={handleCapture} currentImageIndex={selectedIndex} currentImageSrc={images[selectedIndex]?.src} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionRerunCurrent={() => rerunDistractionDetectionForImage(selectedIndex)} onDistractionSelectionChange={setHighlightedLabels} onDistractionHoverChange={setHoveredLabel} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} initialEditingTab={importSource === "tethering" ? "tethering" : undefined} onCancelTethering={importSource === "tethering" ? onCancelTethering : undefined} skipTetheringDetect={skipTetheringDetect} />
       </div>
       {showCoachmarks && isTethering && images.length === 0 && (
         <CoachmarkFlow onDismiss={() => setShowCoachmarks(false)} />

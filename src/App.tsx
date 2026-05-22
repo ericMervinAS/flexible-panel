@@ -28,6 +28,8 @@ const AppContent = () => {
   const [screen, setScreen] = useState<Screen>("pending");
   const [currentAlbumId, setCurrentAlbumId] = useState<string | undefined>();
   const [initialTopTab, setInitialTopTab] = useState<string | undefined>();
+  const [skipTetheringDetect, setSkipTetheringDetect] = useState(false);
+  const [directPanel, setDirectPanel] = useState(false);
   const { addAlbum } = useAlbums();
 
   const handleImportReady = (folder: ImportFolder, topTab?: string) => {
@@ -44,7 +46,9 @@ const AppContent = () => {
     setScreen(folder);
   };
 
-  const handleTetheringStart = () => {
+  const handleTetheringStart = (skipDetect = false, isDirectPanel = false) => {
+    setSkipTetheringDetect(skipDetect);
+    setDirectPanel(isDirectPanel);
     const id = `tether-${Date.now()}`;
     const now = new Date();
     const date = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -57,6 +61,7 @@ const AppContent = () => {
       imageCount: 0,
       coverSrc: defaultCover,
       source: "tethering",
+      tetheringStarted: isDirectPanel,
     });
     setCurrentAlbumId(id);
     setScreen("tethering");
@@ -78,9 +83,13 @@ const AppContent = () => {
   return (
     <>
       {screen === "pending" ? (
-        <ImportGate onReady={(src) => src === "tethering" ? setScreen("home") : setScreen(src)} />
+        <ImportGate onReady={(src) => {
+          if (src === "tethering") setScreen("home");
+          else if (src === "tethering-direct") handleTetheringStart(false, true);
+          else setScreen(src as Screen);
+        }} />
       ) : screen === "home" ? (
-        <HomePage onReady={handleHomeReady} onOpenAlbum={handleOpenAlbum} onCreateAlbum={() => setScreen("import")} />
+        <HomePage onReady={handleHomeReady} onOpenAlbum={handleOpenAlbum} onCreateAlbum={() => setScreen("import")} onTryTethering={() => handleTetheringStart(true)} />
       ) : screen === "import" ? (
         <ImportScreen
           onReady={handleImportReady}
@@ -90,7 +99,7 @@ const AppContent = () => {
       ) : (
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Index importSource={screen} onGoHome={() => setScreen("home")} onCancelTethering={() => setScreen("import")} albumId={currentAlbumId} initialTopTab={initialTopTab} />} />
+            <Route path="/" element={<Index importSource={screen} onGoHome={() => { setScreen("home"); setSkipTetheringDetect(false); setDirectPanel(false); }} onCancelTethering={() => setScreen("import")} albumId={currentAlbumId} initialTopTab={initialTopTab} skipTetheringDetect={skipTetheringDetect} directPanel={directPanel} />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

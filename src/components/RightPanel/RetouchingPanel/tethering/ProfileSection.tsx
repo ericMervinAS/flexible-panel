@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { CaretDown, CropIcon } from "@phosphor-icons/react";
-import { Toggle } from "./Toggle";
 import { InlineSelect } from "./InlineSelect";
+import PresetDropdown from "@/components/PresetDropdown";
 import {
   parseDualFormat,
   PROFILE_SECTIONS_DATA,
@@ -51,19 +51,20 @@ interface ProfileDropdownProps {
 const ProfileDropdown = ({ value, onChange }: ProfileDropdownProps) => {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
-  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const selectedProfile = ALL_PROFILES_FLAT.find((p) => p.name === value) ?? null;
+  const isCropOnly = value === "Crop & Straighten only";
 
   const updatePosition = () => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
     setMenuStyle({
       position: "fixed",
       top: rect.bottom + 4,
-      left: rect.left,
-      width: Math.max(rect.width, 300),
+      right: window.innerWidth - rect.right,
+      minWidth: 280,
       zIndex: 9999,
     });
   };
@@ -73,7 +74,7 @@ const ProfileDropdown = ({ value, onChange }: ProfileDropdownProps) => {
     updatePosition();
     const onClickOutside = (e: MouseEvent) => {
       if (
-        !containerRef.current?.contains(e.target as Node) &&
+        !triggerRef.current?.contains(e.target as Node) &&
         !menuRef.current?.contains(e.target as Node)
       )
         setOpen(false);
@@ -86,30 +87,20 @@ const ProfileDropdown = ({ value, onChange }: ProfileDropdownProps) => {
     };
   }, [open]);
 
-  const isCropOnly = value === "Crop & Straighten only";
+  const displayLabel = isCropOnly
+    ? "Crop & Straighten only"
+    : (selectedProfile?.name ?? "Select a Profile");
 
   return (
-    <div ref={containerRef} className="w-full">
+    <div className="relative">
       <button
+        ref={triggerRef}
         onClick={() => setOpen((p) => !p)}
-        className="w-full flex items-center gap-3 px-3 py-2 bg-[#242424] rounded-[8px] hover:bg-[#2c2c2c] transition-colors"
+        className="flex items-center gap-1.5 text-[#ababab] hover:text-[#e2e2e2] transition-colors"
       >
-        {isCropOnly ? (
-          <div className="w-[56px] h-[38px] rounded-[4px] bg-[#2a2a2a] flex items-center justify-center shrink-0">
-            <CropIcon size={18} className="text-[#777]" />
-          </div>
-        ) : selectedProfile ? (
-          <ProfileThumb img={selectedProfile.img} size="sm" />
-        ) : null}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          {(isCropOnly || selectedProfile) && !isCropOnly && <LrcBadge />}
-          <span className="text-[14px] font-medium text-[#e2e2e2] flex-1 truncate text-left">
-            {isCropOnly ? "Crop & Straighten only" : (selectedProfile?.name ?? "Select a profile")}
-          </span>
-          {selectedProfile && !isCropOnly && <FormatBadge format={selectedProfile.format} />}
-        </div>
+        <span className="text-[13px]">{displayLabel}</span>
         <CaretDown
-          className={`w-4 h-4 shrink-0 text-[#777] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
 
@@ -187,6 +178,29 @@ interface AiTogglesCardProps {
   onMaskModeChange: (v: string) => void;
 }
 
+const Checkbox = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
+  <button
+    onClick={() => onChange(!checked)}
+    className="w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors"
+    style={{
+      background: checked ? "#2563eb" : "transparent",
+      borderColor: checked ? "#2563eb" : "#444",
+    }}
+  >
+    {checked && (
+      <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+        <path
+          d="M1 4L3.5 6.5L9 1"
+          stroke="white"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )}
+  </button>
+);
+
 const AiTogglesCard = ({
   activeProfile,
   aiCropping,
@@ -205,48 +219,42 @@ const AiTogglesCard = ({
   const isCropOnly = activeProfile === "Crop & Straighten only";
 
   return (
-    <div className="flex flex-col gap-0.5 mt-1">
+    <div className="flex flex-col gap-0.5 ">
       <div className="flex items-center gap-2 py-1.5">
-        <span className="text-[12px] text-[#777] w-[110px] shrink-0">AI Cropping</span>
-        <div className="flex items-center gap-2 flex-1 justify-end">
-          {aiCropping && (
-            <>
-              <InlineSelect
-                value={cropStyle}
-                options={["Loose", "Balanced", "Tight"] as const}
-                onChange={onCropStyleChange}
-              />
-              <InlineSelect
-                value={cropOrientation}
-                options={["Default", "Portrait", "Landscape"] as const}
-                onChange={onCropOrientationChange}
-              />
-            </>
-          )}
-          <Toggle value={aiCropping} onChange={onAiCroppingChange} />
-        </div>
+        <Checkbox checked={aiCropping} onChange={onAiCroppingChange} />
+        <span className="text-[13px] text-[#E2E2E2] flex-1">AI Cropping</span>
+        {aiCropping && (
+          <div className="flex items-center gap-2">
+            <InlineSelect
+              value={cropStyle}
+              options={["Loose", "Balanced", "Tight"] as const}
+              onChange={onCropStyleChange}
+            />
+            <InlineSelect
+              value={cropOrientation}
+              options={["Default", "Portrait", "Landscape"] as const}
+              onChange={onCropOrientationChange}
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2 py-1.5">
-        <span className="text-[12px] text-[#777] w-[110px] shrink-0">AI Straightening</span>
-        <div className="flex items-center gap-2 flex-1 justify-end">
-          <Toggle value={aiStraightening} onChange={onAiStraighteningChange} />
-        </div>
+        <Checkbox checked={aiStraightening} onChange={onAiStraighteningChange} />
+        <span className="text-[13px] text-[#E2E2E2] flex-1">AI Straightening</span>
       </div>
 
       {!isCropOnly && (
         <div className="flex items-center gap-2 py-1.5">
-          <span className="text-[12px] text-[#777] w-[110px] shrink-0">AI Masking</span>
-          <div className="flex items-center gap-2 flex-1 justify-end">
-            {aiMasking && (
-              <InlineSelect
-                value={maskMode}
-                options={["Subject Mask with Edits", "Subject Mask", "Background Mask"] as const}
-                onChange={onMaskModeChange}
-              />
-            )}
-            <Toggle value={aiMasking} onChange={onAiMaskingChange} />
-          </div>
+          <Checkbox checked={aiMasking} onChange={onAiMaskingChange} />
+          <span className="text-[13px] text-[#E2E2E2] flex-1">AI Masking</span>
+          {aiMasking && (
+            <InlineSelect
+              value={maskMode}
+              options={["Subject Mask with Edits", "Subject Mask", "Background Mask"] as const}
+              onChange={onMaskModeChange}
+            />
+          )}
         </div>
       )}
     </div>
@@ -277,6 +285,8 @@ export interface ProfileSectionProps {
   onMaskModeChange: (v: string) => void;
   alwaysShowTabs?: boolean;
   rawFormatLabel?: string;
+  retouchPreset?: string | null;
+  onRetouchPresetChange?: (v: string | null) => void;
 }
 
 export const ProfileSection = ({
@@ -301,10 +311,15 @@ export const ProfileSection = ({
   onMaskModeChange,
   alwaysShowTabs = false,
   rawFormatLabel,
+  retouchPreset,
+  onRetouchPresetChange,
 }: ProfileSectionProps) => {
-  const { isDual, rawLabel, jpegLabel } = parseDualFormat(fileFormat);
+  const { isDual } = parseDualFormat(fileFormat);
   const showTabs = alwaysShowTabs || isDual;
-  const tabRawLabel = isDual ? "RAW" : (rawFormatLabel || "RAW");
+  const isJpegContext = showTabs
+    ? activeProfileTab === "jpeg"
+    : fileFormat.toLowerCase().startsWith("jpeg");
+  const tabRawLabel = isDual ? "RAW" : rawFormatLabel || "RAW";
   const tabJpegLabel = "JPEG";
 
   useEffect(() => {
@@ -327,9 +342,9 @@ export const ProfileSection = ({
   const showAiToggles = activeProfile !== null;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-4">
       {showTabs && (
-        <div className="flex p-0.5 bg-[#161616] rounded-[8px]">
+        <div className="flex p-0.5 mt-1 bg-[#161616] mb-[-4px] rounded-[8px]">
           <button
             onClick={() => onActiveProfileTabChange("raw")}
             className={`flex-1 text-[12px] font-medium py-1.5 rounded-[6px] transition-colors ${
@@ -353,10 +368,34 @@ export const ProfileSection = ({
         </div>
       )}
 
-      <ProfileDropdown value={activeProfile} onChange={onActiveProfileChange} />
+      <div className="flex items-center justify-between gap-2 mt-1">
+        <span className="text-[14px] text-[#E2E2E2] shrink-0">Editing Profile</span>
+        <ProfileDropdown value={activeProfile} onChange={onActiveProfileChange} />
+      </div>
+
+      {isJpegContext && onRetouchPresetChange !== undefined && (
+        <div
+          // data-coachmark="retouch-preset"
+          className="flex items-center justify-between pb-1.5 mt-[-4px]"
+        >
+          <span className="text-[14px] text-[#E2E2E2]">Retouching Preset</span>
+          <PresetDropdown
+            compact
+            menuWidth={300}
+            triggerTextSize="13px"
+            value={retouchPreset ?? null}
+            onChange={onRetouchPresetChange}
+          />
+        </div>
+      )}
+
+      {showAiToggles && onRetouchPresetChange !== undefined && (
+        <div className="w-full h-px bg-[#333] my-[-4px]" />
+      )}
 
       {showAiToggles && (
         <AiTogglesCard
+          data-coachmark="retouch-preset"
           activeProfile={activeProfile}
           aiCropping={aiCropping}
           onAiCroppingChange={onAiCroppingChange}

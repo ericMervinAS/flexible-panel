@@ -159,7 +159,7 @@ const BottomBar = (props: BottomBarProps) => {
         {isLoupe && (
           <>
             <div
-              className="flex items-center gap-[2px] px-2 py-[2px] rounded-[6px] shrink-0"
+              className="flex items-center gap-[2px] px-1.5 py-[3px] rounded-[4px] shrink-0"
               style={{ backgroundColor: colorTagBg[props.image.colorTag] }}
             >
               {Array.from({ length: 5 }).map((_, i) => (
@@ -170,8 +170,8 @@ const BottomBar = (props: BottomBarProps) => {
                 >
                   <Star
                     size={12}
-                    fill={i < props.image.stars ? "white" : "rgba(255,255,255,0.3)"}
-                    strokeWidth={0}
+                    weight="fill"
+                    className={i < props.image.stars ? "text-white" : "text-white/30"}
                   />
                 </button>
               ))}
