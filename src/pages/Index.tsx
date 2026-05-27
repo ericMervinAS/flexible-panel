@@ -49,7 +49,7 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
     return sampleImages;
   });
   const [activeTopTab, setActiveTopTab] = useState(
-    initialTopTab ?? (importSource === "tethering" ? "EDIT" : "RETOUCH")
+    initialTopTab ?? (importSource === "tethering" ? "TETHER" : "RETOUCH")
   );
   const [loupeActiveTab, setLoupeActiveTab] = useState("subject");
   const [filmstripSelection, setFilmstripSelection] = useState<Set<number>>(new Set());
@@ -163,7 +163,7 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <TopBar activeTab={activeTopTab} onTopTabChange={setActiveTopTab} view={view} onViewChange={handleViewChange} filterOpen={filterOpen} onFilterToggle={() => setFilterOpen((v) => !v)} hideCull={importSource === "tethering"} onGoHome={onGoHome} />
+      <TopBar activeTab={activeTopTab} onTopTabChange={setActiveTopTab} view={view} onViewChange={handleViewChange} filterOpen={filterOpen} onFilterToggle={() => setFilterOpen((v) => !v)} hideCull={importSource === "tethering"} showTetherTab={importSource === "tethering"} onGoHome={onGoHome} />
       <div className="flex flex-1 overflow-hidden">
         {/* Left: content area */}
         <div className="flex flex-col flex-1 overflow-hidden">

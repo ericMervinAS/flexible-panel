@@ -108,6 +108,7 @@ const TetheringTab = ({
 
   const [rawProfile, setRawProfile] = useState<string | null>(null);
   const [jpegProfile, setJpegProfile] = useState<string | null>(null);
+  const [editPreset, setEditPreset] = useState<string | null>(null);
   const [activeProfileTab, setActiveProfileTab] = useState<"raw" | "jpeg">("raw");
 
   const [aiCropping, setAiCropping] = useState(true);
@@ -193,6 +194,7 @@ const TetheringTab = ({
   type EditSnapshot = {
     rawProfile: string | null;
     jpegProfile: string | null;
+    editPreset: string | null;
     aiCropping: boolean;
     cropStyle: string;
     cropOrientation: string;
@@ -208,6 +210,7 @@ const TetheringTab = ({
   const takeSnapshot = (): EditSnapshot => ({
     rawProfile,
     jpegProfile,
+    editPreset,
     aiCropping,
     cropStyle,
     cropOrientation,
@@ -221,6 +224,7 @@ const TetheringTab = ({
   const applySnapshot = (snap: EditSnapshot) => {
     setRawProfile(snap.rawProfile);
     setJpegProfile(snap.jpegProfile);
+    setEditPreset(snap.editPreset);
     setAiCropping(snap.aiCropping);
     setCropStyle(snap.cropStyle);
     setCropOrientation(snap.cropOrientation);
@@ -302,6 +306,8 @@ const TetheringTab = ({
     onAiMaskingChange: setAiMasking,
     maskMode,
     onMaskModeChange: setMaskMode,
+    editPreset,
+    onEditPresetChange: setEditPreset,
     retouchPreset,
     onRetouchPresetChange: setRetouchPreset,
   };

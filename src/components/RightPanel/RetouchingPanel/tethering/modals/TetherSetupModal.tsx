@@ -270,6 +270,8 @@ export const TetherSetupModal = ({
           </div>
         </div>
 
+        <div className="w-full h-px bg-[#292929] my-[-4px]" />
+
         {/* Editing Profile */}
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">

@@ -14,7 +14,7 @@ const LOUPE_TABS = [
   { id: "tethering", Icon: CameraIcon },
 ] as const;
 
-export type LoupeTab = typeof LOUPE_TABS[number]["id"];
+export type LoupeTab = (typeof LOUPE_TABS)[number]["id"];
 
 interface LoupePanelProps {
   currentImageIndex: number;
@@ -22,7 +22,10 @@ interface LoupePanelProps {
   isTethering?: boolean;
   showTetheringTab?: boolean;
   onStartTethering?: () => void;
-  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt: string }) => void;
+  onCapture?: (
+    autoAdvance: boolean,
+    captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt: string }
+  ) => void;
   tetheringTabActive?: boolean;
   onTetheringTabActiveChange?: (active: boolean) => void;
   appliedPresets: Record<string, string>;
@@ -111,7 +114,10 @@ const RetouchingPanel = ({
   }, [onTabChange, onTetheringTabActiveChange]);
   const [pasteSourceIndex, setPasteSourceIndex] = useState<number | null>(null);
   const [loupeResetSignal, setLoupeResetSignal] = useState(0);
-  const [loupePasteSignal, setLoupePasteSignal] = useState<{ state: LoupeRetouchState; seq: number } | null>(null);
+  const [loupePasteSignal, setLoupePasteSignal] = useState<{
+    state: LoupeRetouchState;
+    seq: number;
+  } | null>(null);
   const prevImageIndexRef = useRef<number | null>(null);
   // Always holds the latest perImageState so effects can read it without stale closure issues
   const perImageStateRef = useRef(perImageState);
@@ -133,7 +139,7 @@ const RetouchingPanel = ({
         setLoupePasteSignal((prev) => ({ state: savedState, seq: (prev?.seq ?? 0) + 1 }));
       }
     }
-  }, [currentImageIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentImageIndex]);
 
   useEffect(() => {
     if (!tabOverride) return;
@@ -155,7 +161,8 @@ const RetouchingPanel = ({
   };
 
   const isSync = useMemo(() => (filmstripSelection?.size ?? 0) > 0, [filmstripSelection]);
-  const canPaste = !isSync && pasteSourceIndex !== null && hasRetouches(perImageState[pasteSourceIndex]);
+  const canPaste =
+    !isSync && pasteSourceIndex !== null && hasRetouches(perImageState[pasteSourceIndex]);
   const canSync = isSync && hasRetouches(perImageState[currentImageIndex]);
   const canReset = hasRetouches(perImageState[currentImageIndex]);
 
@@ -168,16 +175,17 @@ const RetouchingPanel = ({
             <button
               key={id}
               onClick={() => handleTabChange(id)}
-              className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${activeTab === id
-                ? "border-[#e2e2e2] text-[#e2e2e2]"
-                : "border-transparent text-[#777] hover:text-[#ababab]"
-                }`}
+              className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${
+                activeTab === id
+                  ? "border-[#e2e2e2] text-[#e2e2e2]"
+                  : "border-transparent text-[#777] hover:text-[#ababab]"
+              }`}
             >
               <Icon size={16} />
             </button>
           ))}
         </div>
-        {showTetheringTab && (() => {
+        {/* {showTetheringTab && (() => {
           const { id, Icon } = LOUPE_TABS[LOUPE_TABS.length - 1];
           return (
             <button
@@ -191,7 +199,7 @@ const RetouchingPanel = ({
               <Icon size={16} />
             </button>
           );
-        })()}
+        })()} */}
       </div>
 
       {/* Tab content */}
@@ -201,7 +209,9 @@ const RetouchingPanel = ({
             onScrollChange={onScrollChange}
             currentImageIndex={currentImageIndex}
             syncedPresets={appliedPresets}
-            onStateChange={(state) => setPerImageState((prev) => ({ ...prev, [currentImageIndex]: state }))}
+            onStateChange={(state) =>
+              setPerImageState((prev) => ({ ...prev, [currentImageIndex]: state }))
+            }
             pasteSignal={loupePasteSignal}
             loupeResetSignal={loupeResetSignal}
             modelSubjects={modelSubjects}
@@ -268,20 +278,22 @@ const RetouchingPanel = ({
                 }));
               }
             }}
-            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${(isSync ? canSync : canPaste)
-              ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
-              : "bg-[#303030] text-[#474747] cursor-not-allowed"
-              }`}
+            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${
+              (isSync ? canSync : canPaste)
+                ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
+                : "bg-[#303030] text-[#474747] cursor-not-allowed"
+            }`}
           >
             {isSync ? "Sync" : "Paste"}
           </button>
           <button
             disabled={!canReset}
             onClick={() => canReset && setLoupeResetSignal((s) => s + 1)}
-            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${canReset
-              ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
-              : "bg-[#303030] text-[#474747] cursor-not-allowed"
-              }`}
+            className={`flex-1 flex items-center justify-center px-3 py-2 rounded text-[12px] font-medium transition-colors ${
+              canReset
+                ? "bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] cursor-pointer"
+                : "bg-[#303030] text-[#474747] cursor-not-allowed"
+            }`}
           >
             Reset
           </button>

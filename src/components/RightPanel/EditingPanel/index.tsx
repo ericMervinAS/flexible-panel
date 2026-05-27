@@ -23,7 +23,10 @@ interface EditingPanelProps {
   isTethering?: boolean;
   showTetheringTab?: boolean;
   onStartTethering?: () => void;
-  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt: string }) => void;
+  onCapture?: (
+    autoAdvance: boolean,
+    captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt: string }
+  ) => void;
   initialTab?: EditingTab;
   tetheringTabActive?: boolean;
   onTetheringTabActiveChange?: (active: boolean) => void;
@@ -83,7 +86,7 @@ const EditingPanel = ({
             </button>
           ))}
         </div>
-        {showTetheringTab && (
+        {/* {showTetheringTab && (
           <button
             onClick={() => handleTabChange("tethering")}
             className={`flex items-center gap-1 pl-1 pr-1.5 py-2 -mb-px border-b transition-colors ${
@@ -94,7 +97,7 @@ const EditingPanel = ({
           >
             <CameraIcon size={16} />
           </button>
-        )}
+        )} */}
       </div>
 
       {/* Tab content */}

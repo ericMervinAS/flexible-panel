@@ -9,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 
 const ALL_TABS = ["CULL", "EDIT", "RETOUCH"] as const;
+const TETHER_TABS = ["TETHER", "CULL", "EDIT", "RETOUCH"] as const;
 
 interface TopBarProps {
   activeTab: string;
@@ -18,6 +19,7 @@ interface TopBarProps {
   filterOpen?: boolean;
   onFilterToggle?: () => void;
   hideCull?: boolean;
+  showTetherTab?: boolean;
   onGoHome?: () => void;
 }
 
@@ -29,9 +31,11 @@ const TopBar = ({
   filterOpen,
   onFilterToggle,
   hideCull,
+  showTetherTab,
   onGoHome,
 }: TopBarProps) => {
-  const tabs = hideCull ? ALL_TABS.filter((t) => t !== "CULL") : ALL_TABS;
+  const baseTabs = showTetherTab ? TETHER_TABS : ALL_TABS;
+  const tabs = hideCull ? baseTabs.filter((t) => t !== "CULL") : baseTabs;
   return (
     <header className="flex items-center justify-between h-11 px-3 bg-[#1c1c1c] shrink-0 border-b border-background">
       {/* Left: Views + Filter + Add */}

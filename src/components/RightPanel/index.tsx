@@ -4,6 +4,7 @@ import GridPanel from "./GridPanel";
 import RetouchingPanel, { LoupeTab } from "./RetouchingPanel";
 import EditingPanel from "./EditingPanel";
 import AIEditingGridPanel from "./AIEditingGridPanel";
+import TetherPanel from "./TetherPanel";
 import type { ModelSubject } from "@/hooks/useFaceDetection";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 
@@ -135,6 +136,18 @@ const RightPanel = ({
 
       {isLoupeView ? (
         <>
+          {activeTopTab === "TETHER" && (
+            <TetherPanel
+              currentImageSrc={currentImageSrc}
+              isTethering={isTethering}
+              isLoupeView={true}
+              onStartTethering={onStartTethering ?? (() => {})}
+              onCancelTethering={onCancelTethering}
+              onCapture={onCapture}
+              skipTetheringDetect={skipTetheringDetect}
+              directPanel={directPanel}
+            />
+          )}
           <div
             className={`flex-1 flex flex-col overflow-hidden ${activeTopTab !== "EDIT" ? "hidden" : ""}`}
           >
@@ -145,7 +158,7 @@ const RightPanel = ({
               onStartTethering={onStartTethering}
               onCapture={onCapture}
               initialTab={
-                initialEditingTab as "sliders" | "crop" | "mask" | "tethering" | undefined
+                showTetheringTab ? undefined : (initialEditingTab as "sliders" | "crop" | "mask" | "tethering" | undefined)
               }
               tetheringTabActive={activeTopTab === "EDIT" || isTethering ? tetheringTabActive : false}
               onTetheringTabActiveChange={setTetheringTabActive}
@@ -155,7 +168,7 @@ const RightPanel = ({
             />
           </div>
           <div
-            className={`flex-1 flex flex-col overflow-hidden ${activeTopTab === "EDIT" ? "hidden" : ""}`}
+            className={`flex-1 flex flex-col overflow-hidden ${activeTopTab === "EDIT" || activeTopTab === "TETHER" ? "hidden" : ""}`}
           >
             <RetouchingPanel
               currentImageIndex={currentImageIndex}
@@ -196,6 +209,17 @@ const RightPanel = ({
         </>
       ) : activeTopTab === "EDIT" ? (
         <AIEditingGridPanel />
+      ) : activeTopTab === "TETHER" ? (
+        <TetherPanel
+          currentImageSrc={currentImageSrc}
+          isTethering={isTethering}
+          isLoupeView={false}
+          onStartTethering={onStartTethering ?? (() => {})}
+          onCancelTethering={onCancelTethering}
+          onCapture={onCapture}
+          skipTetheringDetect={skipTetheringDetect}
+          directPanel={directPanel}
+        />
       ) : (
         <GridPanel
           isScanning={isScanning}

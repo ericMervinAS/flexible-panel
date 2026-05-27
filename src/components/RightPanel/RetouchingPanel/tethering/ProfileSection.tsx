@@ -10,6 +10,132 @@ import {
   type ProfileItem,
 } from "./constants";
 
+// ─── Edit presets ─────────────────────────────────────────────────────────────
+
+const EDIT_PRESET_SECTIONS = [
+  {
+    group: "Bright & Clean",
+    presets: ["Airy Light", "Soft White", "Pure & Clean", "Morning Glow"],
+  },
+  {
+    group: "Moody",
+    presets: ["Dark & Dramatic", "Muted Shadows", "Cinematic Fade", "Deep Contrast"],
+  },
+  {
+    group: "Film",
+    presets: ["Kodak Porta 400", "Fuji 400H", "Ilford HP5", "Cinestill 800T"],
+  },
+  {
+    group: "Natural",
+    presets: ["Warm Skin", "True Color", "Golden Hour", "Soft Pastel"],
+  },
+  {
+    group: "Black & White",
+    presets: ["Classic B&W", "High Contrast BW", "Soft Matte BW", "Selenium Tone"],
+  },
+];
+
+interface EditPresetDropdownProps {
+  value: string | null;
+  onChange: (v: string | null) => void;
+}
+
+const EditPresetDropdown = ({ value, onChange }: EditPresetDropdownProps) => {
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const updatePosition = () => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setMenuStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+      minWidth: 240,
+      zIndex: 9999,
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+    const onClickOutside = (e: MouseEvent) => {
+      if (
+        !triggerRef.current?.contains(e.target as Node) &&
+        !menuRef.current?.contains(e.target as Node)
+      )
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        onClick={() => setOpen((p) => !p)}
+        className="flex items-center gap-1.5 text-[#ababab] hover:text-[#e2e2e2] transition-colors"
+      >
+        <span className="text-[13px]">{value ?? "Select Preset"}</span>
+        <CaretDown
+          className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{ ...menuStyle, scrollbarWidth: "none" } as React.CSSProperties}
+            className="bg-[#1e1e1e] border border-[#303030] rounded-[10px] p-1 flex flex-col max-h-[380px] overflow-y-auto shadow-xl"
+          >
+            <button
+              onClick={() => {
+                onChange(null);
+                setOpen(false);
+              }}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-[6px] text-left transition-colors ${value === null ? "bg-white/5" : "hover:bg-white/5"}`}
+            >
+              <span className="text-[14px] text-[#777]">None</span>
+            </button>
+            {EDIT_PRESET_SECTIONS.map((section, si) => (
+              <div key={section.group}>
+                <div className={`h-px bg-[#2a2a2a] mx-2 ${si === 0 ? "my-1" : "mt-1 mb-0"}`} />
+                <div className="px-3 pt-2.5 pb-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#555]">
+                    {section.group}
+                  </span>
+                </div>
+                {section.presets.map((name) => (
+                  <button
+                    key={name}
+                    onClick={() => {
+                      onChange(name);
+                      setOpen(false);
+                    }}
+                    className={`w-full flex items-center px-3 py-2 rounded-[6px] transition-colors text-left ${
+                      value === name ? "bg-white/5" : "hover:bg-white/5"
+                    }`}
+                  >
+                    <span className="text-[14px] font-medium text-[#e2e2e2]">{name}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+};
+
 // ─── Small profile UI atoms ───────────────────────────────────────────────────
 
 export const LrcBadge = () => (
@@ -219,24 +345,22 @@ const AiTogglesCard = ({
   const isCropOnly = activeProfile === "Crop & Straighten only";
 
   return (
-    <div className="flex flex-col gap-0.5 ">
+    <div className="flex flex-col gap-0.5 mt-[-8px] pl-6 mb-2 p-2 pr-3 rounded-[0.5rem] bg-neutral-800">
       <div className="flex items-center gap-2 py-1.5">
         <Checkbox checked={aiCropping} onChange={onAiCroppingChange} />
         <span className="text-[13px] text-[#E2E2E2] flex-1">AI Cropping</span>
-        {aiCropping && (
-          <div className="flex items-center gap-2">
-            <InlineSelect
-              value={cropStyle}
-              options={["Loose", "Balanced", "Tight"] as const}
-              onChange={onCropStyleChange}
-            />
-            <InlineSelect
-              value={cropOrientation}
-              options={["Default", "Portrait", "Landscape"] as const}
-              onChange={onCropOrientationChange}
-            />
-          </div>
-        )}
+        <div className={`flex items-center gap-2 transition-opacity ${aiCropping ? "opacity-100" : "opacity-30 pointer-events-none"}`}>
+          <InlineSelect
+            value={cropStyle}
+            options={["Loose", "Balanced", "Tight"] as const}
+            onChange={onCropStyleChange}
+          />
+          <InlineSelect
+            value={cropOrientation}
+            options={["Default", "Portrait", "Landscape"] as const}
+            onChange={onCropOrientationChange}
+          />
+        </div>
       </div>
 
       <div className="flex items-center gap-2 py-1.5">
@@ -244,19 +368,17 @@ const AiTogglesCard = ({
         <span className="text-[13px] text-[#E2E2E2] flex-1">AI Straightening</span>
       </div>
 
-      {!isCropOnly && (
-        <div className="flex items-center gap-2 py-1.5">
-          <Checkbox checked={aiMasking} onChange={onAiMaskingChange} />
-          <span className="text-[13px] text-[#E2E2E2] flex-1">AI Masking</span>
-          {aiMasking && (
-            <InlineSelect
-              value={maskMode}
-              options={["Subject Mask with Edits", "Subject Mask", "Background Mask"] as const}
-              onChange={onMaskModeChange}
-            />
-          )}
+      <div className="flex items-center gap-2 py-1.5">
+        <Checkbox checked={aiMasking} onChange={onAiMaskingChange} />
+        <span className="text-[13px] text-[#E2E2E2] flex-1">AI Masking</span>
+        <div className={`transition-opacity ${aiMasking ? "opacity-100" : "opacity-30 pointer-events-none"}`}>
+          <InlineSelect
+            value={maskMode}
+            options={["Subject Mask with Edits", "Subject Mask", "Background Mask"] as const}
+            onChange={onMaskModeChange}
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -285,6 +407,8 @@ export interface ProfileSectionProps {
   onMaskModeChange: (v: string) => void;
   alwaysShowTabs?: boolean;
   rawFormatLabel?: string;
+  editPreset?: string | null;
+  onEditPresetChange?: (v: string | null) => void;
   retouchPreset?: string | null;
   onRetouchPresetChange?: (v: string | null) => void;
 }
@@ -311,6 +435,8 @@ export const ProfileSection = ({
   onMaskModeChange,
   alwaysShowTabs = false,
   rawFormatLabel,
+  editPreset = null,
+  onEditPresetChange,
   retouchPreset,
   onRetouchPresetChange,
 }: ProfileSectionProps) => {
@@ -369,31 +495,18 @@ export const ProfileSection = ({
       )}
 
       <div className="flex items-center justify-between gap-2 mt-1">
-        <span className="text-[14px] text-[#E2E2E2] shrink-0">Editing Profile</span>
+        <span className="text-[14px] text-[#E2E2E2] shrink-0">Edit AI Profile</span>
         <ProfileDropdown value={activeProfile} onChange={onActiveProfileChange} />
       </div>
-
-      {isJpegContext && onRetouchPresetChange !== undefined && (
-        <div
-          // data-coachmark="retouch-preset"
-          className="flex items-center justify-between pb-1.5 mt-[-4px]"
-        >
-          <span className="text-[14px] text-[#E2E2E2]">Retouching Preset</span>
-          <PresetDropdown
-            compact
-            menuWidth={300}
-            triggerTextSize="13px"
-            value={retouchPreset ?? null}
-            onChange={onRetouchPresetChange}
-          />
+      {/* 
+      {onEditPresetChange !== undefined && (
+        <div className="flex items-center justify-between pb-1.5 mt-[-4px]">
+          <span className="text-[14px] text-[#E2E2E2] shrink-0">Edit Preset</span>
+          <EditPresetDropdown value={editPreset} onChange={onEditPresetChange} />
         </div>
-      )}
+      )} */}
 
-      {showAiToggles && onRetouchPresetChange !== undefined && (
-        <div className="w-full h-px bg-[#333] my-[-4px]" />
-      )}
-
-      {showAiToggles && (
+      {/* {showAiToggles && (
         <AiTogglesCard
           data-coachmark="retouch-preset"
           activeProfile={activeProfile}
@@ -410,7 +523,49 @@ export const ProfileSection = ({
           maskMode={maskMode}
           onMaskModeChange={onMaskModeChange}
         />
+      )} */}
+
+      <AiTogglesCard
+        data-coachmark="retouch-preset"
+        activeProfile={activeProfile}
+        aiCropping={aiCropping}
+        onAiCroppingChange={onAiCroppingChange}
+        cropStyle={cropStyle}
+        onCropStyleChange={onCropStyleChange}
+        cropOrientation={cropOrientation}
+        onCropOrientationChange={onCropOrientationChange}
+        aiStraightening={aiStraightening}
+        onAiStraighteningChange={onAiStraighteningChange}
+        aiMasking={aiMasking}
+        onAiMaskingChange={onAiMaskingChange}
+        maskMode={maskMode}
+        onMaskModeChange={onMaskModeChange}
+      />
+
+      <div className="flex items-center justify-between pb-1.5 mt-[-4px]">
+        <span className="text-[14px] text-[#E2E2E2] shrink-0">Edit Preset</span>
+        <EditPresetDropdown value={editPreset} onChange={onEditPresetChange} />
+      </div>
+
+      {onRetouchPresetChange !== undefined && (
+        <div
+          // data-coachmark="retouch-preset"
+          className="flex items-center justify-between pb-1.5 mt-[-4px]"
+        >
+          <span className="text-[14px] text-[#E2E2E2]">Retouching Preset</span>
+          <PresetDropdown
+            compact
+            menuWidth={300}
+            triggerTextSize="13px"
+            value={retouchPreset ?? null}
+            onChange={onRetouchPresetChange}
+          />
+        </div>
       )}
+
+      {/* {showAiToggles && onRetouchPresetChange !== upndefined && (
+        <div className="w-full h-px bg-[#333] my-[-4px]" />
+      )} */}
     </div>
   );
 };
