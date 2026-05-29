@@ -1,5 +1,26 @@
 import { createPortal } from "react-dom";
 import { X } from "@phosphor-icons/react";
+import canonCover from "../../../../../assets/camerCover/canon.png";
+import fujifilmCover from "../../../../../assets/camerCover/fujifilm.png";
+import hasselbladCover from "../../../../../assets/camerCover/hasselblad.png";
+import nikonCover from "../../../../../assets/camerCover/nilkon.png";
+import sonyCover from "../../../../../assets/camerCover/sony.png";
+
+const brandCoverMap: Record<string, string> = {
+  canon: canonCover,
+  fujifilm: fujifilmCover,
+  hasselblad: hasselbladCover,
+  nikon: nikonCover,
+  sony: sonyCover,
+};
+
+function getCoverForCamera(name: string): string | undefined {
+  const lower = name.toLowerCase();
+  for (const brand of Object.keys(brandCoverMap)) {
+    if (lower.includes(brand)) return brandCoverMap[brand];
+  }
+  return undefined;
+}
 
 interface TetherCameraSelectModalProps {
   onCancel: () => void;
@@ -37,37 +58,39 @@ export const TetherCameraSelectModal = ({ onCancel, onSelect }: TetherCameraSele
             <button
               key={cam.name}
               onClick={() => onSelect(cam.name)}
-              className="group flex flex-col items-center gap-4 flex-1 py-8 px-4 rounded-xl border border-[#161616] bg-[#161616] hover:border-[#212121] hover:bg-[#1e1e1e] transition-colors cursor-pointer"
+              className="group relative flex flex-col items-center justify-center flex-1 h-40 px-4 rounded-xl border border-[#161616] overflow-hidden hover:border-[#212121] transition-colors cursor-pointer"
             >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#666"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="group-hover:stroke-[#ababab] transition-colors"
-              >
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
-              <div className="flex flex-col gap-1 text-center">
+              {getCoverForCamera(cam.name) ? (
+                <img
+                  src={getCoverForCamera(cam.name)}
+                  alt={cam.name}
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-[#161616]" />
+              )}
+              <div
+                className="absolute inset-0 transition-opacity duration-200 opacity-100 group-hover:opacity-85 "
+                style={{
+                  background:
+                    "linear-gradient(-47.18deg, rgba(17,17,17,0.922) 13.554%, rgba(0,0,0,0.712) 85.165%)",
+                }}
+              />
+              <div className="relative z-10 flex flex-col gap-1 text-center">
                 <span className="text-[14px] font-medium text-[#d8d8d8]">{cam.name}</span>
               </div>
             </button>
           ))}
         </div>
 
-        <div className="flex items-center justify-end">
+        {/* <div className="flex items-center justify-end">
           <button
             onClick={onCancel}
             className="px-4 py-2.5 rounded-[8px] bg-[#2a2a2a] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#333] transition-colors"
           >
             Cancel
           </button>
-        </div>
+        </div> */}
       </div>
     </div>,
     document.body

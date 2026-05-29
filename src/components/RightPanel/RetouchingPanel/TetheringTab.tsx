@@ -1,7 +1,18 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import { useSessionState } from "@/hooks/useSessionState";
 import PinnedSlidersCard from "../../PinnedSlidersCard";
-import { BatteryHigh, GearIcon, LinkBreakIcon, FolderSimpleIcon } from "@phosphor-icons/react";
+import {
+  BatteryHigh,
+  GearIcon,
+  LinkBreakIcon,
+  FolderSimpleIcon,
+  Moon,
+  ArrowsClockwise,
+  AppWindow,
+  EjectSimpleIcon,
+  CaretRight,
+} from "@phosphor-icons/react";
 import Accordion from "../../Accordion";
 import PresetDropdown from "../../PresetDropdown";
 import SliderRow from "../../SliderRow";
@@ -26,6 +37,7 @@ import { TetherWelcomeModal } from "./tethering/modals/TetherWelcomeModal";
 import { TetherCameraSelectModal } from "./tethering/modals/TetherCameraSelectModal";
 import { TetherDetectModal } from "./tethering/modals/TetherDetectModal";
 import { TetherSetupModal } from "./tethering/modals/TetherSetupModal";
+import { TetherEndConfirmModal } from "./tethering/modals/TetherEndConfirmModal";
 
 const NAMING_PATTERNS: Array<{
   id: string;
@@ -57,10 +69,46 @@ interface TetheringTabProps {
   onStartTethering: () => void;
   onCancelSetup?: () => void;
   onCancelTethering?: () => void;
-  onCapture?: (autoAdvance: boolean, captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt: string }) => void;
+  onCapture?: (
+    autoAdvance: boolean,
+    captureInfo: { addRaw: boolean; addJpeg: boolean; rawExt: string }
+  ) => void;
   skipDetect?: boolean;
   directPanel?: boolean;
 }
+
+type CameraStatus = "connected" | "asleep" | "disconnected" | "reconnecting" | "stolen";
+
+const STATUS_DOT: Record<CameraStatus, string> = {
+  connected: "bg-[#4ade80]",
+  asleep: "bg-[#fbbf24]",
+  disconnected: "bg-[#ef4444]",
+  reconnecting: "bg-[#3b82f6] animate-pulse",
+  stolen: "bg-[#f97316]",
+};
+
+const STATUS_LABEL: Record<Exclude<CameraStatus, "connected">, string> = {
+  asleep: "Asleep",
+  disconnected: "Disconnected",
+  reconnecting: "Reconnecting",
+  stolen: "Camera Busy",
+};
+
+const STATUS_LABEL_COLOR: Record<Exclude<CameraStatus, "connected">, string> = {
+  asleep: "text-[#fbbf24]",
+  disconnected: "text-[#ef4444]",
+  reconnecting: "text-[#3b82f6]",
+  stolen: "text-[#f97316]",
+};
+
+// Cycle order for the status dot click (simulation only)
+const STATUS_CYCLE: CameraStatus[] = [
+  "connected",
+  "asleep",
+  "disconnected",
+  "stolen",
+  "reconnecting",
+];
 
 const TetheringTab = ({
   currentImageSrc,
@@ -281,6 +329,35 @@ const TetheringTab = ({
     };
   }, []);
 
+  const [cameraOpen, setCameraOpen] = useState(true);
+  const [cameraStatus, setCameraStatus] = useState<CameraStatus>("connected");
+
+  const cycleStatus = () =>
+    setCameraStatus((cur) => STATUS_CYCLE[(STATUS_CYCLE.indexOf(cur) + 1) % STATUS_CYCLE.length]);
+
+  // Simulation: reconnecting auto-resolves after 3 s
+  useEffect(() => {
+    if (cameraStatus !== "reconnecting") return;
+    const t = setTimeout(() => setCameraStatus("connected"), 3000);
+    return () => clearTimeout(t);
+  }, [cameraStatus]);
+
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [ejectMode, setEjectMode] = useState<"end" | "eject-end" | null>(null);
+  const [sessionEndedMode, setSessionEndedMode] = useState<"end" | "eject-end" | null>(null);
+  const [showEjectDropdown, setShowEjectDropdown] = useState(false);
+  const ejectDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showEjectDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (ejectDropdownRef.current && !ejectDropdownRef.current.contains(e.target as Node)) {
+        setShowEjectDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showEjectDropdown]);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showDetect, setShowDetect] = useState(!isTethering && !skipDetect);
   const [showCameraSelect, setShowCameraSelect] = useState(false);
@@ -320,392 +397,494 @@ const TetheringTab = ({
       {isTethering && (
         <>
           <div className="flex flex-col gap-3">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <span className="text-[14px] font-medium text-[#e2e2e2]">Camera</span>
-              <div className="flex items-center">
-                {/* <div className="flex items-center gap-1 px-1.5 py-1 rounded border border-[rgba(21,128,61,0.4)] bg-[rgba(21,128,61,0.12)] backdrop-blur-[2px]">
-                  <div className="w-3 h-3 flex items-center justify-center shrink-0">
-                    
-                  </div>
-                  <span className="text-[11px] font-medium text-[#e2e2e2]">Connected</span>
-                </div> */}
+            {sessionEndedMode ? (
+              /* ── Session-ended header ── */
+              <div className="flex items-center justify-between">
+                <span className="text-[14px] font-medium text-[#e2e2e2]">
+                  {sessionEndedMode === "end" ? cameraName : "Camera"}
+                </span>
                 <button
-                  onClick={() => setShowSetup(false)}
-                  className="text-[#666] hover:text-[#ababab] transition-colors pl-2 py-2"
+                  onClick={() => {
+                    setSessionEndedMode(null);
+                    setCameraStatus("reconnecting");
+                  }}
+                  className="px-2 py-1.5 rounded-[4px] bg-[#303030] hover:bg-[#474747] active:bg-[#171717] text-[11px] font-medium text-white transition-colors"
                 >
-                  <LinkBreakIcon size={16} />
+                  Reconnect
                 </button>
-
-                {!directPanel && (
-                  <button
-                    onClick={() => setShowSetup(true)}
-                    className="text-[#666] hover:text-[#ababab] transition-colors pl-2 py-2"
-                  >
-                    <GearIcon size={16} />
-                  </button>
-                )}
               </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-[14px] font-medium text-[#ababab]">{cameraName}</span>
-                <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
-              </div>
-              <div className="flex items-center gap-1.5 text-[#ababab]">
-                <BatteryHigh size={16} />
-                <span className="text-[14px] font-medium">78%</span>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              {/* Value cards */}
-              <div className="flex gap-2">
-                <CameraCard
-                  label="APERTURE"
-                  stops={APERTURE_STOPS}
-                  index={apertureIdx}
-                  onPrev={() => setApertureIdx((i) => Math.max(0, i - 1))}
-                  onNext={() => setApertureIdx((i) => Math.min(APERTURE_STOPS.length - 1, i + 1))}
-                  onDragStart={() => setDraggingCard("APERTURE")}
-                  onDragEnd={() => setDraggingCard(null)}
-                  suppressHover={draggingCard !== null && draggingCard !== "APERTURE"}
-                  renderValue={(v) => (
-                    <span className="leading-none text-[#e2e2e2] font-medium">
-                      <span className="text-[12px] pr-1">f</span>
-                      <span className="text-[20px]">{v}</span>
-                    </span>
-                  )}
-                />
-                <CameraCard
-                  label="SHUTTER"
-                  stops={SHUTTER_STOPS}
-                  index={shutterIdx}
-                  onPrev={() => setShutterIdx((i) => Math.max(0, i - 1))}
-                  onNext={() => setShutterIdx((i) => Math.min(SHUTTER_STOPS.length - 1, i + 1))}
-                  onDragStart={() => setDraggingCard("SHUTTER")}
-                  onDragEnd={() => setDraggingCard(null)}
-                  suppressHover={draggingCard !== null && draggingCard !== "SHUTTER"}
-                  renderValue={(v) => (
-                    <span className="leading-none text-[#e2e2e2] font-medium">
-                      <span className="text-[14px] pr-1">1/</span>
-                      <span className="text-[20px]">{v}</span>
-                    </span>
-                  )}
-                />
-                <CameraCard
-                  label="ISO"
-                  stops={ISO_STOPS}
-                  index={isoIdx}
-                  onPrev={() => setIsoIdx((i) => Math.max(0, i - 1))}
-                  onNext={() => setIsoIdx((i) => Math.min(ISO_STOPS.length - 1, i + 1))}
-                  onDragStart={() => setDraggingCard("ISO")}
-                  onDragEnd={() => setDraggingCard(null)}
-                  suppressHover={draggingCard !== null && draggingCard !== "ISO"}
-                  renderValue={(v) => (
-                    <span className="leading-none text-[#e2e2e2] font-medium">
-                      <span className="text-[20px]">{v}</span>
-                    </span>
-                  )}
-                />
-              </div>
-
-              {/* Capture button */}
-              <div className="flex justify-center gap-2 py-1">
-                <CameraCard
-                  label="WB"
-                  stops={[...WB_OPTIONS]}
-                  index={wbIdx}
-                  onPrev={() => setWbIdx((i) => Math.max(0, i - 1))}
-                  onNext={() => setWbIdx((i) => Math.min(WB_OPTIONS.length - 1, i + 1))}
-                  onDragStart={() => setDraggingCard("WB")}
-                  onDragEnd={() => setDraggingCard(null)}
-                  suppressHover={draggingCard !== null && draggingCard !== "WB"}
-                  renderValue={(v) => (
-                    <span className="text-[18px] font-medium text-[#e2e2e2] leading-none text-center">
-                      {v}
-                    </span>
-                  )}
-                />
-
-                <div className="px-4">
-                  <button
-                    data-coachmark="capture-btn"
-                    onClick={handleCapture}
-                    className="w-16 h-16 rounded-full border-[3px] border-white/30 flex items-center justify-center transition-all active:scale-95 group relative"
-                  >
-                    <div
-                      className={`w-[52px] h-[52px] rounded-full transition-colors ${timerCount !== null ? "bg-white/30" : "bg-white group-hover:bg-white/90 group-active:bg-white/75"}`}
-                    />
-                    {timerCount !== null && (
-                      <span className="absolute inset-0 flex items-center justify-center text-[22px] font-bold text-white tabular-nums leading-none">
-                        {timerCount}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Settings rows */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                  Format
-                </span>
-                <InlineSelect value={fileFormat} options={formatOptions} onChange={setFileFormat} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                  Import
-                </span>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => isDual && (importJpeg || !importRaw) && setImportRaw(!importRaw)}
-                    disabled={!isDual}
-                    className={`flex items-center gap-1.5 ${!isDual && isJpegOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
-                  >
-                    <div
-                      className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
-                        isRawOnly || (isDual && importRaw)
-                          ? "bg-[#2563eb] border-[#2563eb]"
-                          : "border-[#444] bg-transparent"
-                      }`}
+            ) : (
+              /* ── Active tethering header ── */
+              <>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCameraOpen((v) => !v)}
+                      className="w-3 h-3 flex items-center justify-center text-[#777] hover:text-[#ababab] transition-colors shrink-0"
                     >
-                      {(isRawOnly || (isDual && importRaw)) && (
-                        <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
-                          <path
-                            d="M1 4L3.5 6.5L9 1"
-                            stroke="white"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                    <span
-                      className={`text-[13px] font-medium ${!isDual && isJpegOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
-                    >
-                      RAW
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      isDual && (importRaw || !importJpeg) && setImportJpeg(!importJpeg)
-                    }
-                    disabled={!isDual}
-                    className={`flex items-center gap-1.5 ${!isDual && isRawOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
-                  >
-                    <div
-                      className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
-                        isJpegOnly || (isDual && importJpeg)
-                          ? "bg-[#2563eb] border-[#2563eb]"
-                          : "border-[#444] bg-transparent"
-                      }`}
-                    >
-                      {(isJpegOnly || (isDual && importJpeg)) && (
-                        <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
-                          <path
-                            d="M1 4L3.5 6.5L9 1"
-                            stroke="white"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                    <span
-                      className={`text-[13px] font-medium ${!isDual && isRawOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
-                    >
-                      JPEG
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                  Aspect Ratio
-                </span>
-                <InlineSelect
-                  value={aspectRatio}
-                  options={ASPECT_OPTIONS}
-                  onChange={setAspectRatio}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                  Shoot Mode
-                </span>
-                <InlineSelect value={shootMode} options={SHOOT_OPTIONS} onChange={setShootMode} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                  Focus Mode
-                </span>
-                <InlineSelect value={focusMode} options={FOCUS_OPTIONS} onChange={setFocusMode} />
-              </div>
-
-              {isLoupeView && (
-                <div
-                  onClick={() => setAutoAdvance((p) => !p)}
-                  className="flex items-center justify-between w-full cursor-pointer"
-                >
-                  <span
-                    onMouseEnter={() => setAutoAdvanceHovered(true)}
-                    onMouseLeave={() => setAutoAdvanceHovered(false)}
-                    className="relative inline-flex text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]"
-                  >
-                    <Tooltip
-                      label="Automatically move to the next image after each capture"
-                      visible={autoAdvanceHovered}
-                      position="top"
-                    />
-                    Auto Advance
-                  </span>
-                  <Toggle value={autoAdvance} onChange={setAutoAdvance} />
-                </div>
-              )}
-
-              {directPanel && <div className="h-px bg-[#e2e2e20d]" />}
-
-              {directPanel && (
-                <Accordion title="File Options">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                        Destination
-                      </span>
+                      <CaretRight
+                        size={12}
+                        className={`transition-transform duration-150 ${cameraOpen ? "rotate-90" : ""}`}
+                      />
+                    </button>
+                    <span className="text-[14px] font-medium text-[#e2e2e2]">Camera</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {/* Eject dropdown */}
+                    <div ref={ejectDropdownRef} className="relative">
                       <button
-                        onClick={pickFolder}
-                        className="group flex w-full text-left gap-2 items-center justify-between px-2.5 py-2 bg-[#242424] rounded hover:bg-[#2a2a2a] transition-colors"
+                        onClick={() => setShowEjectDropdown((v) => !v)}
+                        className="text-[#555] hover:text-[#ababab] transition-colors px-1 py-2"
+                        title="Disconnect options"
                       >
-                        <span className="text-[13px] text-[#e2e2e2] truncate flex-1">
-                          {destination}
-                        </span>
-                        <FolderSimpleIcon size={16} className="text-[#777] shrink-0" />
+                        <EjectSimpleIcon weight="fill" size={16} />
                       </button>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-                          File Naming
-                        </span>
-                        <InlineSelect
-                          value={activeNamingPattern?.label ?? NAMING_PATTERNS[0].label}
-                          options={NAMING_PATTERNS.map((p) => p.label)}
-                          onChange={(label) => {
-                            const p = NAMING_PATTERNS.find((p) => p.label === label);
-                            if (p) applyNamingPattern(p);
-                          }}
-                        />
-                      </div>
-                      {showNamingPrefixInput && (
-                        <div className="flex items-center justify-between px-2.5 py-2 bg-[#242424] rounded">
-                          <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] shrink-0">
-                            Prefix
-                          </span>
-                          <input
-                            type="text"
-                            value={namingUserPrefix}
-                            placeholder="Smith"
-                            onChange={(e) => updateNamingPrefix(e.target.value)}
-                            className="bg-transparent outline-none text-[13px] text-[#e2e2e2] placeholder:text-[#3a3a3a] text-right"
-                          />
+                      {showEjectDropdown && (
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-[#1e1e1e] border border-[#303030] rounded-[8px] py-1 min-w-[180px] shadow-lg">
+                          <button
+                            onClick={() => {
+                              setShowEjectDropdown(false);
+                              setEjectMode("end");
+                              setShowEndConfirm(true);
+                            }}
+                            className="w-full text-left px-3 py-2 text-[13px] text-[#e2e2e2] hover:bg-white/5 transition-colors"
+                          >
+                            End Tethering
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowEjectDropdown(false);
+                              setEjectMode("eject-end");
+                              setShowEndConfirm(true);
+                            }}
+                            className="w-full text-left px-3 py-2 text-[13px] text-[#e2e2e2] hover:bg-white/5 transition-colors"
+                          >
+                            Eject and End Tethering
+                          </button>
                         </div>
                       )}
-                      <span className="text-[12px] text-[#555] truncate">
-                        e.g.{" "}
-                        {namingPreview(
-                          activeNamingPattern?.template ?? NAMING_PATTERNS[0].template
+                    </div>
+
+                    {!directPanel && (
+                      <button
+                        onClick={() => setShowSetup(true)}
+                        className="text-[#666] hover:text-[#ababab] transition-colors px-1 py-2"
+                      >
+                        <GearIcon size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {cameraOpen && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-medium text-[#ababab]">{cameraName}</span>
+                      <button
+                        onClick={cycleStatus}
+                        title="Click to cycle status (simulation)"
+                        className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[cameraStatus]} cursor-pointer`}
+                      />
+                    </div>
+                    {cameraStatus === "connected" ? (
+                      <div className="flex items-center gap-1.5 text-[#ababab]">
+                        <BatteryHigh size={16} />
+                        <span className="text-[14px] font-medium">78%</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        {cameraStatus === "reconnecting" && (
+                          <ArrowsClockwise size={13} className="text-[#3b82f6] animate-spin" />
                         )}
+                        <span
+                          className={`text-[13px] font-medium ${STATUS_LABEL_COLOR[cameraStatus]}`}
+                        >
+                          {STATUS_LABEL[cameraStatus]}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {!sessionEndedMode && cameraOpen && (
+              <>
+                {cameraStatus === "asleep" && (
+                  <div className="flex flex-col gap-1.5 px-3 py-3 rounded-lg bg-[#1e1e1e] border border-[#2a2a2a]">
+                    <span className="text-[12px] font-medium text-[#e2e2e2]">Wake the camera</span>
+                    <span className="text-[12px] text-[#555] leading-[1.5]">
+                      Half-press the shutter button on the camera to wake it up.
+                    </span>
+                  </div>
+                )}
+
+                {cameraStatus === "disconnected" && (
+                  <div className="flex flex-col gap-3 px-3 py-3 rounded-lg bg-[#1e1e1e] border border-[#2a2a2a]">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[12px] font-medium text-[#e2e2e2]">
+                        Connection lost
+                      </span>
+                      <span className="text-[12px] text-[#555] leading-[1.5]">
+                        Check the USB cable and make sure the camera is on.
                       </span>
                     </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setCameraStatus("reconnecting")}
+                        className="flex-1 py-1.5 text-[12px] font-medium text-[#e2e2e2] bg-[#2a2a2a] hover:bg-[#333] rounded border border-[#3a3a3a] transition-colors"
+                      >
+                        Retry
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (onCancelTethering) onCancelTethering();
+                          else onCancelSetup?.();
+                        }}
+                        className="flex-1 py-1.5 text-[12px] font-medium text-[#666] hover:text-[#ababab] bg-transparent rounded border border-[#2a2a2a] hover:border-[#3a3a3a] transition-colors"
+                      >
+                        End Session
+                      </button>
+                    </div>
                   </div>
-                </Accordion>
-              )}
-            </div>
+                )}
+
+                {cameraStatus === "stolen" && (
+                  <div className="flex flex-col gap-3 px-3 py-3 rounded-lg bg-[#1e1e1e] border border-[#2a2a2a]">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[12px] font-medium text-[#e2e2e2]">
+                        Camera is in use
+                      </span>
+                      <span className="text-[12px] text-[#555] leading-[1.5]">
+                        Another app is controlling the camera. Close it and bring the camera back.
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setCameraStatus("reconnecting")}
+                      className="py-1.5 text-[12px] font-medium text-[#e2e2e2] bg-[#2a2a2a] hover:bg-[#333] rounded border border-[#3a3a3a] transition-colors"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                )}
+
+                <div
+                  className={`flex flex-col gap-1.5 transition-opacity duration-300 ${cameraStatus !== "connected" ? "opacity-25 pointer-events-none select-none" : ""}`}
+                >
+                  <>
+                    {/* Value cards */}
+                    <div className="flex gap-2">
+                      <CameraCard
+                        label="APERTURE"
+                        stops={APERTURE_STOPS}
+                        index={apertureIdx}
+                        onPrev={() => setApertureIdx((i) => Math.max(0, i - 1))}
+                        onNext={() =>
+                          setApertureIdx((i) => Math.min(APERTURE_STOPS.length - 1, i + 1))
+                        }
+                        onDragStart={() => setDraggingCard("APERTURE")}
+                        onDragEnd={() => setDraggingCard(null)}
+                        suppressHover={draggingCard !== null && draggingCard !== "APERTURE"}
+                        renderValue={(v) => (
+                          <span className="leading-none text-[#e2e2e2] font-medium">
+                            <span className="text-[12px] pr-1">f</span>
+                            <span className="text-[20px]">{v}</span>
+                          </span>
+                        )}
+                      />
+                      <CameraCard
+                        label="SHUTTER"
+                        stops={SHUTTER_STOPS}
+                        index={shutterIdx}
+                        onPrev={() => setShutterIdx((i) => Math.max(0, i - 1))}
+                        onNext={() =>
+                          setShutterIdx((i) => Math.min(SHUTTER_STOPS.length - 1, i + 1))
+                        }
+                        onDragStart={() => setDraggingCard("SHUTTER")}
+                        onDragEnd={() => setDraggingCard(null)}
+                        suppressHover={draggingCard !== null && draggingCard !== "SHUTTER"}
+                        renderValue={(v) => (
+                          <span className="leading-none text-[#e2e2e2] font-medium">
+                            <span className="text-[14px] pr-1">1/</span>
+                            <span className="text-[20px]">{v}</span>
+                          </span>
+                        )}
+                      />
+                      <CameraCard
+                        label="ISO"
+                        stops={ISO_STOPS}
+                        index={isoIdx}
+                        onPrev={() => setIsoIdx((i) => Math.max(0, i - 1))}
+                        onNext={() => setIsoIdx((i) => Math.min(ISO_STOPS.length - 1, i + 1))}
+                        onDragStart={() => setDraggingCard("ISO")}
+                        onDragEnd={() => setDraggingCard(null)}
+                        suppressHover={draggingCard !== null && draggingCard !== "ISO"}
+                        renderValue={(v) => (
+                          <span className="leading-none text-[#e2e2e2] font-medium">
+                            <span className="text-[20px]">{v}</span>
+                          </span>
+                        )}
+                      />
+                    </div>
+
+                    {/* WB + Capture button */}
+                    <div className="flex justify-center gap-2 py-1">
+                      <CameraCard
+                        label="WB"
+                        stops={[...WB_OPTIONS]}
+                        index={wbIdx}
+                        onPrev={() => setWbIdx((i) => Math.max(0, i - 1))}
+                        onNext={() => setWbIdx((i) => Math.min(WB_OPTIONS.length - 1, i + 1))}
+                        onDragStart={() => setDraggingCard("WB")}
+                        onDragEnd={() => setDraggingCard(null)}
+                        suppressHover={draggingCard !== null && draggingCard !== "WB"}
+                        renderValue={(v) => (
+                          <span className="text-[18px] font-medium text-[#e2e2e2] leading-none text-center">
+                            {v}
+                          </span>
+                        )}
+                      />
+
+                      <div className="px-4">
+                        <button
+                          data-coachmark="capture-btn"
+                          onClick={handleCapture}
+                          className="w-16 h-16 rounded-full border-[3px] border-white/30 flex items-center justify-center transition-all active:scale-95 group relative"
+                        >
+                          <div
+                            className={`w-[52px] h-[52px] rounded-full transition-colors ${timerCount !== null ? "bg-white/30" : "bg-white group-hover:bg-white/90 group-active:bg-white/75"}`}
+                          />
+                          {timerCount !== null && (
+                            <span className="absolute inset-0 flex items-center justify-center text-[22px] font-bold text-white tabular-nums leading-none">
+                              {timerCount}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                </div>
+
+                {/* Settings rows */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-[#ababab]">Format</span>
+                    <InlineSelect
+                      value={fileFormat}
+                      options={formatOptions}
+                      onChange={setFileFormat}
+                    />
+                  </div>
+
+                  {isDual && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[13px] text-[#ababab]">Import</span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() =>
+                            isDual && (importJpeg || !importRaw) && setImportRaw(!importRaw)
+                          }
+                          disabled={!isDual}
+                          className={`flex items-center gap-1.5 ${!isDual && isJpegOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
+                        >
+                          <div
+                            className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
+                              isRawOnly || (isDual && importRaw)
+                                ? "bg-[#2563eb] border-[#2563eb]"
+                                : "border-[#444] bg-transparent"
+                            }`}
+                          >
+                            {(isRawOnly || (isDual && importRaw)) && (
+                              <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+                                <path
+                                  d="M1 4L3.5 6.5L9 1"
+                                  stroke="white"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            )}
+                          </div>
+                          <span
+                            className={`text-[13px] font-medium ${!isDual && isJpegOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
+                          >
+                            RAW
+                          </span>
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            isDual && (importRaw || !importJpeg) && setImportJpeg(!importJpeg)
+                          }
+                          disabled={!isDual}
+                          className={`flex items-center gap-1.5 ${!isDual && isRawOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
+                        >
+                          <div
+                            className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
+                              isJpegOnly || (isDual && importJpeg)
+                                ? "bg-[#2563eb] border-[#2563eb]"
+                                : "border-[#444] bg-transparent"
+                            }`}
+                          >
+                            {(isJpegOnly || (isDual && importJpeg)) && (
+                              <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+                                <path
+                                  d="M1 4L3.5 6.5L9 1"
+                                  stroke="white"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            )}
+                          </div>
+                          <span
+                            className={`text-[13px] font-medium ${!isDual && isRawOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
+                          >
+                            JPEG
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-[#ababab]">Aspect Ratio</span>
+                    <InlineSelect
+                      value={aspectRatio}
+                      options={ASPECT_OPTIONS}
+                      onChange={setAspectRatio}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-[#ababab]">Shoot Mode</span>
+                    <InlineSelect
+                      value={shootMode}
+                      options={SHOOT_OPTIONS}
+                      onChange={setShootMode}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-[#ababab]">Focus Mode</span>
+                    <InlineSelect
+                      value={focusMode}
+                      options={FOCUS_OPTIONS}
+                      onChange={setFocusMode}
+                    />
+                  </div>
+
+                  {isLoupeView && (
+                    <div
+                      onClick={() => setAutoAdvance((p) => !p)}
+                      className="flex items-center justify-between w-full cursor-pointer"
+                    >
+                      <span
+                        onMouseEnter={() => setAutoAdvanceHovered(true)}
+                        onMouseLeave={() => setAutoAdvanceHovered(false)}
+                        // className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]"
+                        className="relative inline-flex  text-[13px] text-[#ababab]"
+                      >
+                        <Tooltip
+                          label="Automatically move to the next image after each capture"
+                          visible={autoAdvanceHovered}
+                          position="top"
+                        />
+                        Auto Advance
+                      </span>
+                      <Toggle value={autoAdvance} onChange={setAutoAdvance} />
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
+
+          {directPanel && <div className="h-px bg-[#e2e2e20d]" />}
+
+          {directPanel && (
+            <Accordion title="File Options" titleClassName="text-[14px] font-medium text-[#e2e2e2]">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[13px] text-[#ababab]">Destination</span>
+                  <button
+                    onClick={pickFolder}
+                    className="group flex w-full text-left gap-2 items-center justify-between px-2.5 py-2 bg-[#242424] rounded hover:bg-[#2a2a2a] transition-colors"
+                  >
+                    <span className="text-[13px] text-[#e2e2e2] truncate flex-1">
+                      {destination}
+                    </span>
+                    <FolderSimpleIcon size={16} className="text-[#777] shrink-0" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] text-[#ababab]">File Naming</span>
+                    <InlineSelect
+                      value={activeNamingPattern?.label ?? NAMING_PATTERNS[0].label}
+                      options={NAMING_PATTERNS.map((p) => p.label)}
+                      onChange={(label) => {
+                        const p = NAMING_PATTERNS.find((p) => p.label === label);
+                        if (p) applyNamingPattern(p);
+                      }}
+                    />
+                  </div>
+                  {showNamingPrefixInput && (
+                    <div className="flex items-center justify-between px-2.5 py-2 bg-[#242424] rounded">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] shrink-0">
+                        Prefix
+                      </span>
+                      <input
+                        type="text"
+                        value={namingUserPrefix}
+                        placeholder="Smith"
+                        onChange={(e) => updateNamingPrefix(e.target.value)}
+                        className="bg-transparent outline-none text-[13px] text-[#e2e2e2] placeholder:text-[#3a3a3a] text-right"
+                      />
+                    </div>
+                  )}
+                  <span className="text-[12px] text-[#555] truncate">
+                    e.g.{" "}
+                    {namingPreview(activeNamingPattern?.template ?? NAMING_PATTERNS[0].template)}
+                  </span>
+                </div>
+              </div>
+            </Accordion>
+          )}
 
           <div className="h-px bg-[#e2e2e20d]" />
 
-          <div data-coachmark="edit-profile" className="flex flex-row justify-between gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab]">
-              Edit Effects
-            </span>
-            <div className="flex gap-3">
-              {(["Presets", "Sync with Prev"] as const).map((option) => (
-                <button
-                  key={option}
-                  onClick={() => setEditEffectsMode(option)}
-                  className="flex items-center gap-[4px] group"
-                >
-                  <div
-                    className={`w-3 h-3 rounded-full border bg-[#303030] flex items-center justify-center shrink-0 transition-colors overflow-hidden ${editEffectsMode === option ? "border-[#474747] p-[2px]" : "border-[#474747] group-hover:border-[#777] p-0"}`}
-                  >
-                    <div
-                      className={`w-[6px] h-[6px] rounded-full shrink-0 transition-colors ${editEffectsMode === option ? "bg-[#3b82f6]" : "bg-transparent"}`}
-                    />
-                  </div>
-                  <span className="text-[12px] font-normal text-[#ababab] leading-4 whitespace-nowrap">
-                    {option}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {editEffectsMode === "Presets" && (
-            <>
-              {/* <div className="h-px bg-[#e2e2e20d]" /> */}
-              <ProfileSection {...sharedProfileProps} alwaysShowTabs />
-              {/* Edit Profile */}
-              {/* <div data-coachmark="edit-profile">
-                <Accordion
-                  title="Edit Profile"
-                  actions={
-                    <span className="text-[11px] font-medium text-[#777]">
-                      Auto Applied on next
-                    </span>
-                  }
-                >
-                  <ProfileSection {...sharedProfileProps} alwaysShowTabs />
-                </Accordion>
-              </div>
-
-              <div className="h-px bg-[#e2e2e20d]" /> */}
-
-              {/* Retouching Preset */}
-              {/* <div data-coachmark="retouch-preset">
-                <div className="flex flex-col gap-4">
-                  <div ref={retouchPresetRowRef} className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ababab] leading-3">
-                      Retouch Preset
-                    </span>
-                    <PresetDropdown
-                      compact
-                      anchorRef={retouchPresetRowRef}
-                      value={retouchPreset}
-                      onChange={setRetouchPreset}
-                    />
-                  </div>
-                  {retouchPreset && (
-                    <SliderRow
-                      label="Strength"
-                      value={retouchPresetStrength}
-                      onChange={setRetouchPresetStrength}
-                      noPinArea
-                    />
-                  )}
+          <div data-coachmark="edit-profile">
+            <Accordion
+              title="Edit Effects"
+              titleClassName="text-[14px] font-medium text-[#e2e2e2]"
+              actions={
+                <div className="flex gap-3">
+                  {(["Presets", "Sync with Prev"] as const).map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setEditEffectsMode(option)}
+                      className="flex items-center gap-[4px] group"
+                    >
+                      <div
+                        className={`w-3 h-3 rounded-full border bg-[#303030] flex items-center justify-center shrink-0 transition-colors overflow-hidden ${editEffectsMode === option ? "border-[#474747] p-[2px]" : "border-[#474747] group-hover:border-[#777] p-0"}`}
+                      >
+                        <div
+                          className={`w-[6px] h-[6px] rounded-full shrink-0 transition-colors ${editEffectsMode === option ? "bg-[#3b82f6]" : "bg-transparent"}`}
+                        />
+                      </div>
+                      <span className="text-[12px] font-normal text-[#ababab] leading-4 whitespace-nowrap">
+                        {option}
+                      </span>
+                    </button>
+                  ))}
                 </div>
-              </div> */}
-            </>
-          )}
+              }
+            >
+              {editEffectsMode === "Presets" && <ProfileSection {...sharedProfileProps} />}
+            </Accordion>
+          </div>
 
           {/* Pinned sliders */}
           {pinnedSliders.size > 0 && (
@@ -726,6 +905,21 @@ const TetheringTab = ({
         </>
       )}
 
+      {showEndConfirm && (
+        <TetherEndConfirmModal
+          ejectMode={ejectMode}
+          onCancel={() => {
+            setShowEndConfirm(false);
+            setEjectMode(null);
+          }}
+          onConfirm={() => {
+            const mode = ejectMode ?? "end";
+            setShowEndConfirm(false);
+            setEjectMode(null);
+            setSessionEndedMode(mode);
+          }}
+        />
+      )}
       {showWelcome && <TetherWelcomeModal onClose={() => setShowWelcome(false)} />}
       {showDetect && (
         <TetherDetectModal
@@ -777,8 +971,6 @@ const TetheringTab = ({
           cameraName={cameraName}
           {...sharedProfileProps}
           onFileFormatChange={setFileFormat}
-          retouchPresetStrength={retouchPresetStrength}
-          onRetouchPresetStrengthChange={setRetouchPresetStrength}
           namingTemplate={namingTemplate}
           onNamingTemplateChange={setNamingTemplate}
           destination={destination}

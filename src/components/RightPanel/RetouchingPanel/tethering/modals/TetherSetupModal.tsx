@@ -196,79 +196,83 @@ export const TetherSetupModal = ({
         </div>
 
         {/* Import */}
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
-            Import
-          </span>
-          <div className="flex items-center gap-3">
-            {/* RAW checkbox */}
-            <button
-              onClick={() => isDual && (importJpeg || !importRaw) && onImportRawChange(!importRaw)}
-              disabled={!isDual}
-              className={`flex items-center gap-1.5 ${!isDual && isJpegOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
-            >
-              <div
-                className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
-                  isRawOnly || (isDual && importRaw)
-                    ? "bg-[#2563eb] border-[#2563eb]"
-                    : "border-[#444] bg-transparent"
-                }`}
+        {isDual && (
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
+              Import
+            </span>
+            <div className="flex items-center gap-3">
+              {/* RAW checkbox */}
+              <button
+                onClick={() =>
+                  isDual && (importJpeg || !importRaw) && onImportRawChange(!importRaw)
+                }
+                disabled={!isDual}
+                className={`flex items-center gap-1.5 ${!isDual && isJpegOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
               >
-                {(isRawOnly || (isDual && importRaw)) && (
-                  <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
-                    <path
-                      d="M1 4L3.5 6.5L9 1"
-                      stroke="white"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </div>
-              <span
-                className={`text-[13px] font-medium ${!isDual && isJpegOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
-              >
-                {/* {rawLabel || cameraSpec.raw} */}
-                RAW
-              </span>
-            </button>
+                <div
+                  className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
+                    isRawOnly || (isDual && importRaw)
+                      ? "bg-[#2563eb] border-[#2563eb]"
+                      : "border-[#444] bg-transparent"
+                  }`}
+                >
+                  {(isRawOnly || (isDual && importRaw)) && (
+                    <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+                      <path
+                        d="M1 4L3.5 6.5L9 1"
+                        stroke="white"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </div>
+                <span
+                  className={`text-[13px] font-medium ${!isDual && isJpegOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
+                >
+                  {/* {rawLabel || cameraSpec.raw} */}
+                  RAW
+                </span>
+              </button>
 
-            {/* JPEG checkbox */}
-            <button
-              onClick={() =>
-                isDual && (importRaw || !importJpeg) && onImportJpegChange(!importJpeg)
-              }
-              disabled={!isDual}
-              className={`flex items-center gap-1.5 ${!isDual && isRawOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
-            >
-              <div
-                className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
-                  isJpegOnly || (isDual && importJpeg)
-                    ? "bg-[#2563eb] border-[#2563eb]"
-                    : "border-[#444] bg-transparent"
-                }`}
+              {/* JPEG checkbox */}
+              <button
+                onClick={() =>
+                  isDual && (importRaw || !importJpeg) && onImportJpegChange(!importJpeg)
+                }
+                disabled={!isDual}
+                className={`flex items-center gap-1.5 ${!isDual && isRawOnly ? "opacity-30 cursor-not-allowed" : isDual ? "cursor-pointer" : "cursor-default"}`}
               >
-                {(isJpegOnly || (isDual && importJpeg)) && (
-                  <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
-                    <path
-                      d="M1 4L3.5 6.5L9 1"
-                      stroke="white"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </div>
-              <span
-                className={`text-[13px] font-medium ${!isDual && isRawOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
-              >
-                JPEG
-              </span>
-            </button>
+                <div
+                  className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center shrink-0 transition-colors ${
+                    isJpegOnly || (isDual && importJpeg)
+                      ? "bg-[#2563eb] border-[#2563eb]"
+                      : "border-[#444] bg-transparent"
+                  }`}
+                >
+                  {(isJpegOnly || (isDual && importJpeg)) && (
+                    <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+                      <path
+                        d="M1 4L3.5 6.5L9 1"
+                        stroke="white"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </div>
+                <span
+                  className={`text-[13px] font-medium ${!isDual && isRawOnly ? "text-[#555]" : "text-[#e2e2e2]"}`}
+                >
+                  JPEG
+                </span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="w-full h-px bg-[#292929] my-[-4px]" />
 
@@ -277,7 +281,11 @@ export const TetherSetupModal = ({
           <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[#ABABAB]">
             Edit Effects
           </span>
-          <ProfileSection fileFormat={effectiveFileFormat} {...profileProps} />
+          <ProfileSection
+            fileFormat={effectiveFileFormat}
+            showAiToggles={false}
+            {...profileProps}
+          />
         </div>
 
         {/* Advanced toggle */}

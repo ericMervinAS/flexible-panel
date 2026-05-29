@@ -67,12 +67,12 @@ export const TetherDetectModal = ({ onCancel, onDetected }: TetherDetectModalPro
         </div>
 
         <div className="flex items-center justify-end gap-2">
-          <button
+          {/* <button
             onClick={onCancel}
             className="px-4 py-2.5 rounded-[8px] bg-[#2a2a2a] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#333] transition-colors"
           >
             Cancel
-          </button>
+          </button> */}
           {phase === "not-found" && (
             <button
               onClick={() => {

@@ -108,6 +108,20 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
     setRemoveToast({ message: "Suggestion submitted", key: Date.now() });
   };
 
+  const handleCancelTethering = importSource === "tethering"
+    ? () => {
+        if (isTethering) {
+          // Active session ended — stay in the album, leave tethering mode
+          setIsTethering(false);
+          if (albumId) updateAlbum(albumId, { tetheringStarted: false });
+          setActiveTopTab("RETOUCH");
+        } else {
+          // Cancelled during setup before session started — navigate away
+          onCancelTethering?.();
+        }
+      }
+    : undefined;
+
   // Hardcoded manual set — swap for real detection output when ready
   const retouchOpportunities = new Set([]);
 
@@ -238,7 +252,7 @@ const Index = ({ importSource, onGoHome, onCancelTethering, albumId, initialTopT
         <RightPanel filmstripSelection={filmstripSelection} isScanning={isScanning} isLoupeView={view === "loupe"} activeTopTab={activeTopTab} isTethering={isTethering} showTetheringTab={importSource === "tethering"} directPanel={directPanel} onStartTethering={() => {
           setIsTethering(true);
           if (albumId) updateAlbum(albumId, { tetheringStarted: true });
-        }} onCapture={handleCapture} currentImageIndex={selectedIndex} currentImageSrc={images[selectedIndex]?.src} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionRerunCurrent={() => rerunDistractionDetectionForImage(selectedIndex)} onDistractionSelectionChange={setHighlightedLabels} onDistractionHoverChange={setHoveredLabel} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} initialEditingTab={importSource === "tethering" ? "tethering" : undefined} onCancelTethering={importSource === "tethering" ? onCancelTethering : undefined} skipTetheringDetect={skipTetheringDetect} />
+        }} onCapture={handleCapture} currentImageIndex={selectedIndex} currentImageSrc={images[selectedIndex]?.src} onTabChange={setLoupeActiveTab} canvasHasStrokes={canvasHasStrokes} onClearCanvas={() => setClearCanvasSignal((s) => s + 1)} onRemoveAfterStrokeChange={setAutoRemoveAfterStroke} onRemovingChange={setIsRemoving} visibleSubjectIndices={visibleSubjectIndices} modelSubjects={modelSubjects} modelImageMap={modelImageMap} isModelDetecting={isDetecting || isLoadingModel} modelStatusMessage={statusMessage} modelSubjectFilter={subjectFilter} tabOverride={null} hasRetouchingOpportunity={retouchOpportunities.has(selectedIndex)} distractionMap={distractionMap} isDistractionScanning={isDistractionModelLoading || isDistractionDetecting} onDistractionRerun={rerunDistractionDetection} onDistractionRerunCurrent={() => rerunDistractionDetectionForImage(selectedIndex)} onDistractionSelectionChange={setHighlightedLabels} onDistractionHoverChange={setHoveredLabel} onDistractionRemoveSuccess={handleRemoveSuccess} onSuggestObject={handleSuggestObject} initialEditingTab={importSource === "tethering" ? "tethering" : undefined} onCancelTethering={handleCancelTethering} skipTetheringDetect={skipTetheringDetect} />
       </div>
       {showCoachmarks && isTethering && images.length === 0 && (
         <CoachmarkFlow onDismiss={() => setShowCoachmarks(false)} />

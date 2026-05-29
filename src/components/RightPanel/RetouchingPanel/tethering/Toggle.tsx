@@ -4,7 +4,7 @@ interface ToggleProps {
 }
 
 export const Toggle = ({ value, onChange }: ToggleProps) => (
-  <button onClick={() => onChange(!value)} className="shrink-0">
+  <button onClick={(e) => { e.stopPropagation(); onChange(!value); }} className="shrink-0">
     <div
       className="relative w-8 h-[18px] rounded-full transition-colors"
       style={{ backgroundColor: value ? "#2563eb" : "#383838" }}

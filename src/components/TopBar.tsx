@@ -86,13 +86,13 @@ const TopBar = ({
             <ArrowsDownUpIcon weight="fill" className="w-4 h-4 text-[#777]" />
           </button>
         </div>
-
+        {/* 
         <div className="w-px h-4 bg-[#303030]" />
 
         <button className="flex items-center gap-1 text-[#ababab] text-[12px] font-medium hover:text-[#e2e2e2] transition-colors">
           <PlusIcon className="w-4 h-4" />
           <span>Add</span>
-        </button>
+        </button> */}
       </div>
 
       {/* Center: Feature Switcher */}
