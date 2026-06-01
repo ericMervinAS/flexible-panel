@@ -1,32 +1,72 @@
-import { GridFourIcon, MonitorIcon, FunnelIcon, ArrowsDownUpIcon, PlusIcon, UploadSimpleIcon } from "@phosphor-icons/react";
+import {
+  GridFourIcon,
+  MonitorIcon,
+  FunnelIcon,
+  ArrowsDownUpIcon,
+  PlusIcon,
+  UploadSimpleIcon,
+  HouseSimpleIcon,
+} from "@phosphor-icons/react";
 
-const tabs = ["IMPORT", "CULL", "EDIT", "RETOUCH"] as const;
+const ALL_TABS = ["CULL", "EDIT", "RETOUCH"] as const;
+const TETHER_TABS = ["TETHER", "CULL", "EDIT", "RETOUCH"] as const;
 
 interface TopBarProps {
   activeTab: string;
+  onTopTabChange?: (tab: string) => void;
   view: "grid" | "loupe";
   onViewChange: (view: "grid" | "loupe") => void;
   filterOpen?: boolean;
   onFilterToggle?: () => void;
+  hideCull?: boolean;
+  showTetherTab?: boolean;
+  onGoHome?: () => void;
 }
 
-const TopBar = ({ activeTab, view, onViewChange, filterOpen, onFilterToggle }: TopBarProps) => {
+const TopBar = ({
+  activeTab,
+  onTopTabChange,
+  view,
+  onViewChange,
+  filterOpen,
+  onFilterToggle,
+  hideCull,
+  showTetherTab,
+  onGoHome,
+}: TopBarProps) => {
+  const baseTabs = showTetherTab ? TETHER_TABS : ALL_TABS;
+  const tabs = hideCull ? baseTabs.filter((t) => t !== "CULL") : baseTabs;
   return (
     <header className="flex items-center justify-between h-11 px-3 bg-[#1c1c1c] shrink-0 border-b border-background">
       {/* Left: Views + Filter + Add */}
       <div className="flex items-center gap-2.5 w-[400px]">
+        <button
+          onClick={onGoHome}
+          className="flex items-center justify-center w-6 h-6 rounded transition-colors hover:bg-white/5"
+        >
+          <HouseSimpleIcon weight="fill" className="w-4 h-4 text-[#777] hover:text-[#fff]" />
+        </button>
+
+        <div className="w-px h-4 bg-[#303030]" />
+
         <div className="flex items-center gap-1">
           <button
             className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${view === "grid" ? "bg-white/10 border border-[#5e5e5e]" : "hover:bg-white/5"}`}
             onClick={() => onViewChange("grid")}
           >
-            <GridFourIcon weight="fill" className={`w-4 h-4 ${view === "grid" ? "text-[#e2e2e2]" : "text-[#777]"}`} />
+            <GridFourIcon
+              weight="fill"
+              className={`w-4 h-4 ${view === "grid" ? "text-[#e2e2e2]" : "text-[#777]"}`}
+            />
           </button>
           <button
             className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${view === "loupe" ? "bg-white/10 border border-[#5e5e5e]" : "hover:bg-white/5"}`}
             onClick={() => onViewChange("loupe")}
           >
-            <MonitorIcon weight="fill" className={`w-4 h-4 ${view === "loupe" ? "text-[#e2e2e2]" : "text-[#777]"}`} />
+            <MonitorIcon
+              weight="fill"
+              className={`w-4 h-4 ${view === "loupe" ? "text-[#e2e2e2]" : "text-[#777]"}`}
+            />
           </button>
         </div>
 
@@ -37,19 +77,22 @@ const TopBar = ({ activeTab, view, onViewChange, filterOpen, onFilterToggle }: T
             onClick={onFilterToggle}
             className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${filterOpen ? "bg-white/10 border border-[#5e5e5e]" : "hover:bg-white/5"}`}
           >
-            <FunnelIcon weight="fill" className={`w-4 h-4 ${filterOpen ? "text-[#e2e2e2]" : "text-[#777]"}`} />
+            <FunnelIcon
+              weight="fill"
+              className={`w-4 h-4 ${filterOpen ? "text-[#e2e2e2]" : "text-[#777]"}`}
+            />
           </button>
           <button className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/5 transition-colors">
             <ArrowsDownUpIcon weight="fill" className="w-4 h-4 text-[#777]" />
           </button>
         </div>
-
+        {/* 
         <div className="w-px h-4 bg-[#303030]" />
 
         <button className="flex items-center gap-1 text-[#ababab] text-[12px] font-medium hover:text-[#e2e2e2] transition-colors">
           <PlusIcon className="w-4 h-4" />
           <span>Add</span>
-        </button>
+        </button> */}
       </div>
 
       {/* Center: Feature Switcher */}
@@ -57,10 +100,10 @@ const TopBar = ({ activeTab, view, onViewChange, filterOpen, onFilterToggle }: T
         {tabs.map((tab) => (
           <button
             key={tab}
-            className={`w-20 h-7 text-[11px] font-semibold tracking-[0.5px] rounded transition-colors ${tab === activeTab
-              ? "bg-[#303030] text-[#e2e2e2]"
-              : "text-[#777] hover:text-[#ababab]"
-              }`}
+            onClick={() => onTopTabChange?.(tab)}
+            className={`w-20 h-7 text-[11px] font-semibold tracking-[0.5px] rounded transition-colors ${
+              tab === activeTab ? "bg-[#303030] text-[#e2e2e2]" : "text-[#777] hover:text-[#ababab]"
+            }`}
           >
             {tab}
           </button>

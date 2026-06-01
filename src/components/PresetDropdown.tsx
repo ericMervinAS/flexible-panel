@@ -1,27 +1,51 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { CaretDown } from "@phosphor-icons/react";
+import { CaretDownIcon, TrashIcon } from "@phosphor-icons/react";
 import { PRESETS } from "@/data/presetMapping";
 
 interface PresetDropdownProps {
   value: string | null;
   onChange: (preset: string) => void;
+  onNewPreset?: () => void;
+  onDeletePreset?: (name: string) => void;
   /**
    * When set, only presets tagged with "All Subjects" or this specific gender
    * are shown. Omit (or pass undefined) to show all presets.
    */
   genderFilter?: string;
+  /** Renders as a transparent inline text+caret button (no background) */
+  compact?: boolean;
+  /** When compact, use this ref as the menu anchor for width/position (e.g. the full preset row) */
+  anchorRef?: React.RefObject<HTMLElement>;
+  /** Override the dropdown menu width in px */
+  menuWidth?: number;
+  /** Override the compact trigger font size (default "12px") */
+  triggerTextSize?: string;
 }
 
-const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) => {
+const PresetDropdown = ({
+  value,
+  onChange,
+  onNewPreset,
+  onDeletePreset,
+  genderFilter,
+  compact,
+  anchorRef,
+  menuWidth,
+  triggerTextSize = "12px",
+}: PresetDropdownProps) => {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isAllSubjectsCtx = genderFilter === "All Subjects";
   const isApplicable = (tags: string[]) =>
-    isAllSubjectsCtx || !genderFilter || tags.includes("All Subjects") || tags.includes(genderFilter);
+    isAllSubjectsCtx ||
+    !genderFilter ||
+    tags.includes("All Subjects") ||
+    tags.includes(genderFilter);
 
   const presetSections = [
     { title: "Custom Presets", options: PRESETS.filter((p) => p.custom) },
@@ -29,13 +53,19 @@ const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) 
   ].filter((s) => s.options.length > 0);
 
   const updatePosition = () => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
+    const anchor = compact ? (anchorRef?.current ?? triggerRef.current) : triggerRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const width = menuWidth ?? rect.width;
+    // Compact mode without an anchorRef means the trigger is a small right-side button —
+    // right-align the menu to its right edge so it doesn't overflow the parent container.
+    const rightAlign = compact && !anchorRef;
     setMenuStyle({
       position: "fixed",
       top: rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
+      ...(rightAlign
+        ? { right: window.innerWidth - rect.right, width }
+        : { left: rect.left, width }),
       zIndex: 9999,
     });
   };
@@ -61,6 +91,91 @@ const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) 
     };
   }, [open]);
 
+  if (compact) {
+    return (
+      <div ref={containerRef} className="relative">
+        <button
+          ref={triggerRef}
+          onClick={() => setOpen((prev) => !prev)}
+          className="flex items-center gap-1 font-medium text-[#ababab] hover:text-[#e2e2e2] transition-colors"
+          style={{ fontSize: triggerTextSize }}
+        >
+          <span>{value || "Select Preset"}</span>
+          <CaretDownIcon className="w-4 h-4 shrink-0" />
+        </button>
+
+        {open &&
+          createPortal(
+            <div
+              ref={menuRef}
+              style={menuStyle}
+              className="bg-[#242424] border border-[#474747] rounded-lg p-1 flex flex-col gap-0.5 max-h-96 overflow-y-auto"
+            >
+              {presetSections.map((section, si) => (
+                <div key={section.title}>
+                  {si > 0 && <div className="h-px bg-[#474747] mx-1 my-0.5" />}
+                  <div className="px-2 py-2 flex items-center justify-between">
+                    <span className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#777] leading-4">
+                      {section.title}
+                    </span>
+                    {section.title === "Custom Presets" && onNewPreset && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onNewPreset();
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#333] hover:bg-[#3d3d3d] text-[#e2e2e2] text-[12px] font-medium transition-colors"
+                      >
+                        + New
+                      </button>
+                    )}
+                  </div>
+                  {section.options.map((opt) => {
+                    const applicable = isApplicable(opt.tags);
+                    const isCustom = opt.custom;
+                    return (
+                      <div
+                        key={opt.name}
+                        className={`group relative flex items-center rounded transition-colors ${applicable ? "hover:bg-white/5" : "opacity-35"}`}
+                      >
+                        <button
+                          disabled={!applicable}
+                          onClick={() => {
+                            onChange(opt.name);
+                            setOpen(false);
+                          }}
+                          className={`flex-1 text-left px-2 py-2.5 flex flex-col gap-0.5 ${applicable ? "cursor-pointer" : "cursor-not-allowed"}`}
+                        >
+                          <span className="text-[14px] font-medium text-[#e2e2e2] leading-5">
+                            {opt.name}
+                          </span>
+                          <span className="text-[12px] text-[#777] leading-4">
+                            {opt.tags.join(" · ")}
+                          </span>
+                        </button>
+                        {isCustom && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeletePreset?.(opt.name);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 shrink-0 mr-2 p-1 rounded text-[#555] hover:text-[#e2e2e2] transition-all"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>,
+            document.body
+          )}
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex-1">
       <button
@@ -69,56 +184,77 @@ const PresetDropdown = ({ value, onChange, genderFilter }: PresetDropdownProps) 
         className={`flex w-full items-center justify-between px-2.5 py-2 bg-[#242424] rounded text-[12px] transition-colors ${value ? "text-[#e2e2e2]" : "text-[#777] hover:text-[#ababab]"}`}
       >
         <span>{value || "Select Preset"}</span>
-        <CaretDown className="w-4 h-4 shrink-0" />
+        <CaretDownIcon className="w-4 h-4 shrink-0" />
       </button>
 
-      {open && createPortal(
-        <div
-          ref={menuRef}
-          style={menuStyle}
-          className="bg-[#242424] border border-[#474747] rounded-lg p-1 flex flex-col gap-0.5 max-h-96 overflow-y-auto"
-        >
-          {presetSections.map((section, si) => (
-            <div key={section.title}>
-              {si > 0 && <div className="h-px bg-[#474747] mx-1 my-0.5" />}
-              <div className="px-2 py-2">
-                <span className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#777] leading-4">
-                  {section.title}
-                </span>
-              </div>
-              {section.options.map((opt) => {
-                const applicable = isApplicable(opt.tags);
-                return (
-                  <button
-                    key={opt.name}
-                    disabled={!applicable}
-                    onClick={() => {
-                      onChange(opt.name);
-                      setOpen(false);
-                    }}
-                    className={`w-full text-left px-2 py-3 rounded flex flex-col gap-1.5 transition-colors ${applicable ? "hover:bg-white/5 cursor-pointer" : "opacity-35 cursor-not-allowed"}`}
-                  >
-                    <span className="text-[14px] font-medium text-[#ababab] leading-5">
-                      {opt.name}
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {opt.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="h-5 px-1 py-1 rounded text-[11px] font-medium text-[#e2e2e2] leading-3 bg-[rgba(17,17,17,0.4)] backdrop-blur-[2px]"
-                        >
-                          {tag}
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={menuStyle}
+            className="bg-[#242424] border border-[#474747] rounded-lg p-1 flex flex-col gap-0.5 max-h-96 overflow-y-auto"
+          >
+            {presetSections.map((section, si) => (
+              <div key={section.title}>
+                {si > 0 && <div className="h-px bg-[#474747] mx-1 my-0.5" />}
+                <div className="px-2 py-2 flex items-center justify-between">
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.5px] text-[#777] leading-4">
+                    {section.title}
+                  </span>
+                  {section.title === "Custom Presets" && onNewPreset && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onNewPreset();
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#333] hover:bg-[#3d3d3d] text-[#e2e2e2] text-[12px] font-medium transition-colors"
+                    >
+                      + New
+                    </button>
+                  )}
+                </div>
+                {section.options.map((opt) => {
+                  const applicable = isApplicable(opt.tags);
+                  const isCustom = opt.custom;
+                  return (
+                    <div
+                      key={opt.name}
+                      className={`group relative flex items-center rounded transition-colors ${applicable ? "hover:bg-white/5" : "opacity-35"}`}
+                    >
+                      <button
+                        disabled={!applicable}
+                        onClick={() => {
+                          onChange(opt.name);
+                          setOpen(false);
+                        }}
+                        className={`flex-1 text-left px-2 py-2.5 flex flex-col gap-0.5 ${applicable ? "cursor-pointer" : "cursor-not-allowed"}`}
+                      >
+                        <span className="text-[14px] font-medium text-[#e2e2e2] leading-5">
+                          {opt.name}
                         </span>
-                      ))}
+                        <span className="text-[12px] text-[#777] leading-4">
+                          {opt.tags.join(" · ")}
+                        </span>
+                      </button>
+                      {isCustom && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeletePreset?.(opt.name);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 shrink-0 mr-2 p-1 rounded text-[#555] hover:text-[#e2e2e2] transition-all"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>,
-        document.body,
-      )}
+                  );
+                })}
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

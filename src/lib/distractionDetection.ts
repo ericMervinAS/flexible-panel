@@ -1,4 +1,5 @@
 import * as ort from 'onnxruntime-web';
+import { withOrtQueue } from './ortQueue';
 
 const DET_SIZE = 320;
 const CONF_THRESH = 0.03;
@@ -197,7 +198,7 @@ export class DistractionDetectionService {
       try {
         const img = await this.loadImg(imageSrcs[idx]);
         const { tensor, scale, padX, padY } = preprocessYolo(img);
-        const out = await this.session.run({ [this.session.inputNames[0]]: tensor });
+        const out = await withOrtQueue(() => this.session!.run({ [this.session!.inputNames[0]]: tensor }));
         const outTensor = out[this.session.outputNames[0]];
         const dims = outTensor.dims as number[];
         // dims = [1, 4+numClasses, numAnchors]

@@ -1,4 +1,5 @@
 import * as ort from 'onnxruntime-web';
+import { withOrtQueue } from './ortQueue';
 
 // Configure ORT once — point to locally served WASM files (see vite.config.ts middleware)
 if (typeof window !== 'undefined') {
@@ -439,7 +440,7 @@ export class FaceDetectionService {
     if (!this.detectSession || !this.anchors) throw new Error('Model not loaded');
 
     const { tensor, scale } = preprocessDetect(img);
-    const out = await this.detectSession.run({ [this.detectSession.inputNames[0]]: tensor });
+    const out = await withOrtQueue(() => this.detectSession!.run({ [this.detectSession!.inputNames[0]]: tensor }));
 
     const N = this.anchors.length;
     const arrays = this.detectSession.outputNames.map((n) => out[n].data as Float32Array);
@@ -493,7 +494,7 @@ export class FaceDetectionService {
     let embedding: Float32Array | null = null;
     if (this.arcSession) {
       const tensor = preprocessArcFace(aligned);
-      const out = await this.arcSession.run({ [this.arcSession.inputNames[0]]: tensor });
+      const out = await withOrtQueue(() => this.arcSession!.run({ [this.arcSession!.inputNames[0]]: tensor }));
       embedding = l2normalize(out[this.arcSession.outputNames[0]].data as Float32Array);
     }
 
@@ -501,7 +502,7 @@ export class FaceDetectionService {
     let age: number | undefined;
     if (this.gaSession) {
       const tensor = preprocessGenderAge(img, det);
-      const out = await this.gaSession.run({ [this.gaSession.inputNames[0]]: tensor });
+      const out = await withOrtQueue(() => this.gaSession!.run({ [this.gaSession!.inputNames[0]]: tensor }));
       const pred = out[this.gaSession.outputNames[0]].data as Float32Array;
       // pred = [female_score, male_score, age_scaled] — see InsightFace genderage
       gender = pred[1] > pred[0] ? 'Male' : 'Female';

@@ -1,12 +1,20 @@
 import { useState, useRef, useEffect } from "react";
-import { PushPinSimpleIcon, StarFourIcon, FlaskIcon, ArrowFatLineUpIcon, LightningIcon } from "@phosphor-icons/react";
+import {
+  PushPinSimpleIcon,
+  StarFourIcon,
+  FlaskIcon,
+  ArrowFatLineUpIcon,
+  LightningIcon,
+} from "@phosphor-icons/react";
 import type { BadgeType } from "@/data/presetMapping";
 import Tooltip from "./Tooltip";
 
 const BADGE_ICON: Record<BadgeType, React.ReactNode> = {
   new: <StarFourIcon size={12} weight="fill" className=" text-blue-500 hover:text-blue-400" />,
   beta: <FlaskIcon size={12} weight="fill" className=" text-yellow-500 hover:text-yellow-400" />,
-  improved: <LightningIcon size={12} weight="fill" className=" text-blue-500 hover:text-blue-400" />,
+  improved: (
+    <LightningIcon size={12} weight="fill" className=" text-blue-500 hover:text-blue-400" />
+  ),
 };
 
 interface SliderRowProps {
@@ -18,19 +26,36 @@ interface SliderRowProps {
   onChange: (value: number) => void;
   pinned?: boolean;
   onTogglePin?: () => void;
+  noPinArea?: boolean;
   badge?: BadgeType;
   badgeLabel?: string;
 }
 
 const LABEL_RESET_DELAY = 600;
 
-const SliderRow = ({ label, value, defaultValue = 0, min = 0, max = 100, onChange, pinned, onTogglePin, badge, badgeLabel }: SliderRowProps) => {
+const SliderRow = ({
+  label,
+  value,
+  defaultValue = 0,
+  min = 0,
+  max = 100,
+  onChange,
+  pinned,
+  onTogglePin,
+  noPinArea,
+  badge,
+  badgeLabel,
+}: SliderRowProps) => {
   const pct = ((value - min) / (max - min)) * 100;
   const [badgeHovered, setBadgeHovered] = useState(false);
   const [rowHovered, setRowHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showReset, setShowReset] = useState(false);
+  const [valueEditing, setValueEditing] = useState(false);
+  const [inputVal, setInputVal] = useState(String(value));
+  const [valueHovered, setValueHovered] = useState(false);
   const labelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const isActive = rowHovered || isDragging;
   const hasValue = value !== defaultValue;
@@ -46,11 +71,36 @@ const SliderRow = ({ label, value, defaultValue = 0, min = 0, max = 100, onChang
 
   const handleMouseDown = () => {
     setIsDragging(true);
-    const onUp = () => { setIsDragging(false); window.removeEventListener("mouseup", onUp); };
+    const onUp = () => {
+      setIsDragging(false);
+      window.removeEventListener("mouseup", onUp);
+    };
     window.addEventListener("mouseup", onUp);
   };
 
-  useEffect(() => () => { if (labelTimerRef.current) clearTimeout(labelTimerRef.current); }, []);
+  useEffect(
+    () => () => {
+      if (labelTimerRef.current) clearTimeout(labelTimerRef.current);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!valueEditing) setInputVal(String(value));
+  }, [value, valueEditing]);
+
+  const commitInput = () => {
+    const parsed = parseInt(inputVal, 10);
+    if (!isNaN(parsed)) onChange(Math.min(max, Math.max(min, parsed)));
+    else setInputVal(String(value));
+    setValueEditing(false);
+  };
+
+  const handleValueClick = () => {
+    setValueEditing(true);
+    setInputVal(String(value));
+    setTimeout(() => inputRef.current?.select(), 0);
+  };
 
   // Track fill: same for hover and grabbed (#5e5e5e)
   // Handle: hover = #5e5e5e, grabbed = #ababab
@@ -71,16 +121,21 @@ const SliderRow = ({ label, value, defaultValue = 0, min = 0, max = 100, onChang
         >
           <PushPinSimpleIcon size={12} weight="fill" />
         </button>
-      ) : (
+      ) : !noPinArea ? (
         <div className="ml-1.5 w-4 shrink-0" />
-      )}
+      ) : null}
 
       <div className="w-[106px] shrink-0 flex items-center gap-1">
         <span
           className={`text-[12px] font-medium truncate transition-colors cursor-default select-none ${showReset ? "text-[#e2e2e2] cursor-pointer" : textColor}`}
           onMouseEnter={handleLabelEnter}
           onMouseLeave={handleLabelLeave}
-          onClick={() => { if (showReset) { onChange(defaultValue); setShowReset(false); } }}
+          onClick={() => {
+            if (showReset) {
+              onChange(defaultValue);
+              setShowReset(false);
+            }
+          }}
         >
           {showReset ? "Reset" : label}
         </span>
@@ -97,7 +152,9 @@ const SliderRow = ({ label, value, defaultValue = 0, min = 0, max = 100, onChang
       </div>
 
       <div className="flex-1 relative h-3 flex items-center">
-        <div className={`w-full h-1 rounded-full relative overflow-hidden transition-colors ${isActive ? "bg-[#5e5e5e]" : "bg-[#474747]"}`}>
+        <div
+          className={`w-full h-1 rounded-full relative overflow-hidden transition-colors ${isActive ? "bg-[#5e5e5e]" : "bg-[#474747]"}`}
+        >
           <div
             className={`absolute left-0 top-0 h-full rounded-full transition-colors ${fillColor}`}
             style={{ width: `${pct}%` }}
@@ -108,7 +165,9 @@ const SliderRow = ({ label, value, defaultValue = 0, min = 0, max = 100, onChang
           style={{ left: `${pct}%`, transform: "translateX(-50%)" }}
         >
           <div className="bg-[#1c1c1c] rounded-full w-[8px] h-[18px] flex items-center justify-center">
-            <div className={`rounded-full transition-[width,height,background-color] duration-150 ${handleColor} ${isActive ? "w-[4px] h-[14px]" : "w-[2px] h-3"}`} />
+            <div
+              className={`rounded-full transition-[width,height,background-color] duration-150 ${handleColor} ${isActive ? "w-[4px] h-[14px]" : "w-[2px] h-3"}`}
+            />
           </div>
         </div>
         <input
@@ -123,9 +182,36 @@ const SliderRow = ({ label, value, defaultValue = 0, min = 0, max = 100, onChang
         />
       </div>
 
-      <span className={`w-[36px] text-[12px] font-medium text-right shrink-0 transition-colors ${textColor}`}>
-        {value}
-      </span>
+      {valueEditing ? (
+        <input
+          ref={inputRef}
+          type="number"
+          value={inputVal}
+          min={min}
+          max={max}
+          onChange={(e) => {
+            if (e.target.value.length <= 3) setInputVal(e.target.value);
+          }}
+          onBlur={commitInput}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitInput();
+            if (e.key === "Escape") {
+              setInputVal(String(value));
+              setValueEditing(false);
+            }
+          }}
+          className="w-[36px] text-[12px] font-medium text-right shrink-0 bg-transparent text-[#e2e2e2] outline-none border-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+      ) : (
+        <span
+          onMouseEnter={() => setValueHovered(true)}
+          onMouseLeave={() => setValueHovered(false)}
+          onClick={handleValueClick}
+          className={`w-[36px] text-[12px] font-medium text-right shrink-0 transition-colors select-none cursor-pointer ${valueHovered ? "text-[#e2e2e2]" : textColor}`}
+        >
+          {value}
+        </span>
+      )}
     </div>
   );
 };

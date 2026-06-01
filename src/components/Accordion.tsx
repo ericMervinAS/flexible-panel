@@ -9,9 +9,19 @@ interface AccordionProps {
   onReset?: () => void;
   actions?: React.ReactNode;
   dragHandle?: React.ReactNode;
+  titleClassName?: string;
 }
 
-const Accordion = ({ title, children, defaultOpen = true, onEdit, onReset, actions, dragHandle }: AccordionProps) => {
+const Accordion = ({
+  title,
+  children,
+  defaultOpen = true,
+  onEdit,
+  onReset,
+  actions,
+  dragHandle,
+  titleClassName,
+}: AccordionProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
@@ -28,7 +38,11 @@ const Accordion = ({ title, children, defaultOpen = true, onEdit, onReset, actio
           />
         </button>
         {/* <span className="flex-1 text-[14px] text-[#e2e2e2] font-normal leading-5"> */}
-        <span className="flex-1 text-[11px] font-semibold text-[#ababab] uppercase tracking-[0.5px]">{title}</span>
+        <span
+          className={`flex-1 ${titleClassName ?? "text-[11px] font-semibold text-[#ababab] uppercase tracking-[0.5px]"}`}
+        >
+          {title}
+        </span>
         {/* {title}
         </span> */}
         <div className="flex items-center gap-2 shrink-0">
@@ -55,11 +69,7 @@ const Accordion = ({ title, children, defaultOpen = true, onEdit, onReset, actio
         </div>
       </div>
 
-      {isOpen && (
-        <div className="pt-2.5 pb-2.5 flex flex-col gap-3">
-          {children}
-        </div>
-      )}
+      {isOpen && <div className="pt-2.5 pb-2.5 flex flex-col gap-3">{children}</div>}
     </div>
   );
 };
