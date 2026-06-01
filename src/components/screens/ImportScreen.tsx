@@ -366,10 +366,16 @@ const ImportScreen = ({ onReady, onBack, onStartTethering }: ImportScreenProps) 
                   onClick={() => inputRef.current?.click()}
                   className="group w-full flex flex-col items-center gap-3 py-7 px-6 rounded-2xl border border-[#252525] bg-[#181818] hover:border-[#333] hover:bg-[#1b1b1b] transition-all duration-200 cursor-pointer"
                 >
-                  <ImageIcon weight="light" size={26} className="text-[#555] group-hover:text-[#777] transition-colors" />
+                  <ImageIcon
+                    weight="light"
+                    size={26}
+                    className="text-[#555] group-hover:text-[#777] transition-colors"
+                  />
                   <div className="flex flex-col items-center gap-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-[#bbb] text-[14px] font-semibold">RAW / JPEG / TIFF</span>
+                      <span className="text-[#bbb] text-[14px] font-semibold">
+                        RAW / JPEG / TIFF
+                      </span>
                       <span className="text-[9px] font-semibold tracking-widest uppercase text-[#555] border border-[#2a2a2a] px-2 py-0.5 rounded">
                         Cull, Edit, &amp; Retouch
                       </span>
@@ -381,12 +387,18 @@ const ImportScreen = ({ onReady, onBack, onStartTethering }: ImportScreenProps) 
                 {/* Lr / C1 Catalog */}
                 <button className="group w-full flex flex-col items-center gap-3 py-7 px-6 rounded-2xl border border-[#252525] bg-[#181818] hover:border-[#333] hover:bg-[#1b1b1b] transition-all duration-200 cursor-pointer">
                   <div className="flex items-center gap-2.5">
-                    <span className="w-8 h-8 rounded-md flex items-center justify-center bg-[#1c2b40] text-[#4a85c8] text-[9px] font-bold tracking-tight">Lr</span>
+                    <span className="w-8 h-8 rounded-md flex items-center justify-center bg-[#1c2b40] text-[#4a85c8] text-[9px] font-bold tracking-tight">
+                      Lr
+                    </span>
                     <span className="text-[#383838] text-[13px]">/</span>
-                    <span className="w-8 h-8 rounded-md flex items-center justify-center bg-[#28221a] text-[#c8913a] text-[9px] font-bold tracking-tight">C1</span>
+                    <span className="w-8 h-8 rounded-md flex items-center justify-center bg-[#28221a] text-[#c8913a] text-[9px] font-bold tracking-tight">
+                      C1
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[#bbb] text-[14px] font-semibold group-hover:text-[#d4d4d4] transition-colors">Lr / C1 Catalog</span>
+                    <span className="text-[#bbb] text-[14px] font-semibold group-hover:text-[#d4d4d4] transition-colors">
+                      Lr / C1 Catalog
+                    </span>
                     <span className="text-[9px] font-semibold tracking-widest uppercase text-[#555] border border-[#2a2a2a] px-2 py-0.5 rounded">
                       Edits only
                     </span>
@@ -397,10 +409,12 @@ const ImportScreen = ({ onReady, onBack, onStartTethering }: ImportScreenProps) 
               {/* Explanation */}
               <div className="flex flex-col items-center gap-1 text-center max-w-[420px]">
                 <p className="text-[#444] text-[11px] leading-relaxed">
-                  RAW, JPEG, and TIFF files support all features – culling, editing, retouching, and previewing results.
+                  RAW, JPEG, and TIFF files support all features – culling, editing, retouching, and
+                  previewing results.
                 </p>
                 <p className="text-[#444] text-[11px] leading-relaxed">
-                  Lr/C1 Catalogs support edits only and must be previewed in Lightroom or Capture One.
+                  Lr/C1 Catalogs support edits only and must be previewed in Lightroom or Capture
+                  One.
                 </p>
               </div>
 
@@ -475,9 +489,7 @@ const ImportScreen = ({ onReady, onBack, onStartTethering }: ImportScreenProps) 
 
             {/* Ingest & backup */}
             <div className="flex flex-col gap-3">
-              <p className="text-[#555] text-[11px] font-medium tracking-wide uppercase">
-                Ingest
-              </p>
+              <p className="text-[#555] text-[11px] font-medium tracking-wide uppercase">Ingest</p>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[#bbb] text-[13px]">Ingest &amp; backup photos</p>
