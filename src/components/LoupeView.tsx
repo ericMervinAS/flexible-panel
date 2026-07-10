@@ -7,6 +7,25 @@ import type { DistractionDetection } from "@/lib/distractionDetection";
 import { MODEL_TO_UI } from "@/lib/distractionDetection";
 
 
+// ── Removal masks ──────────────────────────────────────────────────────────────
+// A dot marks where a removed region was. Geometry is stored normalized (0..1 of
+// the displayed image); dx/dy is a normalized drag offset. `nx1..ny2` is the actual
+// inpaint mask rect (object: padded detection box; brush: stroke bounding box).
+// `dataUrl` holds the real brush-stroke mask image for the reveal overlay.
+interface RemovalMask {
+  id: string;
+  kind: "object" | "brush";
+  label?: string;
+  nx1: number; ny1: number; nx2: number; ny2: number;
+  dataUrl?: string;
+  dx: number;
+  dy: number;
+}
+
+// Padding (natural px) applied around object detection boxes — must match the
+// store's BOX_PAD so the revealed outline is the mask actually inpainted.
+const BOX_PAD = 6;
+
 interface LoupeViewProps {
   image: ImageData;
   images: ImageData[];
@@ -18,12 +37,42 @@ interface LoupeViewProps {
   isPatchActive?: boolean;
   onHasStrokesChange?: (has: boolean) => void;
   clearCanvasSignal?: number;
+  /** Incremented by the parent to trigger inpainting of the current brush mask. */
+  inpaintSignal?: number;
+  /** Detection boxes (image-natural coords) to include in the inpaint mask. */
+  pendingInpaintDetections?: DistractionDetection[];
+  /** Patched result data URL for the current image (from the shared store). */
+  patchedSrc?: string;
+  /** True while the shared store is running an inpaint pass — drives the spinner. */
+  isInpainting?: boolean;
+  /** Apply brush strokes + selected boxes to an image (shared store). */
+  onInpaint?: (index: number, dets: DistractionDetection[], brushMask: HTMLCanvasElement | null, brushId?: string) => void;
+  /** Reset the whole image (R key) — clears all removals for an index. */
+  onResetImageAll?: (index: number) => void;
+  /** Restore a single brush removal by id (deletes its dot + re-inpaints). */
+  onResetBrush?: (id: string) => void;
   autoRemoveAfterStroke?: boolean;
   isExternallyRemoving?: boolean;
   highlightedDetections?: DistractionDetection[];
   hoveredDetections?: DistractionDetection[];
   /** Fired after a canvas-side brush removal completes (timer-driven). */
   onCanvasRemoveSuccess?: () => void;
+  /** Shared removed-items state (Set of removed object UI labels) — owned by the page. */
+  removedItems?: Set<string>;
+  /** Merge a set of labels into the shared removed set. */
+  onAddRemovedItems?: (labels: Set<string>) => void;
+  /** Delete one label from the shared removed set. */
+  onResetRemovedItem?: (label: string) => void;
+  /** Replace the shared removed set wholesale. */
+  onSetRemovedItems?: (labels: Set<string>) => void;
+  /** Removed detections on the current image (per-object geometry, raw image px). */
+  removedDetections?: DistractionDetection[];
+  /** Restore one removed object by UI label (drops it from the shared set + re-inpaints). */
+  onRestoreObject?: (label: string) => void;
+  /** True while one or more objects are selected in the patch panel — object
+   *  selection and brush drawing are mutually exclusive removal methods, so
+   *  this locks out brush strokes until the selection is cleared. */
+  disableBrush?: boolean;
 }
 
 const LoupeView = ({
@@ -37,13 +86,36 @@ const LoupeView = ({
   isPatchActive = false,
   onHasStrokesChange,
   clearCanvasSignal = 0,
+  inpaintSignal = 0,
+  pendingInpaintDetections = [],
+  patchedSrc,
+  isInpainting = false,
+  onInpaint,
+  onResetImageAll,
+  onResetBrush,
   autoRemoveAfterStroke = false,
   isExternallyRemoving = false,
   highlightedDetections = [],
   hoveredDetections = [],
   onCanvasRemoveSuccess,
+  removedItems = new Set(),
+  onAddRemovedItems: _onAddRemovedItems,
+  onResetRemovedItem: _onResetRemovedItem,
+  onSetRemovedItems: _onSetRemovedItems,
+  removedDetections = [],
+  onRestoreObject,
+  disableBrush = false,
 }: LoupeViewProps) => {
   const stripImages = filteredImages ?? images.map((img, i) => ({ ...img, originalIndex: i }));
+
+  // Canvas reads the same shared removed-items set: don't draw highlight/hover
+  // boxes for objects that have already been removed album-wide.
+  const visibleHighlighted = highlightedDetections.filter(
+    (d) => !removedItems.has(MODEL_TO_UI[d.label] ?? d.label),
+  );
+  const visibleHovered = hoveredDetections.filter(
+    (d) => !removedItems.has(MODEL_TO_UI[d.label] ?? d.label),
+  );
   const stripRef = useRef<HTMLDivElement>(null);
   const tileRefs = useRef<(HTMLDivElement | null)[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -94,9 +166,24 @@ const LoupeView = ({
   const committedSnapshotRef = useRef<globalThis.ImageData | null>(null);
   const currentStrokeRef = useRef<{ x: number; y: number }[]>([]);
   const autoRemoveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const brushSeqRef = useRef(0);
 
   const [isAutoRemoving, setIsAutoRemoving] = useState(false);
   const [showStrokeHint, setShowStrokeHint] = useState(false);
+
+  // ── Removal dots ─────────────────────────────────────────────────────────────
+  const [removalsByImage, setRemovalsByImage] = useState<Record<number, RemovalMask[]>>({});
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dotMenu, setDotMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  // Cursor position in canvas (pre-transform) space, for proximity reveal.
+  const [dotHoverPos, setDotHoverPos] = useState<{ x: number; y: number } | null>(null);
+  // True while a brush stroke is actively being drawn (hides dots).
+  const [isBrushing, setIsBrushing] = useState(false);
+  const dotMenuRef = useRef<HTMLDivElement>(null);
+
+  // Patched result for this image comes from the shared store (via props).
+  const displaySrc = patchedSrc ?? image.src;
   // Bounding box of the committed mask, in canvas pixel space (pre-zoom).
   // The Cancel/Remove hint is anchored to this so it follows zoom/pan in render.
   const [maskBBox, setMaskBBox] = useState<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
@@ -120,6 +207,12 @@ const LoupeView = ({
   onHasStrokesChangeRef.current = onHasStrokesChange;
   const onCanvasRemoveSuccessRef = useRef(onCanvasRemoveSuccess);
   onCanvasRemoveSuccessRef.current = onCanvasRemoveSuccess;
+  const pendingInpaintDetectionsRef = useRef(pendingInpaintDetections);
+  pendingInpaintDetectionsRef.current = pendingInpaintDetections;
+  const onInpaintRef = useRef(onInpaint);
+  onInpaintRef.current = onInpaint;
+  const onResetImageAllRef = useRef(onResetImageAll);
+  onResetImageAllRef.current = onResetImageAll;
 
   // ── Zoom helpers ─────────────────────────────────────────────────────────────
   const applyZoomAndPan = (newZoom: number, newPan: { x: number; y: number }) => {
@@ -246,13 +339,98 @@ const LoupeView = ({
     autoRemoveTimerRef.current = null;
   };
 
+  // Extract the committed brush strokes as a natural-resolution mask (cropped
+  // from the container-space mask canvas to the rendered image rect). Null if none.
+  const extractBrushMaskNatural = (nW: number, nH: number): HTMLCanvasElement | null => {
+    const maskCanvas = maskCanvasRef.current;
+    const b = imageBoundsRef.current;
+    if (!maskCanvas || !b || !committedHasStrokesRef.current) return null;
+    const out = document.createElement("canvas");
+    out.width = nW;
+    out.height = nH;
+    out.getContext("2d")!.drawImage(
+      maskCanvas, b.left, b.top, b.right - b.left, b.bottom - b.top, 0, 0, nW, nH,
+    );
+    return out;
+  };
+
+  // Bounding box (natural px) of opaque pixels in a mask canvas. Null if empty.
+  const maskBBoxNatural = (c: HTMLCanvasElement): { x1: number; y1: number; x2: number; y2: number } | null => {
+    const { width, height } = c;
+    const data = c.getContext("2d")!.getImageData(0, 0, width, height).data;
+    let minX = width, minY = height, maxX = -1, maxY = -1;
+    for (let y = 0; y < height; y++) {
+      const row = y * width * 4;
+      for (let x = 0; x < width; x++) {
+        if (data[row + x * 4 + 3] > 0) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) return null;
+    return { x1: minX, y1: minY, x2: maxX, y2: maxY };
+  };
+
+  // Capture the pending brush strokes + selected boxes and hand them to the
+  // shared store (which owns the per-image removal set + result), then clear the
+  // live brush layer. The store recomputes from the original and drives the
+  // spinner via the `isInpainting` prop.
+  const performInpaint = () => {
+    const idx = currentIndex;
+    const img = imgRef.current;
+    const nW = img?.naturalWidth ?? 0, nH = img?.naturalHeight ?? 0;
+    const brush = nW && nH ? extractBrushMaskNatural(nW, nH) : null;
+    const dets = pendingInpaintDetectionsRef.current ?? [];
+    if (!brush && !dets.length) { clearAutoRemove(); return; }
+
+    // Clear the live brush layer now that it's captured.
+    const canvas = canvasRef.current, maskCanvas = maskCanvasRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    maskCanvas?.getContext("2d")?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    hasStrokesRef.current = false;
+    committedHasStrokesRef.current = false;
+    committedSnapshotRef.current = null;
+    onHasStrokesChangeRef.current?.(false);
+    setShowStrokeHint(false);
+    setMaskBBox(null);
+    setIsAutoRemoving(false);
+    autoRemoveTimerRef.current = null;
+
+    // Seed a brush removal dot at the stroke's location (actual mask preserved as
+    // a data URL for the reveal overlay).
+    let brushId: string | undefined;
+    if (brush) {
+      const bbox = maskBBoxNatural(brush);
+      if (bbox) {
+        brushId = `brush:${brushSeqRef.current++}`;
+        const dataUrl = brush.toDataURL("image/png");
+        const id = brushId;
+        setRemovalsByImage((prev) => {
+          const list = prev[idx] ?? [];
+          return {
+            ...prev,
+            [idx]: [...list, {
+              id, kind: "brush",
+              nx1: bbox.x1 / nW, ny1: bbox.y1 / nH, nx2: bbox.x2 / nW, ny2: bbox.y2 / nH,
+              dataUrl, dx: 0, dy: 0,
+            }],
+          };
+        });
+      }
+    }
+
+    onInpaintRef.current?.(idx, dets, brush, brushId);
+  };
+
   const startAutoRemoveTimer = () => {
     if (autoRemoveTimerRef.current) clearTimeout(autoRemoveTimerRef.current);
     setIsAutoRemoving(true);
     autoRemoveTimerRef.current = setTimeout(() => {
-      clearAutoRemove();
-      // Success path only — cancel calls clearAutoRemove directly without firing.
-      onCanvasRemoveSuccessRef.current?.();
+      autoRemoveTimerRef.current = null;
+      void performInpaint();
     }, 2000);
   };
 
@@ -288,6 +466,13 @@ const LoupeView = ({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === "g" || e.key === "G") && !e.metaKey && !e.ctrlKey) { onGoToGrid?.(); return; }
+      if ((e.key === "r" || e.key === "R") && !e.metaKey && !e.ctrlKey) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        e.preventDefault();
+        onResetImageAllRef.current?.(currentIndex);
+        return;
+      }
       if (e.key === "ArrowLeft") onSelectImage(Math.max(0, currentIndex - 1));
       if (e.key === "ArrowRight") onSelectImage(Math.min(totalImages - 1, currentIndex + 1));
 
@@ -362,6 +547,11 @@ const LoupeView = ({
     setIsAutoRemoving(false);
     setShowStrokeHint(false);
     setMaskBBox(null);
+    setActiveId(null);
+    setDotMenu(null);
+    setDraggingId(null);
+    setDotHoverPos(null);
+    setIsBrushing(false);
     // Reset zoom / pan / true-100 / image bounds (recomputed on image load)
     zoomRef.current = 1;
     panRef.current = { x: 0, y: 0 };
@@ -379,6 +569,67 @@ const LoupeView = ({
     committedSnapshotRef.current = null;
     onHasStrokesChange?.(false);
   }, [currentIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Seed object removal masks from the removed detections ───────────────────
+  // One mask per removed detection (stable id), pruned when the panel restores an
+  // object. Brush masks (none yet) are left untouched.
+  useEffect(() => {
+    const img = imgRef.current;
+    const nW = img?.naturalWidth ?? 0, nH = img?.naturalHeight ?? 0;
+    if (!nW || !nH) return; // wait for image to load so px→normalized is correct
+
+    setRemovalsByImage((prev) => {
+      const existing = prev[currentIndex] ?? [];
+      const objMasks = existing.filter((m) => m.kind === "object");
+      const brushMasks = existing.filter((m) => m.kind === "brush");
+
+      const nextObj: RemovalMask[] = [];
+      const wantedIds = new Set<string>();
+      for (const det of removedDetections) {
+        const label = MODEL_TO_UI[det.label] ?? det.label;
+        const id = `obj:${label}:${det.x1}:${det.y1}`;
+        wantedIds.add(id);
+        const found = objMasks.find((m) => m.id === id);
+        if (found) { nextObj.push(found); continue; } // keep drag offset etc.
+        // Padded box = the exact region the store inpaints (BOX_PAD around the det).
+        nextObj.push({
+          id, kind: "object", label,
+          nx1: (det.x1 - BOX_PAD) / nW, ny1: (det.y1 - BOX_PAD) / nH,
+          nx2: (det.x2 + BOX_PAD) / nW, ny2: (det.y2 + BOX_PAD) / nH,
+          dx: 0, dy: 0,
+        });
+      }
+      // Prune restored object masks; keep the ordering deterministic.
+      const pruned = nextObj.filter((m) => wantedIds.has(m.id));
+      return { ...prev, [currentIndex]: [...pruned, ...brushMasks] };
+    });
+  }, [removedDetections, currentIndex, imageBounds]);
+
+  // ── Dot context menu: dismiss on outside mousedown ──────────────────────────
+  useEffect(() => {
+    if (!dotMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (dotMenuRef.current && !dotMenuRef.current.contains(e.target as Node)) {
+        setDotMenu(null);
+      }
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [dotMenu]);
+
+  // ── Delete / Backspace removes the active dot (object dots restore the object) ─
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (!activeId) return;
+      e.preventDefault();
+      deleteMask(activeId);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeId, currentIndex, removalsByImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Wheel zoom (passive:false so we can preventDefault) ─────────────────────
   useEffect(() => {
@@ -422,6 +673,12 @@ const LoupeView = ({
     setShowStrokeHint(false);
     setMaskBBox(null);
   }, [clearCanvasSignal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Inpaint on demand (right-panel "Remove Object" for brush strokes) ────────
+  useEffect(() => {
+    if (!inpaintSignal) return;
+    performInpaint();
+  }, [inpaintSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Close zoom dropdown on outside click ─────────────────────────────────────
   useEffect(() => {
@@ -493,6 +750,7 @@ const LoupeView = ({
       finalizeStroke();
       currentStrokeRef.current = [];
       isDrawingRef.current = false;
+      setIsBrushing(false);
       lastPosRef.current = null;
     };
 
@@ -518,6 +776,7 @@ const LoupeView = ({
       }
       currentStrokeRef.current = [];
       isDrawingRef.current = false;
+      setIsBrushing(false);
       lastPosRef.current = null;
     };
 
@@ -607,6 +866,7 @@ const LoupeView = ({
     }
     currentStrokeRef.current = [];
     isDrawingRef.current = false;
+    setIsBrushing(false);
     lastPosRef.current = null;
   };
 
@@ -633,6 +893,7 @@ const LoupeView = ({
     }
     currentStrokeRef.current = [];
     isDrawingRef.current = false;
+    setIsBrushing(false);
     lastPosRef.current = null;
   };
 
@@ -640,12 +901,79 @@ const LoupeView = ({
   const handleHintRemove = () => {
     setShowStrokeHint(false);
     setMaskBBox(null);
-    startAutoRemoveTimer();
+    void performInpaint();
   };
 
   const handleHintCancel = () => {
     setShowStrokeHint(false);
     clearAutoRemove();
+  };
+
+  // ── Removal-dot helpers ──────────────────────────────────────────────────────
+  const updateMask = (id: string, patch: Partial<RemovalMask>) => {
+    setRemovalsByImage((prev) => {
+      const list = prev[currentIndex] ?? [];
+      return { ...prev, [currentIndex]: list.map((m) => (m.id === id ? { ...m, ...patch } : m)) };
+    });
+  };
+
+  const deleteMask = (id: string) => {
+    const mask = (removalsByImage[currentIndex] ?? []).find((m) => m.id === id);
+    setActiveId(null);
+    setDotMenu(null);
+    if (mask?.kind === "object" && mask.label) {
+      // Restoring drops the label from the shared set → removedDetections changes
+      // → the seeding effect prunes this mask.
+      onRestoreObject?.(mask.label);
+      return;
+    }
+    // Brush: re-inpaint from the original without this stroke, then drop the dot.
+    if (mask?.kind === "brush") onResetBrush?.(id);
+    setRemovalsByImage((prev) => ({
+      ...prev,
+      [currentIndex]: (prev[currentIndex] ?? []).filter((m) => m.id !== id),
+    }));
+  };
+
+  // Left mousedown on a dot: select (click, <3px) or drag (dx/dy). Stops
+  // propagation so the container never starts a brush stroke.
+  const handleDotMouseDown = (e: React.MouseEvent, mask: RemovalMask) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const b = imageBoundsRef.current;
+    if (!b) return;
+    const rW = b.right - b.left, rH = b.bottom - b.top;
+    const z = zoomRef.current;
+    const startX = e.clientX, startY = e.clientY;
+    const startDx = mask.dx, startDy = mask.dy;
+    let moved = false;
+
+    const onMove = (ev: MouseEvent) => {
+      const ddx = ev.clientX - startX, ddy = ev.clientY - startY;
+      if (!moved && Math.hypot(ddx, ddy) >= 3) moved = true;
+      if (!moved) return;
+      setDraggingId(mask.id);
+      // screen px per normalized unit = rendered px (rW) × zoom
+      updateMask(mask.id, { dx: startDx + ddx / (rW * z), dy: startDy + ddy / (rH * z) });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      setDraggingId(null);
+      if (!moved) { setActiveId(mask.id); setDotMenu(null); }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const handleDotContextMenu = (e: React.MouseEvent, mask: RemovalMask) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setActiveId(mask.id);
+    setDotMenu({ id: mask.id, x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
 
   // ── Mouse handlers ───────────────────────────────────────────────────────────
@@ -696,7 +1024,10 @@ const LoupeView = ({
       return;
     }
 
-    // Drawing mode — only start if cursor is over the image
+    // Drawing mode — locked out while an object is selected in the patch panel
+    // (object selection and brush strokes are mutually exclusive), and only
+    // starts if the cursor is over the image.
+    if (disableBrush) return;
     const canvasPos = posFromEvent(e);
     if (!isInsideImage(canvasPos)) return;
 
@@ -724,6 +1055,7 @@ const LoupeView = ({
     committedSnapshotRef.current = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
     currentStrokeRef.current = [canvasPos];
     isDrawingRef.current = true;
+    setIsBrushing(true);
     lastPosRef.current = canvasPos;
     redrawCurrentStroke();
 
@@ -752,9 +1084,12 @@ const LoupeView = ({
     const canvasPos = posFromEvent(e);
     const inside = isInsideImage(canvasPos);
 
+    // Track cursor in canvas (pre-transform) space for removal-dot proximity reveal.
+    if (isPatchActive) setDotHoverPos(canvasPos);
+
     // Show brush cursor anywhere inside the canvas area (not just over the image),
-    // except in shift-pan mode
-    if (isPatchActive && !isShiftHeldRef.current) {
+    // except in shift-pan mode or while brushing is locked out by a selection.
+    if (isPatchActive && !isShiftHeldRef.current && !disableBrush) {
       setBrushPos(rawPos);
     } else {
       setBrushPos(null);
@@ -797,6 +1132,7 @@ const LoupeView = ({
 
   const handleMouseLeave = () => {
     setBrushPos(null);
+    setDotHoverPos(null);
     // Keep panning across boundary (global mouseup stops it)
     if (isPanningRef.current) return;
     if (isDrawingRef.current) {
@@ -817,10 +1153,16 @@ const LoupeView = ({
 
   // ── Cursor class ─────────────────────────────────────────────────────────────
   const cursorClass = isPatchActive && !isShiftHeld
-    ? "cursor-none"
+    ? (disableBrush ? "cursor-not-allowed" : "cursor-none")
     : isPanning
       ? "cursor-grabbing"
       : "cursor-grab";
+
+  // Removal masks for the current image + whether the dot layer should render.
+  const dotMasks = removalsByImage[currentIndex] ?? [];
+  const dotsVisible =
+    isPatchActive && !!imageBounds && dotMasks.length > 0 &&
+    !isBrushing && !showStrokeHint && !isAutoRemoving && !isExternallyRemoving;
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -845,7 +1187,7 @@ const LoupeView = ({
         >
           <img
             ref={imgRef}
-            src={image.src}
+            src={displaySrc}
             alt={image.filename}
             className="max-w-full max-h-full object-contain"
             draggable={false}
@@ -859,9 +1201,9 @@ const LoupeView = ({
           />
 
           {/* Hover hint — slim frame, no label, for the patch panel item under the cursor */}
-          {isPatchActive && imageBounds && hoveredDetections.length > 0 && (
+          {isPatchActive && imageBounds && visibleHovered.length > 0 && (
             <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
-              {hoveredDetections.map((det, i) => {
+              {visibleHovered.map((det, i) => {
                 const imgW = imgRef.current?.naturalWidth ?? 1;
                 const imgH = imgRef.current?.naturalHeight ?? 1;
                 const rW = imageBounds.right - imageBounds.left;
@@ -887,9 +1229,9 @@ const LoupeView = ({
           )}
 
           {/* Bounding box overlay for selected distraction objects */}
-          {isPatchActive && imageBounds && highlightedDetections.length > 0 && (
+          {isPatchActive && imageBounds && visibleHighlighted.length > 0 && (
             <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
-              {highlightedDetections.map((det, i) => {
+              {visibleHighlighted.map((det, i) => {
                 const imgW = imgRef.current?.naturalWidth ?? 1;
                 const imgH = imgRef.current?.naturalHeight ?? 1;
                 const rW = imageBounds.right - imageBounds.left;
@@ -940,7 +1282,99 @@ const LoupeView = ({
               })}
             </svg>
           )}
+
+          {/* Removal dots — one per removed object, proximity-revealed outline */}
+          {dotsVisible && imageBounds && (
+            <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
+              <g style={{ pointerEvents: "auto" }}>
+                {dotMasks.map((m) => {
+                  const rW = imageBounds.right - imageBounds.left;
+                  const rH = imageBounds.bottom - imageBounds.top;
+                  const cx = imageBounds.left + ((m.nx1 + m.nx2) / 2 + m.dx) * rW;
+                  const cy = imageBounds.top + ((m.ny1 + m.ny2) / 2 + m.dy) * rH;
+                  const halfW = ((m.nx2 - m.nx1) / 2) * rW;
+                  const halfH = ((m.ny2 - m.ny1) / 2) * rH;
+                  const isActive = activeId === m.id;
+                  const isDragging = draggingId === m.id;
+                  const menuOpen = dotMenu?.id === m.id;
+                  const near = dotHoverPos
+                    ? Math.hypot(dotHoverPos.x - cx, dotHoverPos.y - cy) <= Math.max(halfW, halfH) + 36 / zoom
+                    : false;
+                  const revealed = isActive || isDragging || menuOpen || near;
+                  const r = revealed ? 6.5 / zoom : 5 / zoom;
+                  const dotOpacity = revealed ? 1 : 0.8;
+                  const borderW = isActive ? 2 / zoom : 1 / zoom;
+                  const mx = imageBounds.left + (m.nx1 + m.dx) * rW;
+                  const my = imageBounds.top + (m.ny1 + m.dy) * rH;
+                  const mw = (m.nx2 - m.nx1) * rW;
+                  const mh = (m.ny2 - m.ny1) * rH;
+                  return (
+                    <g key={m.id}>
+                      {revealed && m.kind === "object" && (
+                        // Actual inpaint mask: the padded detection box.
+                        <rect
+                          x={mx} y={my} width={mw} height={mh}
+                          rx={3 / zoom}
+                          fill="rgba(59,130,246,0.22)"
+                          stroke="#3b82f6"
+                          strokeWidth={2 / zoom}
+                        />
+                      )}
+                      {revealed && m.kind === "brush" && m.dataUrl && (
+                        // Actual brush mask, drawn in place (mask canvas is full-image sized).
+                        <image
+                          href={m.dataUrl}
+                          x={imageBounds.left + m.dx * rW}
+                          y={imageBounds.top + m.dy * rH}
+                          width={rW}
+                          height={rH}
+                          opacity={0.5}
+                          preserveAspectRatio="none"
+                        />
+                      )}
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={r}
+                        fill="#3b82f6"
+                        fillOpacity={dotOpacity}
+                        stroke="rgba(255,255,255,0.95)"
+                        strokeWidth={borderW}
+                        style={{ cursor: "pointer" }}
+                        onMouseDown={(e) => handleDotMouseDown(e, m)}
+                        onContextMenu={(e) => handleDotContextMenu(e, m)}
+                      />
+                    </g>
+                  );
+                })}
+              </g>
+            </svg>
+          )}
         </div>
+
+        {/* Removal-dot context menu — container space (unscaled) */}
+        {isPatchActive && dotMenu && (
+          <div
+            ref={dotMenuRef}
+            className="absolute z-40 bg-[#1c1c1c] border border-[#303030] rounded-[8px] py-1 shadow-xl min-w-[128px]"
+            style={{ left: dotMenu.x, top: dotMenu.y }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          >
+            <button
+              onClick={() => { setActiveId(dotMenu.id); setDotMenu(null); }}
+              className="w-full text-left px-3 py-1.5 text-[12px] text-[#e2e2e2] hover:bg-white/5 transition-colors"
+            >
+              Edit mask
+            </button>
+            <button
+              onClick={() => deleteMask(dotMenu.id)}
+              className="w-full text-left px-3 py-1.5 text-[12px] text-[#e2e2e2] hover:bg-white/5 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        )}
 
         {/* Brush cursor ring — container space, sized to match visual brush */}
         {isPatchActive && brushPos && (
@@ -989,7 +1423,7 @@ const LoupeView = ({
         })()}
 
         {/* Canvas removal loader */}
-        {(isAutoRemoving || isExternallyRemoving) && (
+        {(isAutoRemoving || isExternallyRemoving || isInpainting) && (
           <div className="absolute bottom-4 right-4 flex items-center gap-2 bg-black/80 rounded-lg px-3 py-1.5 pointer-events-none">
             <div className="w-3.5 h-3.5 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin shrink-0" />
             <span className="text-[12px] text-[#e2e2e2]">Removing</span>

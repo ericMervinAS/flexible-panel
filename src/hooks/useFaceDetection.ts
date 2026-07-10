@@ -23,7 +23,7 @@ export interface UseFaceDetectionResult {
   detectionProgress: number;
 }
 
-export function useFaceDetection(images: ImageData[]): UseFaceDetectionResult {
+export function useFaceDetection(images: ImageData[], enabled: boolean = true): UseFaceDetectionResult {
   const [modelSubjects, setModelSubjects] = useState<ModelSubject[]>([]);
   const [modelImageMap, setModelImageMap] = useState<Map<number, number[]>>(new Map());
   const [isDetecting, setIsDetecting] = useState(false);
@@ -46,6 +46,7 @@ export function useFaceDetection(images: ImageData[]): UseFaceDetectionResult {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     if (!images.length) return;
     // Only re-run when images are actually added
     if (images.length === lastLengthRef.current) return;
@@ -126,7 +127,7 @@ export function useFaceDetection(images: ImageData[]): UseFaceDetectionResult {
 
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images.length]);
+  }, [images.length, enabled]);
 
   return { modelSubjects, modelImageMap, isDetecting, isLoadingModel, statusMessage, detectionProgress };
 }

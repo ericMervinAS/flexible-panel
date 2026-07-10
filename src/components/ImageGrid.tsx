@@ -28,6 +28,13 @@ const sampleImages: ImageData[] = Object.entries(sampleModules)
     colorTag: "none" as ColorTag,
   }));
 
+/** Initial image set for a given import source — used to seed loupe view before
+ *  the grid mounts (the grid still owns uploads/edits after that). */
+export const resolveInitialImages = (
+  importSource?: "sample" | ImportFolder
+): ImageData[] =>
+  importSource && importSource !== "sample" ? importSource.images : sampleImages;
+
 interface ImageGridProps {
   columns: number;
   isScanning: boolean;
@@ -37,9 +44,11 @@ interface ImageGridProps {
   modelImageMap?: Map<number, number[]>;
   initialSelectedIndex?: number;
   importSource?: "sample" | ImportFolder;
+  /** Patched (inpainted) result data URLs by original image index. */
+  patchedByIndex?: Record<number, string>;
 }
 
-const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter, modelImageMap, initialSelectedIndex, importSource }: ImageGridProps) => {
+const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter, modelImageMap, initialSelectedIndex, importSource, patchedByIndex = {} }: ImageGridProps) => {
   const [allImages, setAllImages] = useState<ImageData[]>(
     importSource && importSource !== "sample" ? importSource.images : sampleImages
   );
@@ -184,11 +193,12 @@ const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, su
         {displayImages.map(({ src, filename, originalIndex }) => (
           <ImageTile
             key={originalIndex}
-            src={src}
+            src={patchedByIndex[originalIndex] ?? src}
             filename={filename}
             isScanning={isScanning}
             isSelected={selectedIndices.has(originalIndex)}
             isPrimary={originalIndex === anchorIndex && isMultiSelected}
+            isRetouched={originalIndex in patchedByIndex}
             onClick={(e) => handleClick(originalIndex, e)}
             onDoubleClick={() => onImageDoubleClick(originalIndex)}
           />

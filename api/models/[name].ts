@@ -3,6 +3,7 @@ const MODEL_URLS: Record<string, string | undefined> = {
   arcface:     process.env.MODEL_URL_ARCFACE,
   genderage:   process.env.MODEL_URL_GENDERAGE,
   distraction: process.env.MODEL_URL_DISTRACTION,
+  inpaint:     process.env.MODEL_URL_INPAINT,
 };
 
 // Redirect rather than proxy — model files (esp. ArcFace at ~13MB) exceed

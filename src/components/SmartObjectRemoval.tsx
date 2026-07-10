@@ -29,6 +29,8 @@ export interface SmartObjectState {
 
 interface SmartObjectRemovalProps {
   isScanning: boolean;
+  /** Album not yet scanned — show every object as selectable, hide counts. */
+  preScan?: boolean;
   disabled?: boolean;
   resetSignal?: number;
   removedItems?: Set<string>;
@@ -40,10 +42,13 @@ interface SmartObjectRemovalProps {
   onRerun?: () => void;
   onReport?: () => void;
   onSuggestSubmit?: (suggestion: string) => void;
+  /** Highlight this section with a one-time coachmark (e.g. after "Scan this album" from the loupe). */
+  coachmarkVisible?: boolean;
 }
 
 const SmartObjectRemoval = ({
   isScanning,
+  preScan = false,
   disabled,
   resetSignal,
   removedItems,
@@ -55,6 +60,7 @@ const SmartObjectRemoval = ({
   onRerun,
   onReport,
   onSuggestSubmit,
+  coachmarkVisible = false,
 }: SmartObjectRemovalProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -75,8 +81,7 @@ const SmartObjectRemoval = ({
     return UI_LABELS.map((label) => ({ label, count: countMap.get(label) ?? 0 }));
   }, [distractionMap]);
 
-  const hasScanned = distractionMap !== undefined;
-  const noneFound = hasScanned && distractions.every((d) => d.count === 0);
+  const noneFound = !preScan && distractions.every((d) => d.count === 0);
   const [pendingReset, setPendingReset] = useState<{ label: string; count: number } | null>(null);
   const [skipConfirmation, setSkipConfirmation] = useState(false);
   const [showSuggestModal, setShowSuggestModal] = useState(false);
@@ -132,7 +137,10 @@ const SmartObjectRemoval = ({
   return (
     <>
       <div className={`px-5 flex flex-col gap-3 transition-opacity ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 relative">
+          {coachmarkVisible && (
+            <div className="absolute -inset-2 rounded-lg border-2 border-[#2563eb] pointer-events-none animate-pulse z-10" />
+          )}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <h3 className="text-base font-normal text-[#e2e2e2]">Smart Object Removal</h3>
@@ -154,7 +162,7 @@ const SmartObjectRemoval = ({
             {isScanning && (
               <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
             )}
-            {!isScanning && (
+            {!isScanning && !preScan && (
               <button
                 onClick={handleRerun}
                 disabled={isScanning}
@@ -169,8 +177,19 @@ const SmartObjectRemoval = ({
 
           </div>
           <p className="text-[12px] text-[#ababab] leading-4">
-            Smart object detection will automatically identify and remove distractions you select
+            {preScan
+              ? "Select the objects you want us to look for, then scan the album."
+              : "Smart object detection will automatically identify and remove distractions you select"}
           </p>
+
+          {coachmarkVisible && (
+            <div className="absolute left-3 top-full mt-2 z-20 flex flex-col items-start">
+              <div className="w-3 h-3 bg-[#2563eb] rotate-45 -mb-1.5 ml-2" />
+              <div className="px-3 py-2 rounded-md bg-[#2563eb] text-white text-[12px] font-medium leading-4 shadow-lg max-w-[220px]">
+                Select the objects you want to find, then scan the whole album for them here.
+              </div>
+            </div>
+          )}
         </div>
 
         {!isScanning && noneFound && (
@@ -219,7 +238,7 @@ const SmartObjectRemoval = ({
             ].map((d) => {
               const isRemoved = removedItems?.has(d.label) ?? false;
               const isSelected = selected.has(d.label);
-              const isDisabled = d.count === 0;
+              const isDisabled = !preScan && d.count === 0;
 
               if (isRemoved) {
                 return (
@@ -250,7 +269,9 @@ const SmartObjectRemoval = ({
                 >
                   <div className="flex items-center gap-1 min-w-0">
                     <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">{d.label}</span>
-                    <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">{d.count}</span>
+                    {!preScan && (
+                      <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">{d.count}</span>
+                    )}
                   </div>
                   <div
                     className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${isSelected ? "bg-[#2563eb]" : "border border-[#474747] bg-transparent"

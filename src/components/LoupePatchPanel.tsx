@@ -1,6 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwiseIcon, X, CubeFocusIcon, FlaskIcon, ArrowsCounterClockwiseIcon, Plus, ArrowsClockwiseIcon } from "@phosphor-icons/react";
+import {
+  Check,
+  ArrowCounterClockwiseIcon,
+  X,
+  CubeFocusIcon,
+  FlaskIcon,
+  ArrowsCounterClockwiseIcon,
+  Plus,
+  ArrowsClockwiseIcon,
+} from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 import SuggestObjectModal from "./SuggestObjectModal";
 import Tooltip from "./Tooltip";
@@ -10,7 +19,7 @@ const MODEL_TO_UI: Record<string, string> = {
   "Smoke Detector": "Fire Alarms",
   "Fire Extinguisher": "Fire Extinguishers",
   "Electrical Outlet": "Electricity Sockets",
-  "Thermostat": "Thermostats",
+  Thermostat: "Thermostats",
   "Trash Can": "Garbage Cans",
 };
 
@@ -24,12 +33,14 @@ interface ToggleProps {
 const Toggle = ({ checked, onChange }: ToggleProps) => (
   <button
     onClick={() => onChange(!checked)}
-    className={`relative flex items-center p-0.5 rounded-full w-8 h-[18px] transition-colors shrink-0 ${checked ? "bg-[#2563eb]" : "bg-[#303030]"
-      }`}
+    className={`relative flex items-center p-0.5 rounded-full w-8 h-[18px] transition-colors shrink-0 ${
+      checked ? "bg-[#2563eb]" : "bg-[#303030]"
+    }`}
   >
     <div
-      className={`w-3 h-3 rounded-full transition-transform duration-200 ${checked ? "translate-x-[14px] bg-white" : "translate-x-0 bg-[#ababab]"
-        }`}
+      className={`w-3 h-3 rounded-full transition-transform duration-200 ${
+        checked ? "translate-x-[14px] bg-white" : "translate-x-0 bg-[#ababab]"
+      }`}
     />
   </button>
 );
@@ -41,19 +52,32 @@ interface LoupePatchPanelProps {
   currentImageIndex?: number;
   canvasHasStrokes?: boolean;
   onClearCanvas?: () => void;
+  onInpaintCanvas?: () => void;
   onRemoveAfterStrokeChange?: (v: boolean) => void;
   onRemovingChange?: (v: boolean) => void;
   distractionMap?: Map<number, DistractionDetection[]>;
+  /** Whether the current image specifically has been scanned — an album scan
+   *  covers every image, but a single "Scan this image" only covers one, so
+   *  this can't be derived from distractionMap being defined alone. */
+  hasScanned?: boolean;
   isModelScanning?: boolean;
   onRerun?: () => void;
+  /** Scan just the current image. */
+  onScanImage?: () => void;
+  /** Jump to the grid to scan the whole album. */
+  onScanAlbum?: () => void;
   onReport?: () => void;
   onSuggestSubmit?: (suggestion: string) => void;
   removedItems?: Set<string>;
   onRemove?: (labels: Set<string>) => void;
   onResetItem?: (label: string) => void;
+  /** Reset one removed object (by UI label) — re-inpaints with survivors. */
+  onResetImage?: (label: string) => void;
   onSelectedLabelsChange?: (labels: Set<string>) => void;
   onHoveredLabelChange?: (label: string | null) => void;
   onRemoveSuccess?: (count: number, brushOnly: boolean) => void;
+  /** Raised after a label-based removal succeeds (not brush-only). */
+  onBatchOffer?: (labels: string[]) => void;
 }
 
 const LoupePatchPanel = ({
@@ -61,24 +85,33 @@ const LoupePatchPanel = ({
   currentImageIndex = 0,
   canvasHasStrokes = false,
   onClearCanvas,
+  onInpaintCanvas,
   onRemoveAfterStrokeChange,
   onRemovingChange,
   distractionMap,
+  hasScanned: hasScannedProp,
   isModelScanning = false,
   onRerun,
+  onScanImage,
+  onScanAlbum,
   onReport,
   onSuggestSubmit,
   removedItems = new Set(),
   onRemove,
   onResetItem,
+  onResetImage,
   onSelectedLabelsChange,
   onHoveredLabelChange,
   onRemoveSuccess,
+  onBatchOffer,
 }: LoupePatchPanelProps) => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [removeAfterStroke, setRemoveAfterStroke] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
-  const [pendingReset, setPendingReset] = useState<{ label: string; count: number } | null>(null);
+  const [pendingReset, setPendingReset] = useState<{
+    label: string;
+    count: number;
+  } | null>(null);
   const [skipConfirmation, setSkipConfirmation] = useState(false);
   const [showSuggestModal, setShowSuggestModal] = useState(false);
   const [hasRescanned, setHasRescanned] = useState(false);
@@ -94,7 +127,6 @@ const LoupePatchPanel = ({
     setShowSuggestModal(false);
   };
 
-
   const detected = useMemo(() => {
     const imageDets = distractionMap?.get(currentImageIndex) ?? [];
     const countMap = new Map<string, number>();
@@ -102,10 +134,15 @@ const LoupePatchPanel = ({
       const uiLabel = MODEL_TO_UI[det.label];
       if (uiLabel) countMap.set(uiLabel, (countMap.get(uiLabel) ?? 0) + 1);
     }
-    return Array.from(countMap.entries()).map(([label, count]) => ({ label, count }));
+    return Array.from(countMap.entries()).map(([label, count]) => ({
+      label,
+      count,
+    }));
   }, [distractionMap, currentImageIndex]);
 
-  const hasScanned = distractionMap !== undefined;
+  const hasScanned = hasScannedProp ?? distractionMap !== undefined;
+  // Nothing scanned yet — offer the scan entry points instead of results.
+  const preScan = !hasScanned && !isModelScanning;
 
   // Non-removed first, removed at the bottom — same ordering as SmartObjectRemoval
   const orderedItems = [
@@ -142,6 +179,7 @@ const LoupePatchPanel = ({
   const handleResetClick = (label: string, count: number) => {
     if (skipConfirmation) {
       onResetItem?.(label);
+      onResetImage?.(label);
       return;
     }
     setPendingReset({ label, count });
@@ -150,6 +188,7 @@ const LoupePatchPanel = ({
   const confirmReset = () => {
     if (!pendingReset) return;
     onResetItem?.(pendingReset.label);
+    onResetImage?.(pendingReset.label);
     setPendingReset(null);
   };
 
@@ -157,34 +196,43 @@ const LoupePatchPanel = ({
   const totalObjectCount =
     detected
       .filter((d) => selected.has(d.label))
-      .reduce((sum, d) => sum + d.count, 0) +
-    (canvasHasStrokes ? 1 : 0);
+      .reduce((sum, d) => sum + d.count, 0) + (canvasHasStrokes ? 1 : 0);
 
   const removeLabel =
-    totalObjectCount > 1 ? `Remove ${totalObjectCount} Objects` : "Remove Object";
+    totalObjectCount > 1
+      ? `Remove ${totalObjectCount} Objects`
+      : "Remove Object";
 
-  const canRemove = !isRemoving && (selected.size > 0 || (canvasHasStrokes && !removeAfterStroke));
+  const canRemove =
+    !isRemoving &&
+    (selected.size > 0 || (canvasHasStrokes && !removeAfterStroke));
 
   const handleRemove = () => {
     if (!canRemove) return;
     const toRemove = new Set(selected);
-    const removedCount = detected
-      .filter((d) => toRemove.has(d.label))
-      .reduce((sum, d) => sum + d.count, 0);
-    const brushOnly = toRemove.size === 0 && canvasHasStrokes;
-    setIsRemoving(true);
-    setTimeout(() => {
-      onClearCanvas?.();
-      onRemove?.(toRemove);
-      const empty = new Set<string>();
-      setSelected(empty);
-      onSelectedLabelsChange?.(empty);
-      setIsRemoving(false);
-      onRemoveSuccess?.(removedCount, brushOnly);
-    }, 2200);
+
+    // Real inpainting happens in LoupeView, which owns the source image and the
+    // mask. It builds the mask from the brush strokes and/or the selected
+    // detection boxes (captured by the parent when onInpaintCanvas fires), shows
+    // its own spinner, clears the canvas, and fires the success toast via
+    // onCanvasRemoveSuccess. So we only trigger it and mark the list here.
+    onInpaintCanvas?.();
+    onRemove?.(toRemove);
+
+    // Label-based removal (not brush-only) — raise the album-wide batch offer.
+    if (toRemove.size > 0) {
+      onBatchOffer?.(Array.from(toRemove));
+    }
+
+    const empty = new Set<string>();
+    setSelected(empty);
+    onSelectedLabelsChange?.(empty);
   };
 
-  const itemsDisabled = isModelScanning || isRemoving;
+  // Brush strokes and object-checkbox selection are mutually exclusive removal
+  // methods — once the brush has pending strokes, lock the object list until
+  // those strokes are cleared or committed.
+  const itemsDisabled = isModelScanning || isRemoving || canvasHasStrokes;
 
   return (
     <div
@@ -193,11 +241,12 @@ const LoupePatchPanel = ({
     >
       {/* ── Smart Object ──────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2">
-
         {/* Title row */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">Smart Object Removal</span>
+            <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
+              Smart Object Removal
+            </span>
             {/* <span className="px-1 py-0.5 text-[11px] font-medium leading-3 rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
               Beta
             </span> */}
@@ -212,47 +261,90 @@ const LoupePatchPanel = ({
           </div>
 
           {/* Scan icon */}
-          <button
-            onClick={handleRerun}
-            disabled={isModelScanning || isRemoving}
-            title="Rerun object scan"
-            className={`flex items-center justify-center w-6 h-6 rounded transition-opacity ${isRemoving
-              ? "opacity-30 cursor-not-allowed"
-              : isModelScanning
-                ? "opacity-60 cursor-not-allowed"
-                : "opacity-70 hover:opacity-100 cursor-pointer"
+          {!preScan && (
+            <button
+              onClick={handleRerun}
+              disabled={isModelScanning || isRemoving}
+              title="Rerun object scan"
+              className={`flex items-center justify-center w-6 h-6 rounded transition-opacity ${
+                isRemoving
+                  ? "opacity-30 cursor-not-allowed"
+                  : isModelScanning
+                    ? "opacity-60 cursor-not-allowed"
+                    : "opacity-70 hover:opacity-100 cursor-pointer"
               }`}
-          >
-            {isModelScanning ? (
-              <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
-            ) : (
-              <ArrowsClockwiseIcon className="w-5 h-5 text-[#555]" />
-            )}
-          </button>
+            >
+              {isModelScanning ? (
+                <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
+              ) : (
+                <ArrowsClockwiseIcon className="w-5 h-5 text-[#555]" />
+              )}
+            </button>
+          )}
         </div>
+
+        {preScan && (
+          <p className="text-[12px] text-[#ababab] leading-4">
+            Scan for distracting objects to remove.
+          </p>
+        )}
+
+        {/* Pre-scan entry points */}
+        {preScan && (
+          <div className="flex flex-col gap-2 mt-1">
+            <button
+              onClick={onScanImage}
+              // className="flex-1 flex items-center justify-center h-9 px-3 rounded bg-[#2563eb] hover:bg-[#1d56d1] transition-colors"
+              className="flex items-center justify-center h-9 px-3 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
+            >
+              <span className="text-[12px] font-medium text-white leading-4">
+                Scan this image
+              </span>
+            </button>
+            <button
+              onClick={onScanAlbum}
+              className="flex items-center justify-center h-9 px-3 rounded border border-[#303030] hover:border-[#3a3a3a] transition-colors"
+            >
+              <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+                Scan this album
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Empty state */}
         {!isModelScanning && hasScanned && detected.length === 0 && (
           <div className="flex flex-col items-center gap-3 mt-1">
             <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424] w-full">
-              <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" weight="duotone" />
+              <ArrowsClockwiseIcon
+                className="w-8 h-8 text-[#e2e2e2]"
+                weight="duotone"
+              />
               <div className="flex flex-col gap-1 text-center w-full">
-                <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">No distractions detected</p>
-                <p className="text-[13px] font-normal text-[#ababab] leading-4">Think we missed something?</p>
+                <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
+                  No distractions detected
+                </p>
+                <p className="text-[13px] font-normal text-[#ababab] leading-4">
+                  Think we missed something?
+                </p>
               </div>
               <div className="flex items-center justify-center gap-2 w-full">
                 <button
                   onClick={handleRerun}
                   className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
                 >
-                  <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">Rescan Album</span>
+                  <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+                    Rescan Album
+                  </span>
                 </button>
                 {hasRescanned && (
                   <button
                     onClick={onReport}
                     className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded hover:bg-white/5 transition-colors"
                   >
-                    <span className="text-[12px] font-medium text-[#ababab] leading-4">Report Issue</span>
+                    <span className="text-[12px] font-medium text-[#ababab] leading-4">
+                      Report Issue
+                    </span>
                   </button>
                 )}
               </div>
@@ -264,14 +356,18 @@ const LoupePatchPanel = ({
               <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
                 <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
               </div>
-              <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
+              <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">
+                Suggest a new object
+              </span>
             </button>
           </div>
         )}
 
         {/* Detected items grid */}
-        {(!hasScanned || detected.length > 0) && (
-          <div className={`grid grid-cols-2 gap-1.5 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+        {!preScan && detected.length > 0 && (
+          <div
+            className={`grid grid-cols-2 gap-1.5 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}
+          >
             {orderedItems.map((d) => {
               const isItemRemoved = removedItems.has(d.label);
               const isSelected = selected.has(d.label);
@@ -284,8 +380,12 @@ const LoupePatchPanel = ({
                     className="flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] transition-colors text-left cursor-pointer group"
                   >
                     <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-[11px] text-[#555] leading-4 truncate">{d.label}</span>
-                      <span className="text-[10px] font-medium text-[#474747] leading-3 shrink-0">{d.count}</span>
+                      <span className="text-[11px] text-[#555] leading-4 truncate">
+                        {d.label}
+                      </span>
+                      <span className="text-[10px] font-medium text-[#474747] leading-3 shrink-0">
+                        {d.count}
+                      </span>
                     </div>
                     <div className="shrink-0 relative w-3 h-3">
                       <Check className="absolute top-0 left-0 w-3 h-3 text-[#16a34a] transition-opacity group-hover:opacity-0" />
@@ -299,20 +399,36 @@ const LoupePatchPanel = ({
                 <button
                   key={d.label}
                   onClick={() => toggle(d.label)}
-                  onMouseEnter={() => !itemsDisabled && onHoveredLabelChange?.(d.label)}
-                  onMouseLeave={() => !itemsDisabled && onHoveredLabelChange?.(null)}
-                  className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${itemsDisabled ? "cursor-not-allowed" : "hover:bg-[#2a2a2a] cursor-pointer"
-                    }`}
+                  onMouseEnter={() =>
+                    !itemsDisabled && onHoveredLabelChange?.(d.label)
+                  }
+                  onMouseLeave={() =>
+                    !itemsDisabled && onHoveredLabelChange?.(null)
+                  }
+                  className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${
+                    itemsDisabled
+                      ? "cursor-not-allowed"
+                      : "hover:bg-[#2a2a2a] cursor-pointer"
+                  }`}
                 >
                   <div className="flex items-center gap-1 min-w-0">
-                    <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">{d.label}</span>
-                    <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">{d.count}</span>
+                    <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
+                      {d.label}
+                    </span>
+                    <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
+                      {d.count}
+                    </span>
                   </div>
                   <div
-                    className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${isSelected ? "bg-[#2563eb]" : "border border-[#474747] bg-transparent"
-                      }`}
+                    className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
+                      isSelected
+                        ? "bg-[#2563eb]"
+                        : "border border-[#474747] bg-transparent"
+                    }`}
                   >
-                    {isSelected && <Check className="w-2 h-2 text-white stroke-[3]" />}
+                    {isSelected && (
+                      <Check className="w-2 h-2 text-white stroke-[3]" />
+                    )}
                   </div>
                 </button>
               );
@@ -325,7 +441,9 @@ const LoupePatchPanel = ({
                 <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
                   <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
                 </div>
-                <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest objects</span>
+                <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">
+                  Suggest objects
+                </span>
               </button>
             )}
           </div>
@@ -358,18 +476,21 @@ const LoupePatchPanel = ({
         </button> */}
       </div>
 
-      <button
-        disabled={!canRemove}
-        onClick={handleRemove}
-        className={`flex items-center mt-1 justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium transition-colors ${isRemoving
-          ? "bg-[#1d56d1] text-white cursor-not-allowed"
-          : canRemove
-            ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
-            : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
+      {!preScan && (
+        <button
+          disabled={!canRemove}
+          onClick={handleRemove}
+          className={`flex items-center mt-[-8px] justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium transition-colors ${
+            isRemoving
+              ? "bg-[#1d56d1] text-white cursor-not-allowed"
+              : canRemove
+                ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
+                : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
           }`}
-      >
-        <span>{isRemoving ? "Removing…" : removeLabel}</span>
-      </button>
+        >
+          <span>{isRemoving ? "Removing…" : removeLabel}</span>
+        </button>
+      )}
 
       <div className="h-[1px] w-full bg-[#e2e2e20d]"></div>
 
@@ -379,7 +500,9 @@ const LoupePatchPanel = ({
           Brush Options
         </span> */}
 
-        <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">Brush Options</span>
+        <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
+          Brush Options
+        </span>
 
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-col gap-0.5">
@@ -399,64 +522,72 @@ const LoupePatchPanel = ({
             }}
           />
         </div>
-
-
       </div>
 
-
-
       {/* ── Restore confirmation modal (same as SmartObjectRemoval) ───────── */}
-      {pendingReset && createPortal(
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-          <div className="bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-5 flex flex-col gap-4 w-[448px]">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex flex-col gap-1 pt-0.5">
-                <h3 className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
-                  Reset Object Removal
-                </h3>
-                <p className="text-[14px] font-normal text-[#ababab] leading-5">
-                  This will restore {pendingReset.count} photo{pendingReset.count > 1 ? "s" : ""} affected by "{pendingReset.label}".
-                </p>
-              </div>
-              <button
-                onClick={() => setPendingReset(null)}
-                className="shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
-              >
-                <X className="w-4 h-4 text-[#777]" />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSkipConfirmation((v) => !v)}
-                className="flex items-center gap-1.5 shrink-0"
-              >
-                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${skipConfirmation ? "bg-[#2563eb] border-[#2563eb]" : "bg-[#303030] border-[#474747]"
-                  }`}>
-                  {skipConfirmation && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+      {pendingReset &&
+        createPortal(
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+            <div className="bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-5 flex flex-col gap-4 w-[448px]">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col gap-1 pt-0.5">
+                  <h3 className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
+                    Reset Object Removal
+                  </h3>
+                  <p className="text-[14px] font-normal text-[#ababab] leading-5">
+                    This will restore {pendingReset.count} photo
+                    {pendingReset.count > 1 ? "s" : ""} affected by "
+                    {pendingReset.label}".
+                  </p>
                 </div>
-                <span className="text-[12px] text-[#777]">Don't ask again</span>
-              </button>
-
-              <div className="flex items-center gap-2 ml-auto">
                 <button
                   onClick={() => setPendingReset(null)}
-                  className="px-4 py-2 rounded bg-[#303030] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors"
+                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmReset}
-                  className="px-4 py-2 rounded bg-[#dc2626] text-[14px] font-medium text-white hover:bg-[#b91c1c] transition-colors"
-                >
-                  Reset
+                  <X className="w-4 h-4 text-[#777]" />
                 </button>
               </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSkipConfirmation((v) => !v)}
+                  className="flex items-center gap-1.5 shrink-0"
+                >
+                  <div
+                    className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                      skipConfirmation
+                        ? "bg-[#2563eb] border-[#2563eb]"
+                        : "bg-[#303030] border-[#474747]"
+                    }`}
+                  >
+                    {skipConfirmation && (
+                      <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
+                    )}
+                  </div>
+                  <span className="text-[12px] text-[#777]">
+                    Don't ask again
+                  </span>
+                </button>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    onClick={() => setPendingReset(null)}
+                    className="px-4 py-2 rounded bg-[#303030] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmReset}
+                    className="px-4 py-2 rounded bg-[#dc2626] text-[14px] font-medium text-white hover:bg-[#b91c1c] transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body,
+        )}
 
       {showSuggestModal && (
         <SuggestObjectModal

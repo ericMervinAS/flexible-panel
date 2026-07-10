@@ -5,6 +5,10 @@ import type { ImageData } from '@/components/ImageGrid';
 export interface UseDistractionDetectionResult {
   /** imageIndex → detections in that image; undefined = scan not yet completed */
   distractionMap: Map<number, DistractionDetection[]> | undefined;
+  /** True once a full album-wide scan has completed — distinct from
+   *  distractionMap being defined, since rerunSingle() also populates
+   *  distractionMap for just one image. */
+  hasScannedAlbum: boolean;
   isDetecting: boolean;
   isLoadingModel: boolean;
   statusMessage: string;
@@ -13,8 +17,9 @@ export interface UseDistractionDetectionResult {
   rerunSingle: (index: number) => void;
 }
 
-export function useDistractionDetection(images: ImageData[]): UseDistractionDetectionResult {
+export function useDistractionDetection(images: ImageData[], enabled: boolean = true): UseDistractionDetectionResult {
   const [distractionMap, setDistractionMap] = useState<Map<number, DistractionDetection[]> | undefined>(undefined);
+  const [hasScannedAlbum, setHasScannedAlbum] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [isLoadingModel, setIsLoadingModel] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -28,6 +33,7 @@ export function useDistractionDetection(images: ImageData[]): UseDistractionDete
   const rerun = useCallback(() => {
     lastLengthRef.current = 0;
     setDistractionMap(undefined);
+    setHasScannedAlbum(false);
     setRerunKey((k) => k + 1);
     console.log('[DistractionDetection] Rerun requested');
   }, []);
@@ -71,6 +77,7 @@ export function useDistractionDetection(images: ImageData[]): UseDistractionDete
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     if (!images.length) return;
     if (images.length === lastLengthRef.current) return;
     lastLengthRef.current = images.length;
@@ -111,6 +118,7 @@ export function useDistractionDetection(images: ImageData[]): UseDistractionDete
         if (abortRef.current) return;
 
         setDistractionMap(result);
+        setHasScannedAlbum(true);
 
         const totalDets = Array.from(result.values()).reduce((s, d) => s + d.length, 0);
         const summary = `Found ${totalDets} distraction${totalDets === 1 ? '' : 's'} across ${result.size} image${result.size === 1 ? '' : 's'}`;
@@ -141,7 +149,7 @@ export function useDistractionDetection(images: ImageData[]): UseDistractionDete
 
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images.length, rerunKey]);
+  }, [images.length, rerunKey, enabled]);
 
-  return { distractionMap, isDetecting, isLoadingModel, statusMessage, detectionProgress, rerun, rerunSingle };
+  return { distractionMap, hasScannedAlbum, isDetecting, isLoadingModel, statusMessage, detectionProgress, rerun, rerunSingle };
 }

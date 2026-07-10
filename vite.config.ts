@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => ({
           arcface:     env.MODEL_URL_ARCFACE     ?? "",
           genderage:   env.MODEL_URL_GENDERAGE   ?? "",
           distraction: env.MODEL_URL_DISTRACTION ?? "",
+          inpaint:     env.MODEL_URL_INPAINT     ?? "",
         };
         server.middlewares.use("/api/models", async (req, res, next) => {
           const name = (req.url ?? "").replace(/^\//, "").split("?")[0];
