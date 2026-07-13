@@ -88,9 +88,11 @@ interface BrushToolbarProps {
   onBrushSizeChange: (size: number) => void;
   onBrushModeChange?: (mode: "add" | "subtract") => void;
   onClear?: () => void;
+  /** Disables the Reset button — true when there's no active brush mask to clear. */
+  resetDisabled?: boolean;
 }
 
-const BrushToolbar = ({ brushSize, onBrushSizeChange, onBrushModeChange, onClear }: BrushToolbarProps) => {
+const BrushToolbar = ({ brushSize, onBrushSizeChange, onBrushModeChange, onClear, resetDisabled }: BrushToolbarProps) => {
   const [brushMode, setBrushMode] = useState<"add" | "subtract">("add");
   const [softness, setSoftness] = useState(50);
   const [opacity, setOpacity] = useState(50);
@@ -195,8 +197,9 @@ const BrushToolbar = ({ brushSize, onBrushSizeChange, onBrushModeChange, onClear
             {/* Reset all strokes */}
             <button
               onClick={() => onClear?.()}
+              disabled={resetDisabled}
               title="Reset"
-              className="w-8 h-8 flex items-center justify-center rounded-[6px] border border-transparent hover:bg-[rgba(226,226,226,0.05)] transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-[6px] border border-transparent hover:bg-[rgba(226,226,226,0.05)] transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
             >
               <ArrowCounterClockwiseIcon className="w-5 h-5" />
             </button>

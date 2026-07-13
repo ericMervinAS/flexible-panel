@@ -40,11 +40,21 @@ const Index = ({ importSource }: IndexProps) => {
   // One-time coachmark pointing at "Smart Object Removal" in the grid, shown
   // after the user clicks "Scan this album" from the loupe patch tab.
   const [showObjectCoachmark, setShowObjectCoachmark] = useState(false);
+  // Labels to preselect in the grid's Smart Object Removal — set when the user
+  // arrives via the loupe's batch-removal offer ("Scan the album") so the object
+  // they just removed on one photo is ready to scan for across the rest, rather
+  // than showing up as already "removed". Cleared whenever we leave the grid so
+  // a later, unrelated visit doesn't reapply a stale selection.
+  const [gridPreselectLabels, setGridPreselectLabels] = useState<string[]>([]);
   const [canvasHasStrokes, setCanvasHasStrokes] = useState(false);
   const [clearCanvasSignal, setClearCanvasSignal] = useState(0);
   const [inpaintSignal, setInpaintSignal] = useState(0);
   // Detection boxes captured at "Remove Object" click, fed to LoupeView as a mask.
   const [inpaintBoxes, setInpaintBoxes] = useState<DistractionDetection[]>([]);
+  // Queued edited masks (canvas "Edit" -> "Save") captured at the same click.
+  const [pendingExtraBrushes, setPendingExtraBrushes] = useState<
+    { id: string; canvas: HTMLCanvasElement; det: DistractionDetection }[]
+  >([]);
   // Shared inpaint store — single source of truth for patched images (grid + loupe).
   const inpaintStore = useInpaintStore((i) => images[i]?.src);
   const [autoRemoveAfterStroke, setAutoRemoveAfterStroke] = useState(false);
@@ -60,6 +70,58 @@ const Index = ({ importSource }: IndexProps) => {
     key: number;
     ctaLabel?: string;
   } | null>(null);
+  // Per-image set of detection instances the user chose to Skip on canvas —
+  // excluded from the *next* batch removal and from dot seeding, but not from
+  // distractionMap: the instance is still a real, unresolved distraction, so it
+  // reappears as a normal pending box once that removal runs (see
+  // handleInpaintCanvas) rather than staying hidden forever.
+  const [skippedDetections, setSkippedDetections] = useState<
+    Record<number, Set<string>>
+  >({});
+  // Per-image, per-instance hand-painted masks from canvas "Edit" -> "Save" —
+  // queued rather than applied immediately (see onSaveEditedDetection), and
+  // merged into the next batch removal for their label.
+  const [pendingEditedMasks, setPendingEditedMasks] = useState<
+    Record<number, Record<string, { det: DistractionDetection; brushId: string; canvas: HTMLCanvasElement }>>
+  >({});
+  // Per-image set of detection instances actually inpainted so far — the only
+  // permanent record of "this one is done", since a label can be resolved
+  // across several partial passes (skip 1 of 3, remove the other 2, come back
+  // for the last one later) without ever setting the label-level removedItems
+  // flag. Drives the patch panel's remaining count and the removal dots,
+  // independent of whether the whole label counts as globally "removed".
+  const [appliedDetections, setAppliedDetections] = useState<
+    Record<number, Set<string>>
+  >({});
+  const detKey = (det: DistractionDetection) =>
+    `${MODEL_TO_UI[det.label] ?? det.label}:${det.x1}:${det.y1}:${det.x2}:${det.y2}`;
+  // Skip, edited-pending, and already-applied all hide their box / reduce the
+  // visible "remaining" count — only skip blocks marking the label "removed"
+  // (see handleInpaintCanvas).
+  const dismissedDetectionKeys = useMemo(() => {
+    const combined = new Set(skippedDetections[selectedIndex] ?? []);
+    const edited = pendingEditedMasks[selectedIndex];
+    if (edited) Object.keys(edited).forEach((k) => combined.add(k));
+    const applied = appliedDetections[selectedIndex];
+    if (applied) applied.forEach((k) => combined.add(k));
+    return combined;
+  }, [skippedDetections, pendingEditedMasks, appliedDetections, selectedIndex]);
+  // Which instances are actually done, for the current image — lets the panel
+  // tell "fully resolved" (show the done tile with the original total) apart
+  // from "some left over" (stay a checkbox showing what's left) even when a
+  // skip kept the label out of the shared removedItems set.
+  const appliedDetectionKeys = useMemo(
+    () => appliedDetections[selectedIndex] ?? new Set<string>(),
+    [appliedDetections, selectedIndex],
+  );
+  // UI labels that still have at least one Skipped-and-unresolved instance on
+  // this image — the panel keeps these as normal (re-selectable) checkboxes
+  // instead of flipping them to "removed" when Remove Object runs.
+  const labelsWithSkips = useMemo(() => {
+    const skipped = skippedDetections[selectedIndex];
+    if (!skipped?.size) return new Set<string>();
+    return new Set([...skipped].map((k) => k.split(":")[0]));
+  }, [skippedDetections, selectedIndex]);
   // Shared removed-items state — single source of truth for the patch panel and
   // the loupe canvas view (a Set of removed object UI labels).
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
@@ -159,22 +221,110 @@ const Index = ({ importSource }: IndexProps) => {
   const highlightedDetections = useMemo(() => {
     if (!highlightedLabels.size) return [];
     const imageDets = distractionMap?.get(selectedIndex) ?? [];
-    return imageDets.filter((det) =>
-      highlightedLabels.has(MODEL_TO_UI[det.label]),
+    return imageDets.filter(
+      (det) =>
+        highlightedLabels.has(MODEL_TO_UI[det.label]) &&
+        !dismissedDetectionKeys.has(detKey(det)),
     );
-  }, [distractionMap, selectedIndex, highlightedLabels]);
+  }, [distractionMap, selectedIndex, highlightedLabels, dismissedDetectionKeys]);
 
-  // Per-object geometry for the loupe canvas: detections on the current image
-  // whose UI label is in the shared removed set. Drives the on-image removal dots.
+  // Per-object geometry for the loupe canvas: detections actually applied on
+  // this image — either individually (loupe per-instance review) or because
+  // their whole label was removed some other way (grid album-wide batch, or
+  // the simple no-skip loupe flow, both of which only set removedItems).
+  // Always excludes a currently-Skipped instance, even if its label happens to
+  // be removedItems from a different image, since this one was never inpainted.
   const removedDetections = useMemo(() => {
     const imageDets = distractionMap?.get(selectedIndex) ?? [];
-    return imageDets.filter((det) => removedItems.has(MODEL_TO_UI[det.label]));
-  }, [distractionMap, selectedIndex, removedItems]);
+    const skipped = skippedDetections[selectedIndex];
+    return imageDets.filter((det) => {
+      const key = detKey(det);
+      if (skipped?.has(key)) return false;
+      return appliedDetectionKeys.has(key) || removedItems.has(MODEL_TO_UI[det.label] ?? det.label);
+    });
+  }, [distractionMap, selectedIndex, appliedDetectionKeys, removedItems, skippedDetections]);
+
+  // Canvas "Skip": exclude this instance from the next batch removal / dot
+  // seeding — retained in distractionMap, so it's still a real pending
+  // distraction once that removal runs (see handleInpaintCanvas below).
+  const handleSkipDetection = (idx: number, det: DistractionDetection) => {
+    setSkippedDetections((prev) => {
+      const next = new Set(prev[idx] ?? []);
+      next.add(detKey(det));
+      return { ...prev, [idx]: next };
+    });
+  };
+
+  // Canvas "Edit" -> "Save": queue the hand-painted mask for this instance
+  // rather than inpainting immediately — merged into the next batch removal.
+  const handleSaveEditedDetection = (
+    idx: number,
+    det: DistractionDetection,
+    brushId: string,
+    canvas: HTMLCanvasElement,
+  ) => {
+    setPendingEditedMasks((prev) => ({
+      ...prev,
+      [idx]: { ...(prev[idx] ?? {}), [detKey(det)]: { det, brushId, canvas } },
+    }));
+  };
+
+  // Panel "Remove Object" / "Remove N Objects": gather any queued edited masks
+  // for the currently checked labels alongside the plain boxes, record every
+  // instance included in this pass as actually applied (the permanent "done"
+  // record — see appliedDetections), then clear the skip/edited state for
+  // those labels — either they were just applied, or they were deliberately
+  // excluded and should reappear as normal pending boxes the next time the
+  // label is checked (rather than staying hidden).
+  const handleInpaintCanvas = () => {
+    const edited = pendingEditedMasks[selectedIndex] ?? {};
+    const extraBrushes = Object.values(edited).filter(({ det }) =>
+      highlightedLabels.has(MODEL_TO_UI[det.label] ?? det.label),
+    );
+    setPendingExtraBrushes(extraBrushes);
+    setInpaintBoxes(highlightedDetections);
+    setInpaintSignal((s) => s + 1);
+
+    setAppliedDetections((prev) => {
+      const next = new Set(prev[selectedIndex] ?? []);
+      highlightedDetections.forEach((det) => next.add(detKey(det)));
+      extraBrushes.forEach(({ det }) => next.add(detKey(det)));
+      return { ...prev, [selectedIndex]: next };
+    });
+    setSkippedDetections((prev) => {
+      const set = prev[selectedIndex];
+      if (!set) return prev;
+      const filtered = new Set([...set].filter((k) => !highlightedLabels.has(k.split(":")[0])));
+      return { ...prev, [selectedIndex]: filtered };
+    });
+    setPendingEditedMasks((prev) => {
+      const obj = prev[selectedIndex];
+      if (!obj) return prev;
+      const next = Object.fromEntries(
+        Object.entries(obj).filter(([key]) => !highlightedLabels.has(key.split(":")[0])),
+      );
+      return { ...prev, [selectedIndex]: next };
+    });
+  };
 
   // Restore one removed object: drop its label from the shared set and re-inpaint
-  // from the original with that label's boxes removed from the mask.
+  // from the original with that label's boxes removed from the mask. Also clears
+  // any per-instance skips/applied-record for this label so a fresh review shows
+  // every box again.
   const handleRestoreObject = (label: string) => {
     resetRemovedItem(label);
+    setSkippedDetections((prev) => {
+      const set = prev[selectedIndex];
+      if (!set) return prev;
+      const filtered = new Set([...set].filter((k) => !k.startsWith(`${label}:`)));
+      return { ...prev, [selectedIndex]: filtered };
+    });
+    setAppliedDetections((prev) => {
+      const set = prev[selectedIndex];
+      if (!set) return prev;
+      const filtered = new Set([...set].filter((k) => !k.startsWith(`${label}:`)));
+      return { ...prev, [selectedIndex]: filtered };
+    });
     void inpaintStore.resetLabel(selectedIndex, label);
   };
 
@@ -182,6 +332,8 @@ const Index = ({ importSource }: IndexProps) => {
   // from the shared "removed" set that no longer has an active removal on any
   // other image — otherwise the panel/dots would keep showing it as removed
   // even though this image (the only one it applied to) was just restored.
+  // Also clears any per-instance skips/edits/applied-record on this image for
+  // a clean re-review.
   const handleResetImageAll = (idx: number) => {
     const labelsOnImage = new Set(
       (distractionMap?.get(idx) ?? [])
@@ -192,6 +344,24 @@ const Index = ({ importSource }: IndexProps) => {
       labelsOnImage.forEach((label) => {
         if (!inpaintStore.hasActiveLabel(label)) resetRemovedItem(label);
       });
+    });
+    setSkippedDetections((prev) => {
+      if (!(idx in prev)) return prev;
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+    setAppliedDetections((prev) => {
+      if (!(idx in prev)) return prev;
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+    setPendingEditedMasks((prev) => {
+      if (!(idx in prev)) return prev;
+      const next = { ...prev };
+      delete next[idx];
+      return next;
     });
   };
 
@@ -222,6 +392,10 @@ const Index = ({ importSource }: IndexProps) => {
   // matter which path triggered the view change.
   useEffect(() => {
     if (view !== "grid") setShowObjectCoachmark(false);
+  }, [view]);
+
+  useEffect(() => {
+    if (view !== "grid") setGridPreselectLabels([]);
   }, [view]);
 
   return (
@@ -294,16 +468,22 @@ const Index = ({ importSource }: IndexProps) => {
               clearCanvasSignal={clearCanvasSignal}
               inpaintSignal={inpaintSignal}
               pendingInpaintDetections={inpaintBoxes}
+              pendingExtraBrushes={pendingExtraBrushes}
               patchedSrc={inpaintStore.patchedByIndex[selectedIndex]}
               isInpainting={inpaintStore.isBusy}
-              onInpaint={(idx, dets, brush, brushId) => {
+              onInpaint={(idx, dets, brush, brushId, extraBrushes) => {
                 void inpaintStore
-                  .inpaintImage(idx, dets, brush, brushId)
+                  .inpaintImage(idx, dets, brush, brushId, extraBrushes)
                   .then(() => handleRemoveSuccess(1, true));
               }}
               onResetImageAll={handleResetImageAll}
               onResetBrush={(id) => {
                 void inpaintStore.resetBrush(selectedIndex, id);
+              }}
+              onConvertObjectMask={(idx, det, brushId, natMask) => {
+                void inpaintStore
+                  .convertObjectToBrush(idx, MODEL_TO_UI[det.label] ?? det.label, det, brushId, natMask)
+                  .then(() => handleRemoveSuccess(1, true));
               }}
               autoRemoveAfterStroke={autoRemoveAfterStroke}
               isExternallyRemoving={isRemoving}
@@ -316,6 +496,8 @@ const Index = ({ importSource }: IndexProps) => {
               onSetRemovedItems={replaceRemovedItems}
               removedDetections={removedDetections}
               onRestoreObject={handleRestoreObject}
+              onSkipDetection={handleSkipDetection}
+              onSaveEditedDetection={handleSaveEditedDetection}
             />
           ) : null}
         </div>
@@ -323,21 +505,26 @@ const Index = ({ importSource }: IndexProps) => {
           isScanning={isScanning}
           isLoupeView={view === "loupe"}
           currentImageIndex={selectedIndex}
-          onGoToGrid={() => setView("grid")}
+          onGoToGrid={(labels) => {
+            setGridPreselectLabels(labels);
+            setView("grid");
+          }}
+          initialObjectSelection={gridPreselectLabels}
           onTabChange={setLoupeActiveTab}
           canvasHasStrokes={canvasHasStrokes}
           onClearCanvas={() => setClearCanvasSignal((s) => s + 1)}
-          onInpaintCanvas={() => {
-            setInpaintBoxes(highlightedDetections);
-            setInpaintSignal((s) => s + 1);
-          }}
+          onInpaintCanvas={handleInpaintCanvas}
+          dismissedDetectionKeys={dismissedDetectionKeys}
+          appliedDetectionKeys={appliedDetectionKeys}
+          labelsWithSkips={labelsWithSkips}
           onResetImage={(label) => {
             void inpaintStore.resetLabel(selectedIndex, label);
           }}
-          onBatchRemove={(uiLabels) => {
-            if (distractionMap)
-              void inpaintStore.inpaintBatch(uiLabels, distractionMap);
-          }}
+          onBatchRemove={(uiLabels) =>
+            distractionMap
+              ? inpaintStore.inpaintBatch(uiLabels, distractionMap)
+              : Promise.resolve()
+          }
           onRemoveAfterStrokeChange={setAutoRemoveAfterStroke}
           onRemovingChange={setIsRemoving}
           visibleSubjectIndices={visibleSubjectIndices}

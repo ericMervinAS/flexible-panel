@@ -14,8 +14,9 @@ interface BatchRemovalOfferProps {
   /** Called to tear down the offer (X or "Not now"). */
   onDismiss: () => void;
   /** Switch the app back to the grid view, where the user can scan and remove
-   *  the same distraction(s) across the rest of the album. */
-  onGoToGrid?: () => void;
+   *  the same distraction(s) across the rest of the album. Receives the labels
+   *  so the grid can preselect them instead of showing them as already removed. */
+  onGoToGrid?: (labels: string[]) => void;
 }
 
 /**
@@ -47,7 +48,7 @@ const BatchRemovalOffer = ({ labels, onDismiss, onGoToGrid }: BatchRemovalOfferP
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              onGoToGrid?.();
+              onGoToGrid?.(labels);
               onDismiss();
             }}
             className="flex items-center justify-center h-8 px-3 rounded bg-[#2563eb] hover:bg-[#1d56d1] text-[12px] font-medium text-white transition-colors"

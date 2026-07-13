@@ -1,7 +1,14 @@
 import { type RefObject, useRef, useState, useCallback } from "react";
 import {
-  Eye, Keyboard, Star, Flag, Info,
-  ArrowCounterClockwise, Columns, CaretDown,
+  Eye,
+  Keyboard,
+  Star,
+  Flag,
+  Info,
+  ArrowCounterClockwise,
+  Columns,
+  CaretDown,
+  SquareSplitHorizontal,
 } from "@phosphor-icons/react";
 import type { ImageData, ColorTag } from "./ImageGrid";
 
@@ -65,8 +72,11 @@ const GridSlider = ({ value, min, max, step, onChange }: GridSliderProps) => {
         style={{ left: `${pct}%` }}
       >
         <div
-          className={`rounded-[8px] transition-all ${grabbed ? "bg-[#ababab] w-[4px] h-[14px]" : "bg-[#474747] w-[2px] h-[12px]"
-            }`}
+          className={`rounded-[8px] transition-all ${
+            grabbed
+              ? "bg-[#ababab] w-[4px] h-[14px]"
+              : "bg-[#474747] w-[2px] h-[12px]"
+          }`}
         />
       </div>
     </div>
@@ -108,6 +118,11 @@ type LoupeProps = {
   showZoomDropdown: boolean;
   setShowZoomDropdown: (v: boolean | ((prev: boolean) => boolean)) => void;
   zoomDropdownRef: RefObject<HTMLDivElement>;
+  /** Whether the current image has any edits to compare against. */
+  hasEdits: boolean;
+  /** True while the before/after toggle is showing the original image. */
+  showOriginal: boolean;
+  onToggleShowOriginal: () => void;
 };
 
 type BottomBarProps = GridProps | LoupeProps;
@@ -119,7 +134,6 @@ const BottomBar = (props: BottomBarProps) => {
 
   return (
     <footer className="flex items-center justify-between h-10 px-3 bg-[#1c1c1c] shrink-0">
-
       {/* Left ─ album info (grid) / filename (loupe) */}
       <div className="flex items-center gap-3 text-[12px] w-[220px] transition-all duration-200">
         {isLoupe ? (
@@ -131,8 +145,15 @@ const BottomBar = (props: BottomBarProps) => {
           </div>
         ) : (
           <div className="flex items-center gap-3 min-w-0">
-            <span className="text-[#e2e2e2] font-medium truncate" title={props.albumName}>{props.albumName}</span>
-            <span className="text-[#ababab] shrink-0">({props.totalPhotos})</span>
+            <span
+              className="text-[#e2e2e2] font-medium truncate"
+              title={props.albumName}
+            >
+              {props.albumName}
+            </span>
+            <span className="text-[#ababab] shrink-0">
+              ({props.totalPhotos})
+            </span>
           </div>
         )}
 
@@ -150,8 +171,9 @@ const BottomBar = (props: BottomBarProps) => {
 
       {/* Center ─ stars + flag (loupe only) */}
       <div
-        className={`flex items-center gap-1 transition-all duration-200 ${isLoupe ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
+        className={`flex items-center gap-1 transition-all duration-200 ${
+          isLoupe ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
       >
         {isLoupe && (
           <>
@@ -168,7 +190,9 @@ const BottomBar = (props: BottomBarProps) => {
                 <Star
                   key={i}
                   size={12}
-                  fill={i < props.image.stars ? "white" : "rgba(255,255,255,0.3)"}
+                  fill={
+                    i < props.image.stars ? "white" : "rgba(255,255,255,0.3)"
+                  }
                   strokeWidth={0}
                 />
               ))}
@@ -187,8 +211,26 @@ const BottomBar = (props: BottomBarProps) => {
             <button className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors">
               <ArrowCounterClockwise size={16} />
             </button>
-            <button className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors">
+            {/* <button className="flex items-center justify-center w-5 h-5 text-[#777] hover:text-[#ababab] transition-colors">
               <Columns size={16} />
+            </button> */}
+            <button
+              onClick={props.onToggleShowOriginal}
+              disabled={!props.hasEdits}
+              title={
+                props.hasEdits
+                  ? "Toggle original image (\\)"
+                  : "No edits to compare"
+              }
+              className={`flex items-center justify-center w-5 h-5 transition-colors ${
+                !props.hasEdits
+                  ? "text-[#474747] cursor-not-allowed"
+                  : props.showOriginal
+                    ? "text-[#e2e2e2]"
+                    : "text-[#777] hover:text-[#ababab]"
+              }`}
+            >
+              <SquareSplitHorizontal size={16} />
             </button>
           </div>
         ) : (
@@ -207,18 +249,27 @@ const BottomBar = (props: BottomBarProps) => {
           <div className="flex items-center gap-1.5">
             <button
               onClick={props.goToFit}
-              className={`text-[12px] font-medium transition-colors ${props.isFit ? "text-[#e2e2e2]" : "text-[#555] hover:text-[#ababab]"
-                }`}
+              className={`text-[12px] font-medium transition-colors ${
+                props.isFit
+                  ? "text-[#e2e2e2]"
+                  : "text-[#555] hover:text-[#ababab]"
+              }`}
             >
               Fit
             </button>
 
-            <div className="relative flex items-center gap-0.5" ref={props.zoomDropdownRef}>
+            <div
+              className="relative flex items-center gap-0.5"
+              ref={props.zoomDropdownRef}
+            >
               <button
                 onClick={props.goToTrueHundred}
                 title="Jump to 100%"
-                className={`text-[12px] font-medium transition-colors ${!props.isFit ? "text-[#e2e2e2]" : "text-[#777] hover:text-[#ababab]"
-                  }`}
+                className={`text-[12px] font-medium transition-colors ${
+                  !props.isFit
+                    ? "text-[#e2e2e2]"
+                    : "text-[#777] hover:text-[#ababab]"
+                }`}
               >
                 {props.displayPct()}%
               </button>
@@ -232,20 +283,30 @@ const BottomBar = (props: BottomBarProps) => {
               {props.showZoomDropdown && (
                 <div className="absolute bottom-full right-0 mb-2 bg-[#242424] border border-[#303030] rounded-[6px] py-1 z-50 min-w-[100px] shadow-lg">
                   <button
-                    onClick={() => { props.handleZoomPreset("fit"); props.setShowZoomDropdown(false); }}
-                    className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${props.isFit ? "text-[#e2e2e2]" : "text-[#ababab] hover:text-[#e2e2e2]"
-                      }`}
+                    onClick={() => {
+                      props.handleZoomPreset("fit");
+                      props.setShowZoomDropdown(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${
+                      props.isFit
+                        ? "text-[#e2e2e2]"
+                        : "text-[#ababab] hover:text-[#e2e2e2]"
+                    }`}
                   >
                     Fit
                   </button>
                   {ZOOM_PRESETS.map((pct) => (
                     <button
                       key={pct}
-                      onClick={() => { props.handleZoomPreset(pct); props.setShowZoomDropdown(false); }}
-                      className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${!props.isFit && props.displayPct() === pct
-                        ? "text-[#e2e2e2]"
-                        : "text-[#ababab] hover:text-[#e2e2e2]"
-                        }`}
+                      onClick={() => {
+                        props.handleZoomPreset(pct);
+                        props.setShowZoomDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors hover:bg-[#303030] ${
+                        !props.isFit && props.displayPct() === pct
+                          ? "text-[#e2e2e2]"
+                          : "text-[#ababab] hover:text-[#e2e2e2]"
+                      }`}
                     >
                       {pct}%
                     </button>

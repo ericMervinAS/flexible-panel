@@ -1,6 +1,14 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Check, ArrowCounterClockwiseIcon, X, MagnifyingGlassIcon, ArrowsClockwiseIcon, PlusIcon, FlaskIcon } from "@phosphor-icons/react";
+import {
+  Check,
+  ArrowCounterClockwiseIcon,
+  X,
+  MagnifyingGlassIcon,
+  ArrowsClockwiseIcon,
+  PlusIcon,
+  FlaskIcon,
+} from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 import SuggestObjectModal from "./SuggestObjectModal";
 import Tooltip from "./Tooltip";
@@ -19,7 +27,7 @@ const MODEL_TO_UI: Record<string, string> = {
   "Smoke Detector": "Fire Alarms",
   "Fire Extinguisher": "Fire Extinguishers",
   "Electrical Outlet": "Electricity Sockets",
-  "Thermostat": "Thermostats",
+  Thermostat: "Thermostats",
   "Trash Can": "Garbage Cans",
 };
 
@@ -44,6 +52,11 @@ interface SmartObjectRemovalProps {
   onSuggestSubmit?: (suggestion: string) => void;
   /** Highlight this section with a one-time coachmark (e.g. after "Scan this album" from the loupe). */
   coachmarkVisible?: boolean;
+  /** UI labels to preselect on mount — used when arriving here via the loupe's
+   *  "Scan the album" batch-removal offer, so the same object is already
+   *  checked and ready to scan for across the rest of the album instead of
+   *  making the user reselect what they just removed on one photo. */
+  initialSelectedLabels?: string[];
 }
 
 const SmartObjectRemoval = ({
@@ -61,8 +74,11 @@ const SmartObjectRemoval = ({
   onReport,
   onSuggestSubmit,
   coachmarkVisible = false,
+  initialSelectedLabels,
 }: SmartObjectRemovalProps) => {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(initialSelectedLabels ?? []),
+  );
 
   const distractions = useMemo(() => {
     const countMap = new Map<string, number>();
@@ -78,11 +94,17 @@ const SmartObjectRemoval = ({
         }
       }
     }
-    return UI_LABELS.map((label) => ({ label, count: countMap.get(label) ?? 0 }));
+    return UI_LABELS.map((label) => ({
+      label,
+      count: countMap.get(label) ?? 0,
+    }));
   }, [distractionMap]);
 
   const noneFound = !preScan && distractions.every((d) => d.count === 0);
-  const [pendingReset, setPendingReset] = useState<{ label: string; count: number } | null>(null);
+  const [pendingReset, setPendingReset] = useState<{
+    label: string;
+    count: number;
+  } | null>(null);
   const [skipConfirmation, setSkipConfirmation] = useState(false);
   const [showSuggestModal, setShowSuggestModal] = useState(false);
   const [hasRescanned, setHasRescanned] = useState(false);
@@ -104,6 +126,20 @@ const SmartObjectRemoval = ({
     onSelectionsChange?.(false);
     onStateChange?.({ selectedWithCounts: [] });
   }, [resetSignal]);
+
+  // Notify the parent about the preselected labels once on mount, so the
+  // "Find and remove" CTA is enabled without requiring the user to reselect.
+  useEffect(() => {
+    if (!initialSelectedLabels?.length) return;
+    onSelectionsChange?.(true);
+    onStateChange?.({
+      selectedWithCounts: distractions
+        .filter((d) => initialSelectedLabels.includes(d.label))
+        .map((d) => ({ label: d.label, count: d.count })),
+    });
+    // Mount-only: applies the labels this instance was seeded with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggle = (label: string) => {
     const next = new Set(selected);
@@ -136,14 +172,18 @@ const SmartObjectRemoval = ({
 
   return (
     <>
-      <div className={`px-5 flex flex-col gap-3 transition-opacity ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
+      <div
+        className={`px-5 flex flex-col gap-3 transition-opacity ${disabled ? "opacity-50 pointer-events-none" : ""}`}
+      >
         <div className="flex flex-col gap-1.5 relative">
           {coachmarkVisible && (
             <div className="absolute -inset-2 rounded-lg border-2 border-[#2563eb] pointer-events-none animate-pulse z-10" />
           )}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <h3 className="text-base font-normal text-[#e2e2e2]">Smart Object Removal</h3>
+              <h3 className="text-base font-normal text-[#e2e2e2]">
+                Smart Object Removal
+              </h3>
               {/* <span className="px-1 py-0.5 text-[11px] font-medium leading-[12px] rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
                 Beta
               </span> */}
@@ -167,14 +207,15 @@ const SmartObjectRemoval = ({
                 onClick={handleRerun}
                 disabled={isScanning}
                 title="Rescan album"
-                className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${isScanning ? "text-[#474747] cursor-not-allowed" : "text-[#777] hover:text-[#e2e2e2] hover:bg-white/5"
-                  }`}
+                className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${
+                  isScanning
+                    ? "text-[#474747] cursor-not-allowed"
+                    : "text-[#777] hover:text-[#e2e2e2] hover:bg-white/5"
+                }`}
               >
                 <ArrowsClockwiseIcon className="w-4 h-4" />
               </button>
             )}
-
-
           </div>
           <p className="text-[12px] text-[#ababab] leading-4">
             {preScan
@@ -186,7 +227,8 @@ const SmartObjectRemoval = ({
             <div className="absolute left-3 top-full mt-2 z-20 flex flex-col items-start">
               <div className="w-3 h-3 bg-[#2563eb] rotate-45 -mb-1.5 ml-2" />
               <div className="px-3 py-2 rounded-md bg-[#2563eb] text-white text-[12px] font-medium leading-4 shadow-lg max-w-[220px]">
-                Select the objects you want to find, then scan the whole album for them here.
+                Select the objects you want to find, then scan the whole album
+                for them here.
               </div>
             </div>
           )}
@@ -195,24 +237,32 @@ const SmartObjectRemoval = ({
         {!isScanning && noneFound && (
           <div className="flex flex-col pt-1">
             <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424]">
-              <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" weight="duotone" />
+              <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" />
               <div className="flex flex-col gap-1 text-center w-full">
-                <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">No distractions detected</p>
-                <p className="text-[13px] font-normal text-[#ababab] leading-4">Think we missed something?</p>
+                <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
+                  No distractions detected
+                </p>
+                <p className="text-[13px] font-normal text-[#ababab] leading-4">
+                  Think we missed something?
+                </p>
               </div>
               <div className="flex items-center justify-center gap-2 w-full">
                 <button
                   onClick={handleRerun}
                   className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
                 >
-                  <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">Rescan Album</span>
+                  <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+                    Rescan Album
+                  </span>
                 </button>
                 {hasRescanned && (
                   <button
                     onClick={onReport}
                     className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded hover:bg-white/5 transition-colors"
                   >
-                    <span className="text-[12px] font-medium text-[#ababab] leading-4">Report Issue</span>
+                    <span className="text-[12px] font-medium text-[#ababab] leading-4">
+                      Report Issue
+                    </span>
                   </button>
                 )}
               </div>
@@ -222,21 +272,37 @@ const SmartObjectRemoval = ({
               className="group relative mt-2 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
             >
               <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
-                <PlusIcon className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
+                <PlusIcon
+                  className="w-2.5 h-2.5 text-[#ababab]"
+                  weight="bold"
+                />
               </div>
-              <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
+              <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">
+                Suggest a new object
+              </span>
             </button>
           </div>
         )}
 
         {!isScanning && !noneFound && (
           <div className="grid grid-cols-2 gap-1.5">
-            {[
-              ...distractions.filter((d) => !removedItems?.has(d.label) && d.count > 0),
-              ...distractions.filter((d) => removedItems?.has(d.label)),
-              ...distractions.filter((d) => !removedItems?.has(d.label) && d.count === 0),
-            ].map((d) => {
-              const isRemoved = removedItems?.has(d.label) ?? false;
+            {(preScan
+              ? distractions
+              : [
+                  ...distractions.filter(
+                    (d) => !removedItems?.has(d.label) && d.count > 0,
+                  ),
+                  ...distractions.filter((d) => removedItems?.has(d.label)),
+                  ...distractions.filter(
+                    (d) => !removedItems?.has(d.label) && d.count === 0,
+                  ),
+                ]
+            ).map((d) => {
+              // Before the album itself has been scanned, a label removed on a
+              // single loupe-scanned photo isn't "done" album-wide — keep it a
+              // normal selectable option instead of showing the green "removed" tick.
+              const isRemoved =
+                !preScan && (removedItems?.has(d.label) ?? false);
               const isSelected = selected.has(d.label);
               const isDisabled = !preScan && d.count === 0;
 
@@ -248,8 +314,12 @@ const SmartObjectRemoval = ({
                     className="flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] transition-colors text-left cursor-pointer group"
                   >
                     <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">{d.label}</span>
-                      <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">{d.count}</span>
+                      <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
+                        {d.label}
+                      </span>
+                      <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
+                        {d.count}
+                      </span>
                     </div>
                     <div className="shrink-0 relative w-3 h-3">
                       <Check className="absolute top-0 left-0 w-3 h-3 text-[#16a34a] transition-opacity group-hover:opacity-0" />
@@ -264,20 +334,32 @@ const SmartObjectRemoval = ({
                   key={d.label}
                   disabled={isDisabled}
                   onClick={() => toggle(d.label)}
-                  className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${isDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-[#2a2a2a] cursor-pointer"
-                    }`}
+                  className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${
+                    isDisabled
+                      ? "opacity-40 cursor-not-allowed"
+                      : "hover:bg-[#2a2a2a] cursor-pointer"
+                  }`}
                 >
                   <div className="flex items-center gap-1 min-w-0">
-                    <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">{d.label}</span>
+                    <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
+                      {d.label}
+                    </span>
                     {!preScan && (
-                      <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">{d.count}</span>
+                      <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
+                        {d.count}
+                      </span>
                     )}
                   </div>
                   <div
-                    className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${isSelected ? "bg-[#2563eb]" : "border border-[#474747] bg-transparent"
-                      }`}
+                    className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
+                      isSelected
+                        ? "bg-[#2563eb]"
+                        : "border border-[#474747] bg-transparent"
+                    }`}
                   >
-                    {isSelected && <Check className="w-2 h-2 text-white stroke-[3]" />}
+                    {isSelected && (
+                      <Check className="w-2 h-2 text-white stroke-[3]" />
+                    )}
                   </div>
                 </button>
               );
@@ -293,66 +375,79 @@ const SmartObjectRemoval = ({
             <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
               <PlusIcon className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />
             </div>
-            <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">Suggest a new object</span>
+            <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">
+              Suggest a new object
+            </span>
           </button>
         )}
       </div>
 
       {/* Reset confirmation modal */}
-      {pendingReset && createPortal(
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-          <div className="bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-5 flex flex-col gap-4 w-[448px]">
-            {/* Header */}
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex flex-col gap-1 pt-0.5">
-                <h3 className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
-                  Reset Object Removal
-                </h3>
-                <p className="text-[14px] font-normal text-[#ababab] leading-5">
-                  This will restore {pendingReset.count} photos affected by "{pendingReset.label}".
-                </p>
-              </div>
-              <button
-                onClick={() => setPendingReset(null)}
-                className="shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
-              >
-                <X className="w-4 h-4 text-[#777]" />
-              </button>
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center gap-2">
-              {/* Don't ask again */}
-              <button
-                onClick={() => setSkipConfirmation((v) => !v)}
-                className="flex items-center gap-1.5 shrink-0"
-              >
-                <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${skipConfirmation ? "bg-[#2563eb] border-[#2563eb]" : "bg-[#303030] border-[#474747]"
-                  }`}>
-                  {skipConfirmation && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+      {pendingReset &&
+        createPortal(
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+            <div className="bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-5 flex flex-col gap-4 w-[448px]">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col gap-1 pt-0.5">
+                  <h3 className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
+                    Reset Object Removal
+                  </h3>
+                  <p className="text-[14px] font-normal text-[#ababab] leading-5">
+                    This will restore {pendingReset.count} photos affected by "
+                    {pendingReset.label}".
+                  </p>
                 </div>
-                <span className="text-[12px] text-[#777]">Don't ask again</span>
-              </button>
-
-              <div className="flex items-center gap-2 ml-auto">
                 <button
                   onClick={() => setPendingReset(null)}
-                  className="px-4 py-2 rounded bg-[#303030] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors"
+                  className="shrink-0 w-8 h-8 flex items-center justify-center rounded hover:bg-white/5 transition-colors"
                 >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmReset}
-                  className="px-4 py-2 rounded bg-[#dc2626] text-[14px] font-medium text-white hover:bg-[#b91c1c] transition-colors"
-                >
-                  Reset
+                  <X className="w-4 h-4 text-[#777]" />
                 </button>
               </div>
+
+              {/* Footer */}
+              <div className="flex items-center gap-2">
+                {/* Don't ask again */}
+                <button
+                  onClick={() => setSkipConfirmation((v) => !v)}
+                  className="flex items-center gap-1.5 shrink-0"
+                >
+                  <div
+                    className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                      skipConfirmation
+                        ? "bg-[#2563eb] border-[#2563eb]"
+                        : "bg-[#303030] border-[#474747]"
+                    }`}
+                  >
+                    {skipConfirmation && (
+                      <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
+                    )}
+                  </div>
+                  <span className="text-[12px] text-[#777]">
+                    Don't ask again
+                  </span>
+                </button>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    onClick={() => setPendingReset(null)}
+                    className="px-4 py-2 rounded bg-[#303030] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmReset}
+                    className="px-4 py-2 rounded bg-[#dc2626] text-[14px] font-medium text-white hover:bg-[#b91c1c] transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body,
+        )}
 
       {showSuggestModal && (
         <SuggestObjectModal

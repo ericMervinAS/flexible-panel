@@ -53,6 +53,20 @@ interface LoupePatchPanelProps {
   canvasHasStrokes?: boolean;
   onClearCanvas?: () => void;
   onInpaintCanvas?: () => void;
+  /** Detection instance keys resolved directly on the canvas (Skip, or Edit ->
+   *  Save) for the current image — subtracted from counts below so the
+   *  "Remove N Objects" CTA matches what will actually be removed. */
+  dismissedDetectionKeys?: Set<string>;
+  /** Detection instance keys actually inpainted so far on this image — the
+   *  permanent "done" record. Used (alongside removedItems) to tell a fully
+   *  resolved label apart from one with leftovers, since a label can be
+   *  resolved across several partial passes without ever setting removedItems. */
+  appliedDetectionKeys?: Set<string>;
+  /** UI labels that still have at least one Skipped-and-unresolved instance on
+   *  this image — excluded from the "removed" set Remove Object marks, so the
+   *  label stays a normal checkbox (with the remaining count) instead of
+   *  flipping to the done/restore tile. */
+  labelsWithSkips?: Set<string>;
   onRemoveAfterStrokeChange?: (v: boolean) => void;
   onRemovingChange?: (v: boolean) => void;
   distractionMap?: Map<number, DistractionDetection[]>;
@@ -86,6 +100,9 @@ const LoupePatchPanel = ({
   canvasHasStrokes = false,
   onClearCanvas,
   onInpaintCanvas,
+  dismissedDetectionKeys,
+  appliedDetectionKeys,
+  labelsWithSkips,
   onRemoveAfterStrokeChange,
   onRemovingChange,
   distractionMap,
@@ -129,25 +146,49 @@ const LoupePatchPanel = ({
 
   const detected = useMemo(() => {
     const imageDets = distractionMap?.get(currentImageIndex) ?? [];
-    const countMap = new Map<string, number>();
+    const rawCountMap = new Map<string, number>();
+    const remainingCountMap = new Map<string, number>();
+    const appliedCountMap = new Map<string, number>();
     for (const det of imageDets) {
       const uiLabel = MODEL_TO_UI[det.label];
-      if (uiLabel) countMap.set(uiLabel, (countMap.get(uiLabel) ?? 0) + 1);
+      if (!uiLabel) continue;
+      rawCountMap.set(uiLabel, (rawCountMap.get(uiLabel) ?? 0) + 1);
+      const key = `${uiLabel}:${det.x1}:${det.y1}:${det.x2}:${det.y2}`;
+      if (appliedDetectionKeys?.has(key)) {
+        appliedCountMap.set(uiLabel, (appliedCountMap.get(uiLabel) ?? 0) + 1);
+      }
+      // Skip instances the user already resolved directly on the canvas
+      // (Skip, or Edit -> Save, or already applied) so this count matches
+      // what Remove will do next.
+      if (dismissedDetectionKeys?.has(key)) continue;
+      remainingCountMap.set(uiLabel, (remainingCountMap.get(uiLabel) ?? 0) + 1);
     }
-    return Array.from(countMap.entries()).map(([label, count]) => ({
+    return Array.from(rawCountMap.entries()).map(([label, rawCount]) => ({
       label,
-      count,
+      rawCount,
+      count: remainingCountMap.get(label) ?? 0,
+      // Every instance of this label on this image has actually been
+      // inpainted — distinct from removedItems, which a partial pass
+      // (some instances Skipped) deliberately leaves unset.
+      isFullyApplied: appliedCountMap.get(label) === rawCount,
     }));
-  }, [distractionMap, currentImageIndex]);
+  }, [distractionMap, currentImageIndex, dismissedDetectionKeys, appliedDetectionKeys]);
 
   const hasScanned = hasScannedProp ?? distractionMap !== undefined;
   // Nothing scanned yet — offer the scan entry points instead of results.
   const preScan = !hasScanned && !isModelScanning;
 
+  // A label reads as "done" once every instance on this image is actually
+  // applied, or (album-wide path) removedItems already says so — a partial
+  // pass (some instances Skipped) deliberately leaves both unset so the
+  // label stays a normal, re-selectable checkbox showing what's left.
+  const isDone = (d: { label: string; isFullyApplied: boolean }) =>
+    removedItems.has(d.label) || d.isFullyApplied;
+
   // Non-removed first, removed at the bottom — same ordering as SmartObjectRemoval
   const orderedItems = [
-    ...detected.filter((d) => !removedItems.has(d.label)),
-    ...detected.filter((d) => removedItems.has(d.label)),
+    ...detected.filter((d) => !isDone(d)),
+    ...detected.filter((d) => isDone(d)),
   ];
 
   // Notify parent when removal state changes so canvas loader can be shown
@@ -210,6 +251,13 @@ const LoupePatchPanel = ({
   const handleRemove = () => {
     if (!canRemove) return;
     const toRemove = new Set(selected);
+    // A label with a Skipped-and-unresolved instance isn't fully handled by
+    // this click — leave it out of the "removed" set so it stays a normal,
+    // re-selectable checkbox (with the remaining count) instead of flipping
+    // to the done/restore tile.
+    const toMarkRemoved = new Set(
+      [...toRemove].filter((label) => !labelsWithSkips?.has(label)),
+    );
 
     // Real inpainting happens in LoupeView, which owns the source image and the
     // mask. It builds the mask from the brush strokes and/or the selected
@@ -217,11 +265,13 @@ const LoupePatchPanel = ({
     // its own spinner, clears the canvas, and fires the success toast via
     // onCanvasRemoveSuccess. So we only trigger it and mark the list here.
     onInpaintCanvas?.();
-    onRemove?.(toRemove);
+    onRemove?.(toMarkRemoved);
 
     // Label-based removal (not brush-only) — raise the album-wide batch offer.
-    if (toRemove.size > 0) {
-      onBatchOffer?.(Array.from(toRemove));
+    // Skip-only labels didn't actually get removed, so don't offer to scan the
+    // album for them yet.
+    if (toMarkRemoved.size > 0) {
+      onBatchOffer?.(Array.from(toMarkRemoved));
     }
 
     const empty = new Set<string>();
@@ -316,10 +366,7 @@ const LoupePatchPanel = ({
         {!isModelScanning && hasScanned && detected.length === 0 && (
           <div className="flex flex-col items-center gap-3 mt-1">
             <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424] w-full">
-              <ArrowsClockwiseIcon
-                className="w-8 h-8 text-[#e2e2e2]"
-                weight="duotone"
-              />
+              <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" />
               <div className="flex flex-col gap-1 text-center w-full">
                 <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
                   No distractions detected
@@ -334,7 +381,7 @@ const LoupePatchPanel = ({
                   className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
                 >
                   <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
-                    Rescan Album
+                    Rescan Image
                   </span>
                 </button>
                 {hasRescanned && (
@@ -369,14 +416,14 @@ const LoupePatchPanel = ({
             className={`grid grid-cols-2 gap-1.5 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}
           >
             {orderedItems.map((d) => {
-              const isItemRemoved = removedItems.has(d.label);
+              const isItemRemoved = isDone(d);
               const isSelected = selected.has(d.label);
 
               if (isItemRemoved) {
                 return (
                   <button
                     key={d.label}
-                    onClick={() => handleResetClick(d.label, d.count)}
+                    onClick={() => handleResetClick(d.label, d.rawCount)}
                     className="flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] transition-colors text-left cursor-pointer group"
                   >
                     <div className="flex items-center gap-1 min-w-0">
@@ -384,7 +431,7 @@ const LoupePatchPanel = ({
                         {d.label}
                       </span>
                       <span className="text-[10px] font-medium text-[#474747] leading-3 shrink-0">
-                        {d.count}
+                        {d.rawCount}
                       </span>
                     </div>
                     <div className="shrink-0 relative w-3 h-3">

@@ -26,6 +26,13 @@ interface RemovalMask {
 // store's BOX_PAD so the revealed outline is the mask actually inpainted.
 const BOX_PAD = 6;
 
+// Stable identity for a still-pending (not yet removed) detection instance —
+// drives per-box hover state and the dismissed-detection lookup.
+const pendingKeyOf = (det: DistractionDetection) => {
+  const label = MODEL_TO_UI[det.label] ?? det.label;
+  return `${label}:${det.x1}:${det.y1}:${det.x2}:${det.y2}`;
+};
+
 interface LoupeViewProps {
   image: ImageData;
   images: ImageData[];
@@ -45,8 +52,16 @@ interface LoupeViewProps {
   patchedSrc?: string;
   /** True while the shared store is running an inpaint pass — drives the spinner. */
   isInpainting?: boolean;
-  /** Apply brush strokes + selected boxes to an image (shared store). */
-  onInpaint?: (index: number, dets: DistractionDetection[], brushMask: HTMLCanvasElement | null, brushId?: string) => void;
+  /** Apply brush strokes + selected boxes to an image (shared store). `extraBrushes`
+   *  are queued per-instance edited masks (see onSaveEditedDetection) being
+   *  included in this same removal pass. */
+  onInpaint?: (
+    index: number,
+    dets: DistractionDetection[],
+    brushMask: HTMLCanvasElement | null,
+    brushId?: string,
+    extraBrushes?: { id: string; canvas: HTMLCanvasElement }[],
+  ) => void;
   /** Reset the whole image (R key) — clears all removals for an index. */
   onResetImageAll?: (index: number) => void;
   /** Restore a single brush removal by id (deletes its dot + re-inpaints). */
@@ -69,10 +84,26 @@ interface LoupeViewProps {
   removedDetections?: DistractionDetection[];
   /** Restore one removed object by UI label (drops it from the shared set + re-inpaints). */
   onRestoreObject?: (label: string) => void;
+  /** "Edit mask" on an AI (object) dot: converts it to a custom brush mask —
+   *  excludes this one detection from the label's boxes and adds the user's
+   *  painted shape in its place. */
+  onConvertObjectMask?: (index: number, det: DistractionDetection, brushId: string, natMask: HTMLCanvasElement) => void;
   /** True while one or more objects are selected in the patch panel — object
    *  selection and brush drawing are mutually exclusive removal methods, so
    *  this locks out brush strokes until the selection is cleared. */
   disableBrush?: boolean;
+  /** Canvas "Skip" on a still-pending (not yet removed) detection box — excludes
+   *  it from the next batch removal / dot seeding, but leaves it as a normal
+   *  detected instance for a later round (see Index.tsx). */
+  onSkipDetection?: (index: number, det: DistractionDetection) => void;
+  /** Canvas "Edit" -> "Save" on a still-pending detection box: queues the user's
+   *  hand-painted mask for this one instance rather than inpainting immediately —
+   *  it's applied the next time the panel's "Remove Object" actually runs. */
+  onSaveEditedDetection?: (index: number, det: DistractionDetection, brushId: string, natMask: HTMLCanvasElement) => void;
+  /** Queued edited masks (from onSaveEditedDetection) relevant to the currently
+   *  selected label(s) — captured by the parent right before it bumps
+   *  inpaintSignal, mirroring pendingInpaintDetections. */
+  pendingExtraBrushes?: { id: string; canvas: HTMLCanvasElement; det: DistractionDetection }[];
 }
 
 const LoupeView = ({
@@ -88,6 +119,7 @@ const LoupeView = ({
   clearCanvasSignal = 0,
   inpaintSignal = 0,
   pendingInpaintDetections = [],
+  pendingExtraBrushes = [],
   patchedSrc,
   isInpainting = false,
   onInpaint,
@@ -104,7 +136,10 @@ const LoupeView = ({
   onSetRemovedItems: _onSetRemovedItems,
   removedDetections = [],
   onRestoreObject,
+  onConvertObjectMask,
   disableBrush = false,
+  onSkipDetection,
+  onSaveEditedDetection,
 }: LoupeViewProps) => {
   const stripImages = filteredImages ?? images.map((img, i) => ({ ...img, originalIndex: i }));
 
@@ -162,6 +197,13 @@ const LoupeView = ({
   const isDrawingRef = useRef(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
   const hasStrokesRef = useRef(false);
+  // Mirrors hasStrokesRef as reactive state so the brush toolbar's Reset
+  // button can enable/disable itself based on whether there's an active mask.
+  const [hasStrokes, setHasStrokesState] = useState(false);
+  const setHasStrokes = (v: boolean) => {
+    hasStrokesRef.current = v;
+    setHasStrokesState(v);
+  };
   const committedHasStrokesRef = useRef(false);
   const committedSnapshotRef = useRef<globalThis.ImageData | null>(null);
   const currentStrokeRef = useRef<{ x: number; y: number }[]>([]);
@@ -176,14 +218,100 @@ const LoupeView = ({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dotMenu, setDotMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  // Id of the brush-kind mask currently loaded onto the live drawing canvas for
+  // correction (via the dot's "Edit mask" menu item) — null when not editing.
+  // While set, finishing the stroke (Remove) replaces that mask instead of
+  // creating a new one; Cancel (or erasing it to nothing) just abandons the edit.
+  const [editingMaskId, setEditingMaskId] = useState<string | null>(null);
+  // Mirrors editingMaskId for the global mouseup/checkBounds effect below, whose
+  // closures are fixed at mount and would otherwise see a stale value.
+  const editingMaskIdRef = useRef<string | null>(null);
+  editingMaskIdRef.current = editingMaskId;
+  // Still-pending (not yet removed) detection currently being hand-edited via
+  // the brush, opened from its hover Skip/Edit hint — null when not editing.
+  // Distinct from editingMaskId, which is for already-applied removal dots.
+  const [editingPendingDet, setEditingPendingDet] = useState<DistractionDetection | null>(null);
+  // Which pending box's Skip/Edit hint is currently showing (hover-driven).
+  const [hoveredPendingKey, setHoveredPendingKey] = useState<string | null>(null);
+  const pendingHoverHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Object-mask ids (per image index) that have been converted to a custom brush
+  // edit — the detection is excluded from the store's box list, so the seeding
+  // effect below must stop re-creating their plain-box dot.
+  const [suppressedObjectIds, setSuppressedObjectIds] = useState<Record<number, Set<string>>>({});
   // Cursor position in canvas (pre-transform) space, for proximity reveal.
   const [dotHoverPos, setDotHoverPos] = useState<{ x: number; y: number } | null>(null);
   // True while a brush stroke is actively being drawn (hides dots).
   const [isBrushing, setIsBrushing] = useState(false);
   const dotMenuRef = useRef<HTMLDivElement>(null);
+  // Decoded pixel alpha for brush-kind masks, keyed by mask id — lets hover
+  // reveal test the cursor against the mask's real painted shape instead of a
+  // bounding-box/proximity approximation.
+  const brushAlphaRef = useRef<Record<string, { data: Uint8ClampedArray; width: number; height: number }>>({});
+
+  useEffect(() => {
+    const masks = removalsByImage[currentIndex] ?? [];
+    for (const m of masks) {
+      if (m.kind !== "brush" || !m.dataUrl || brushAlphaRef.current[m.id]) continue;
+      const id = m.id;
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        const ctx = c.getContext("2d");
+        if (!ctx) return;
+        ctx.drawImage(img, 0, 0);
+        const { data, width, height } = ctx.getImageData(0, 0, c.width, c.height);
+        brushAlphaRef.current[id] = { data, width, height };
+      };
+      img.src = m.dataUrl;
+    }
+  }, [removalsByImage, currentIndex]);
+
+  // Whether canvas-space point (px, py) sits over an opaque (painted) pixel of a
+  // brush mask's actual shape. `dx`/`dy` are the mask's normalized drag offset;
+  // `rW`/`rH` are the rendered image's pixel dimensions (the mask image, like the
+  // photo, spans exactly that rect).
+  const isPointInBrushMask = (m: RemovalMask, px: number, py: number, b: { left: number; top: number }, rW: number, rH: number): boolean => {
+    const cache = brushAlphaRef.current[m.id];
+    if (!cache) return false;
+    const relX = (px - b.left) / rW - m.dx;
+    const relY = (py - b.top) / rH - m.dy;
+    if (relX < 0 || relX > 1 || relY < 0 || relY > 1) return false;
+    const sx = Math.min(cache.width - 1, Math.max(0, Math.floor(relX * cache.width)));
+    const sy = Math.min(cache.height - 1, Math.max(0, Math.floor(relY * cache.height)));
+    return cache.data[(sy * cache.width + sx) * 4 + 3] > 0;
+  };
+
+  // Whether canvas-space point (px, py) sits over a mask's real footprint — the
+  // padded detection box for an object mask, the actual painted shape for a
+  // brush mask. Shared by the dot-reveal test and the brush-cursor suppression
+  // below, so both agree on exactly where the mask "is".
+  const isInsideMaskFootprint = (
+    m: RemovalMask, px: number, py: number,
+    b: { left: number; top: number; right: number; bottom: number },
+  ): boolean => {
+    const rW = b.right - b.left, rH = b.bottom - b.top;
+    if (m.kind === "object") {
+      const mx = b.left + (m.nx1 + m.dx) * rW;
+      const my = b.top + (m.ny1 + m.dy) * rH;
+      const mw = (m.nx2 - m.nx1) * rW;
+      const mh = (m.ny2 - m.ny1) * rH;
+      return px >= mx && px <= mx + mw && py >= my && py <= my + mh;
+    }
+    return isPointInBrushMask(m, px, py, b, rW, rH);
+  };
+
+  // ── Before/after toggle — \ key (or the bottom-bar button) swaps back to the
+  // original, unedited image. Resets whenever the user moves to another photo.
+  const [showOriginal, setShowOriginal] = useState(false);
+  useEffect(() => setShowOriginal(false), [currentIndex]);
+  const hasEdits = !!patchedSrc;
+  const hasEditsRef = useRef(hasEdits);
+  hasEditsRef.current = hasEdits;
 
   // Patched result for this image comes from the shared store (via props).
-  const displaySrc = patchedSrc ?? image.src;
+  const displaySrc = showOriginal ? image.src : (patchedSrc ?? image.src);
   // Bounding box of the committed mask, in canvas pixel space (pre-zoom).
   // The Cancel/Remove hint is anchored to this so it follows zoom/pan in render.
   const [maskBBox, setMaskBBox] = useState<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
@@ -209,10 +337,14 @@ const LoupeView = ({
   onCanvasRemoveSuccessRef.current = onCanvasRemoveSuccess;
   const pendingInpaintDetectionsRef = useRef(pendingInpaintDetections);
   pendingInpaintDetectionsRef.current = pendingInpaintDetections;
+  const pendingExtraBrushesRef = useRef(pendingExtraBrushes);
+  pendingExtraBrushesRef.current = pendingExtraBrushes;
   const onInpaintRef = useRef(onInpaint);
   onInpaintRef.current = onInpaint;
   const onResetImageAllRef = useRef(onResetImageAll);
   onResetImageAllRef.current = onResetImageAll;
+  const onSaveEditedDetectionRef = useRef(onSaveEditedDetection);
+  onSaveEditedDetectionRef.current = onSaveEditedDetection;
 
   // ── Zoom helpers ─────────────────────────────────────────────────────────────
   const applyZoomAndPan = (newZoom: number, newPan: { x: number; y: number }) => {
@@ -329,13 +461,15 @@ const LoupeView = ({
     const maskCanvas = maskCanvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     maskCanvas?.getContext("2d")?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-    hasStrokesRef.current = false;
+    setHasStrokes(false);
     committedHasStrokesRef.current = false;
     committedSnapshotRef.current = null;
     onHasStrokesChangeRef.current?.(false);
     setIsAutoRemoving(false);
     setShowStrokeHint(false);
     setMaskBBox(null);
+    setEditingMaskId(null);
+    setEditingPendingDet(null);
     autoRemoveTimerRef.current = null;
   };
 
@@ -383,14 +517,45 @@ const LoupeView = ({
     const img = imgRef.current;
     const nW = img?.naturalWidth ?? 0, nH = img?.naturalHeight ?? 0;
     const brush = nW && nH ? extractBrushMaskNatural(nW, nH) : null;
+    const bbox = brush ? maskBBoxNatural(brush) : null;
     const dets = pendingInpaintDetectionsRef.current ?? [];
-    if (!brush && !dets.length) { clearAutoRemove(); return; }
+    // Capture before any of the resets below (clearAutoRemove included) clear it.
+    const editingId = editingMaskId;
+    const editingOriginal = editingId ? (removalsByImage[idx] ?? []).find((m) => m.id === editingId) : undefined;
+    const isObjectEdit = editingOriginal?.kind === "object";
+    // Captured before any of the resets below (clearAutoRemove included) clear it.
+    const pendingDet = editingPendingDet;
+    const extraBrushes = pendingExtraBrushesRef.current ?? [];
+    if (!brush && !dets.length && !extraBrushes.length) { clearAutoRemove(); return; }
+
+    // Editing an existing mask and erased it down to nothing: abandon.
+    if (editingId && !bbox) {
+      if (isObjectEdit) {
+        // Nothing was excluded from the store yet (that only happens on a
+        // successful conversion below) — the plain AI box is untouched.
+        clearAutoRemove();
+        return;
+      }
+      // Brush: drop the dot and ask the store to purge that id outright, rather
+      // than resubmitting an empty stroke under its id.
+      setRemovalsByImage((prev) => ({ ...prev, [idx]: (prev[idx] ?? []).filter((m) => m.id !== editingId) }));
+      onResetBrush?.(editingId);
+      clearAutoRemove();
+      return;
+    }
+
+    // Hand-editing a still-pending detection (canvas "Edit" hint) and erased it
+    // down to nothing: abandon — the plain box goes back to being pending.
+    if (pendingDet && !bbox) {
+      clearAutoRemove();
+      return;
+    }
 
     // Clear the live brush layer now that it's captured.
     const canvas = canvasRef.current, maskCanvas = maskCanvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     maskCanvas?.getContext("2d")?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-    hasStrokesRef.current = false;
+    setHasStrokes(false);
     committedHasStrokesRef.current = false;
     committedSnapshotRef.current = null;
     onHasStrokesChangeRef.current?.(false);
@@ -399,30 +564,97 @@ const LoupeView = ({
     setIsAutoRemoving(false);
     autoRemoveTimerRef.current = null;
 
+    // Hand-editing a still-pending detection (canvas "Edit" hint, before the
+    // label itself is removed): just queue the hand-painted mask — no inpaint
+    // yet, no dot yet. It's applied the next time the panel's "Remove Object"
+    // actually runs (see the extraBrushes handling below), same as the box
+    // would have been had the user left it alone.
+    if (pendingDet && brush && bbox) {
+      const brushId = `brush:${brushSeqRef.current++}`;
+      setEditingPendingDet(null);
+      onSaveEditedDetectionRef.current?.(idx, pendingDet, brushId, brush);
+      return;
+    }
+
+    // Editing an AI (object) dot: converting it to a custom brush mask, rather
+    // than replacing an existing brush mask or adding a fresh one. Look up the
+    // raw detection to tell the store which box to drop.
+    const editingDet = isObjectEdit && editingOriginal ? findDetectionForObjectMask(editingOriginal) : undefined;
+
     // Seed a brush removal dot at the stroke's location (actual mask preserved as
-    // a data URL for the reveal overlay).
+    // a data URL for the reveal overlay). Editing an existing brush dot reuses
+    // its id and replaces its entry in place; converting an AI dot mints a new
+    // brush id and drops the old object entry.
     let brushId: string | undefined;
-    if (brush) {
-      const bbox = maskBBoxNatural(brush);
-      if (bbox) {
+    if (brush && bbox) {
+      const dataUrl = brush.toDataURL("image/png");
+      if (editingDet) {
         brushId = `brush:${brushSeqRef.current++}`;
-        const dataUrl = brush.toDataURL("image/png");
         const id = brushId;
+        const entry: RemovalMask = {
+          id, kind: "brush",
+          nx1: bbox.x1 / nW, ny1: bbox.y1 / nH, nx2: bbox.x2 / nW, ny2: bbox.y2 / nH,
+          dataUrl, dx: 0, dy: 0,
+        };
+        setRemovalsByImage((prev) => ({
+          ...prev,
+          [idx]: [...(prev[idx] ?? []).filter((m) => m.id !== editingId), entry],
+        }));
+        setSuppressedObjectIds((prev) => {
+          const set = new Set(prev[idx] ?? []);
+          set.add(editingId!);
+          return { ...prev, [idx]: set };
+        });
+      } else {
+        brushId = editingId ?? `brush:${brushSeqRef.current++}`;
+        const id = brushId;
+        const entry: RemovalMask = {
+          id, kind: "brush",
+          nx1: bbox.x1 / nW, ny1: bbox.y1 / nH, nx2: bbox.x2 / nW, ny2: bbox.y2 / nH,
+          dataUrl, dx: 0, dy: 0,
+        };
         setRemovalsByImage((prev) => {
           const list = prev[idx] ?? [];
-          return {
-            ...prev,
-            [idx]: [...list, {
-              id, kind: "brush",
-              nx1: bbox.x1 / nW, ny1: bbox.y1 / nH, nx2: bbox.x2 / nW, ny2: bbox.y2 / nH,
-              dataUrl, dx: 0, dy: 0,
-            }],
-          };
+          const i = list.findIndex((m) => m.id === id);
+          return { ...prev, [idx]: i >= 0 ? list.map((m, mi) => (mi === i ? entry : m)) : [...list, entry] };
         });
       }
     }
 
-    onInpaintRef.current?.(idx, dets, brush, brushId);
+    // Apply any queued edited masks (canvas "Edit" -> "Save" on now-included
+    // instances) alongside this same removal — one dot per instance, and
+    // suppressed from the generic seeding effect below so a later removedItems
+    // flip for this label doesn't also draw a duplicate plain-box dot for it.
+    if (extraBrushes.length) {
+      const newEntries: RemovalMask[] = [];
+      const newSuppressed: string[] = [];
+      for (const eb of extraBrushes) {
+        const ebBbox = maskBBoxNatural(eb.canvas);
+        if (!ebBbox) continue;
+        newEntries.push({
+          id: eb.id, kind: "brush",
+          nx1: ebBbox.x1 / nW, ny1: ebBbox.y1 / nH, nx2: ebBbox.x2 / nW, ny2: ebBbox.y2 / nH,
+          dataUrl: eb.canvas.toDataURL("image/png"), dx: 0, dy: 0,
+        });
+        const uiLabel = MODEL_TO_UI[eb.det.label] ?? eb.det.label;
+        newSuppressed.push(`obj:${uiLabel}:${eb.det.x1}:${eb.det.y1}`);
+      }
+      if (newEntries.length) {
+        setRemovalsByImage((prev) => ({ ...prev, [idx]: [...(prev[idx] ?? []), ...newEntries] }));
+        setSuppressedObjectIds((prev) => {
+          const set = new Set(prev[idx] ?? []);
+          newSuppressed.forEach((s) => set.add(s));
+          return { ...prev, [idx]: set };
+        });
+      }
+    }
+
+    setEditingMaskId(null);
+    if (editingDet && brush && bbox && brushId) {
+      onConvertObjectMask?.(idx, editingDet, brushId, brush);
+    } else {
+      onInpaintRef.current?.(idx, dets, brush, brushId, extraBrushes.map((eb) => ({ id: eb.id, canvas: eb.canvas })));
+    }
   };
 
   const startAutoRemoveTimer = () => {
@@ -471,10 +703,34 @@ const LoupeView = ({
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
         e.preventDefault();
         onResetImageAllRef.current?.(currentIndex);
+        // Object-kind dots get pruned once removedDetections updates, but brush-kind
+        // dots have no such trigger — drop them here or their hints outlive the reset.
+        setRemovalsByImage((prev) => {
+          const list = prev[currentIndex];
+          if (!list?.some((m) => m.kind === "brush")) return prev;
+          return { ...prev, [currentIndex]: list.filter((m) => m.kind !== "brush") };
+        });
+        // Un-suppress any AI dots converted to brush edits on this image, so a
+        // fresh removal of the same object seeds its plain box again.
+        setSuppressedObjectIds((prev) => {
+          if (!prev[currentIndex]?.size) return prev;
+          const next = { ...prev };
+          delete next[currentIndex];
+          return next;
+        });
         return;
       }
       if (e.key === "ArrowLeft") onSelectImage(Math.max(0, currentIndex - 1));
       if (e.key === "ArrowRight") onSelectImage(Math.min(totalImages - 1, currentIndex + 1));
+
+      if (e.key === "\\") {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        if (!hasEditsRef.current) return;
+        e.preventDefault();
+        setShowOriginal((v) => !v);
+        return;
+      }
 
       if (e.key === " ") {
         e.preventDefault();
@@ -526,7 +782,7 @@ const LoupeView = ({
         // Invalidate snapshot — dimensions changed, stored ImageData no longer matches
         committedSnapshotRef.current = null;
         committedHasStrokesRef.current = false;
-        hasStrokesRef.current = false;
+        setHasStrokes(false);
       }
 
       computeImageBounds();
@@ -552,6 +808,12 @@ const LoupeView = ({
     setDraggingId(null);
     setDotHoverPos(null);
     setIsBrushing(false);
+    setEditingPendingDet(null);
+    setHoveredPendingKey(null);
+    if (pendingHoverHideTimerRef.current) {
+      clearTimeout(pendingHoverHideTimerRef.current);
+      pendingHoverHideTimerRef.current = null;
+    }
     // Reset zoom / pan / true-100 / image bounds (recomputed on image load)
     zoomRef.current = 1;
     panRef.current = { x: 0, y: 0 };
@@ -564,7 +826,7 @@ const LoupeView = ({
     const maskCanvas = maskCanvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     maskCanvas?.getContext("2d")?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-    hasStrokesRef.current = false;
+    setHasStrokes(false);
     committedHasStrokesRef.current = false;
     committedSnapshotRef.current = null;
     onHasStrokesChange?.(false);
@@ -578,6 +840,7 @@ const LoupeView = ({
     const nW = img?.naturalWidth ?? 0, nH = img?.naturalHeight ?? 0;
     if (!nW || !nH) return; // wait for image to load so px→normalized is correct
 
+    const suppressed = suppressedObjectIds[currentIndex];
     setRemovalsByImage((prev) => {
       const existing = prev[currentIndex] ?? [];
       const objMasks = existing.filter((m) => m.kind === "object");
@@ -588,6 +851,8 @@ const LoupeView = ({
       for (const det of removedDetections) {
         const label = MODEL_TO_UI[det.label] ?? det.label;
         const id = `obj:${label}:${det.x1}:${det.y1}`;
+        // Converted to a custom brush edit — don't re-seed the plain-box dot.
+        if (suppressed?.has(id)) continue;
         wantedIds.add(id);
         const found = objMasks.find((m) => m.id === id);
         if (found) { nextObj.push(found); continue; } // keep drag offset etc.
@@ -603,7 +868,7 @@ const LoupeView = ({
       const pruned = nextObj.filter((m) => wantedIds.has(m.id));
       return { ...prev, [currentIndex]: [...pruned, ...brushMasks] };
     });
-  }, [removedDetections, currentIndex, imageBounds]);
+  }, [removedDetections, currentIndex, imageBounds, suppressedObjectIds]);
 
   // ── Dot context menu: dismiss on outside mousedown ──────────────────────────
   useEffect(() => {
@@ -666,7 +931,7 @@ const LoupeView = ({
     const maskCanvas = maskCanvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     maskCanvas?.getContext("2d")?.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-    hasStrokesRef.current = false;
+    setHasStrokes(false);
     committedHasStrokesRef.current = false;
     committedSnapshotRef.current = null;
     onHasStrokesChange?.(false);
@@ -726,13 +991,15 @@ const LoupeView = ({
       // Refresh mask bbox; only show the hint if any opaque pixels remain.
       const hasPixels = updateMaskBBox();
       if (!hasPixels) {
-        hasStrokesRef.current = false;
+        setHasStrokes(false);
         committedHasStrokesRef.current = false;
         onHasStrokesChangeRef.current?.(false);
         setShowStrokeHint(false);
+        setEditingMaskId(null);
         return;
       }
-      if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current) {
+      // Fine-tuning an existing mask shouldn't auto-submit after every stroke.
+      if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current && !editingMaskIdRef.current) {
         startAutoRemoveTimer();
       } else {
         setShowStrokeHint(true);
@@ -764,10 +1031,10 @@ const LoupeView = ({
       if (!outside) return;
 
       setBrushPos(null);
-      if (autoRemoveAfterStrokeRef.current) {
+      if (autoRemoveAfterStrokeRef.current && !editingMaskIdRef.current) {
         restoreMask();
         if (!committedHasStrokesRef.current) {
-          hasStrokesRef.current = false;
+          setHasStrokes(false);
           onHasStrokesChangeRef.current?.(false);
         }
       } else {
@@ -888,7 +1155,7 @@ const LoupeView = ({
       }
     }
     if (!committedHasStrokesRef.current) {
-      hasStrokesRef.current = false;
+      setHasStrokes(false);
       onHasStrokesChange?.(false);
     }
     currentStrokeRef.current = [];
@@ -933,6 +1200,132 @@ const LoupeView = ({
       ...prev,
       [currentIndex]: (prev[currentIndex] ?? []).filter((m) => m.id !== id),
     }));
+  };
+
+  // Given an object-kind RemovalMask, find the raw DistractionDetection behind
+  // it — needed to tell the store which exact box to exclude on conversion.
+  const findDetectionForObjectMask = (mask: RemovalMask): DistractionDetection | undefined => {
+    if (mask.kind !== "object") return undefined;
+    return removedDetections.find((det) => {
+      const label = MODEL_TO_UI[det.label] ?? det.label;
+      return `obj:${label}:${det.x1}:${det.y1}` === mask.id;
+    });
+  };
+
+  // "Edit mask" on a dot: seed the live drawing canvas (same layer regular
+  // strokes use) with the mask's actual shape — the real painted stroke for a
+  // brush dot, or the padded detection box (the exact region the store inpaints)
+  // for an AI dot — and open the stroke hint, so the brush is immediately ready
+  // to add/erase. Finishing via the hint either replaces this mask in place
+  // (brush) or converts it to a custom brush mask (object) — see
+  // `performInpaint`'s `editingId`/`isObjectEdit` handling.
+  const startEditingMask = (mask: RemovalMask) => {
+    const maskCanvas = maskCanvasRef.current;
+    const canvas = canvasRef.current;
+    const b = imageBoundsRef.current;
+    if (!maskCanvas || !canvas || !b) return;
+    const rW = b.right - b.left, rH = b.bottom - b.top;
+
+    const seedAndReveal = (draw: (mctx: CanvasRenderingContext2D) => void) => {
+      const mctx = maskCanvas.getContext("2d");
+      const ctx = canvas.getContext("2d");
+      if (!mctx || !ctx) return;
+      mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+      draw(mctx);
+      committedSnapshotRef.current = mctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+      committedHasStrokesRef.current = true;
+      setHasStrokes(true);
+      onHasStrokesChange?.(true);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 0.35;
+      ctx.drawImage(maskCanvas, 0, 0);
+      ctx.globalAlpha = 1;
+      updateMaskBBox();
+      setShowStrokeHint(true);
+    };
+
+    if (mask.kind === "brush" && mask.dataUrl) {
+      const img = new Image();
+      img.onload = () => seedAndReveal((mctx) => {
+        mctx.drawImage(img, b.left + mask.dx * rW, b.top + mask.dy * rH, rW, rH);
+      });
+      img.src = mask.dataUrl;
+    } else if (mask.kind === "object") {
+      const mx = b.left + (mask.nx1 + mask.dx) * rW;
+      const my = b.top + (mask.ny1 + mask.dy) * rH;
+      const mw = (mask.nx2 - mask.nx1) * rW;
+      const mh = (mask.ny2 - mask.ny1) * rH;
+      seedAndReveal((mctx) => {
+        // Color here is purely cosmetic (only the alpha channel drives the actual
+        // inpaint mask) — match the same blue regular brush strokes use so the
+        // live preview looks consistent regardless of which kind of dot this is.
+        mctx.fillStyle = "rgb(59, 130, 246)";
+        mctx.fillRect(mx, my, mw, mh);
+      });
+    }
+  };
+
+  // Canvas "Edit" hint on a still-pending (not yet removed) detection box: seed
+  // the live drawing canvas with the same padded box the store would otherwise
+  // inpaint verbatim, and open the stroke hint (reading "Save" while this is
+  // set — see the render below) so the brush is immediately ready to adjust it.
+  const startEditingPendingDet = (det: DistractionDetection) => {
+    const maskCanvas = maskCanvasRef.current;
+    const canvas = canvasRef.current;
+    const b = imageBoundsRef.current;
+    const img = imgRef.current;
+    if (!maskCanvas || !canvas || !b || !img) return;
+    const rW = b.right - b.left, rH = b.bottom - b.top;
+    const nW = img.naturalWidth, nH = img.naturalHeight;
+    const mx = b.left + ((det.x1 - BOX_PAD) / nW) * rW;
+    const my = b.top + ((det.y1 - BOX_PAD) / nH) * rH;
+    const mw = ((det.x2 - det.x1 + BOX_PAD * 2) / nW) * rW;
+    const mh = ((det.y2 - det.y1 + BOX_PAD * 2) / nH) * rH;
+
+    const mctx = maskCanvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
+    if (!mctx || !ctx) return;
+    mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    mctx.fillStyle = "rgb(59, 130, 246)";
+    mctx.fillRect(mx, my, mw, mh);
+    committedSnapshotRef.current = mctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+    committedHasStrokesRef.current = true;
+    setHasStrokes(true);
+    onHasStrokesChange?.(true);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 0.35;
+    ctx.drawImage(maskCanvas, 0, 0);
+    ctx.globalAlpha = 1;
+    updateMaskBBox();
+    setShowStrokeHint(true);
+    setEditingPendingDet(det);
+    setHoveredPendingKey(null);
+  };
+
+  // Canvas "Skip" hint on a still-pending detection box: drop it from the
+  // batch entirely, no inpaint. Nothing to undo short of re-selecting the
+  // label (Restore also brings skipped instances back — see Index.tsx).
+  const handleSkipDetection = (det: DistractionDetection) => {
+    setHoveredPendingKey(null);
+    onSkipDetection?.(currentIndex, det);
+  };
+
+  // Hover-intent helpers for the Skip/Edit hint — a short hide delay lets the
+  // cursor cross the gap from the box down to the hint pill without it
+  // disappearing mid-transit (the pill re-affirms via the same show call).
+  const showPendingHover = (key: string) => {
+    if (pendingHoverHideTimerRef.current) {
+      clearTimeout(pendingHoverHideTimerRef.current);
+      pendingHoverHideTimerRef.current = null;
+    }
+    setHoveredPendingKey(key);
+  };
+  const scheduleHidePendingHover = () => {
+    if (pendingHoverHideTimerRef.current) clearTimeout(pendingHoverHideTimerRef.current);
+    pendingHoverHideTimerRef.current = setTimeout(() => {
+      setHoveredPendingKey(null);
+      pendingHoverHideTimerRef.current = null;
+    }, 150);
   };
 
   // Left mousedown on a dot: select (click, <3px) or drag (dx/dy). Stops
@@ -1026,8 +1419,9 @@ const LoupeView = ({
 
     // Drawing mode — locked out while an object is selected in the patch panel
     // (object selection and brush strokes are mutually exclusive), and only
-    // starts if the cursor is over the image.
-    if (disableBrush) return;
+    // starts if the cursor is over the image. Unlocked while hand-editing one
+    // pending detection's mask (canvas "Edit" hint), regardless of selection.
+    if (disableBrush && !editingPendingDet) return;
     const canvasPos = posFromEvent(e);
     if (!isInsideImage(canvasPos)) return;
 
@@ -1042,7 +1436,7 @@ const LoupeView = ({
       autoRemoveTimerRef.current = null;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-      hasStrokesRef.current = false;
+      setHasStrokes(false);
       committedHasStrokesRef.current = false;
       committedSnapshotRef.current = null;
       onHasStrokesChangeRef.current?.(false);
@@ -1060,7 +1454,7 @@ const LoupeView = ({
     redrawCurrentStroke();
 
     if (brushModeRef.current === "add" && !hasStrokesRef.current) {
-      hasStrokesRef.current = true;
+      setHasStrokes(true);
       onHasStrokesChange?.(true);
     }
   };
@@ -1088,8 +1482,11 @@ const LoupeView = ({
     if (isPatchActive) setDotHoverPos(canvasPos);
 
     // Show brush cursor anywhere inside the canvas area (not just over the image),
-    // except in shift-pan mode or while brushing is locked out by a selection.
-    if (isPatchActive && !isShiftHeldRef.current && !disableBrush) {
+    // except in shift-pan mode, while locked out by a selection, or while hovering
+    // a revealed mask hint (that area gets a plain pointer cursor instead — see
+    // the mask's own `cursor` style — so the two don't show at once).
+    const overMaskHint = dotsVisible && dotMasks.some((m) => isInsideMaskFootprint(m, canvasPos.x, canvasPos.y, imageBounds!));
+    if (isPatchActive && !isShiftHeldRef.current && (!disableBrush || editingPendingDet) && !overMaskHint) {
       setBrushPos(rawPos);
     } else {
       setBrushPos(null);
@@ -1099,7 +1496,7 @@ const LoupeView = ({
       if (!inside) {
         // Cursor exited the image — commit the stroke and stop
         commitStroke();
-        if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current) startAutoRemoveTimer();
+        if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current && !editingMaskIdRef.current) startAutoRemoveTimer();
       } else {
         currentStrokeRef.current.push(canvasPos);
         lastPosRef.current = canvasPos;
@@ -1118,12 +1515,14 @@ const LoupeView = ({
     commitStroke();
     if (!updateMaskBBox()) {
       // Stroke (likely a subtract) emptied the mask — clear state silently
-      hasStrokesRef.current = false;
+      setHasStrokes(false);
       committedHasStrokesRef.current = false;
       onHasStrokesChange?.(false);
+      setEditingMaskId(null);
       return;
     }
-    if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current) {
+    // Fine-tuning an existing mask shouldn't auto-submit after every stroke.
+    if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current && !editingMaskIdRef.current) {
       startAutoRemoveTimer();
     } else {
       setShowStrokeHint(true);
@@ -1136,14 +1535,15 @@ const LoupeView = ({
     // Keep panning across boundary (global mouseup stops it)
     if (isPanningRef.current) return;
     if (isDrawingRef.current) {
-      if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current) {
+      if (brushModeRef.current === "add" && autoRemoveAfterStrokeRef.current && !editingMaskIdRef.current) {
         discardStroke();
       } else {
         commitStroke();
         if (!updateMaskBBox()) {
-          hasStrokesRef.current = false;
+          setHasStrokes(false);
           committedHasStrokesRef.current = false;
           onHasStrokesChange?.(false);
+          setEditingMaskId(null);
           return;
         }
         setShowStrokeHint(true);
@@ -1153,7 +1553,7 @@ const LoupeView = ({
 
   // ── Cursor class ─────────────────────────────────────────────────────────────
   const cursorClass = isPatchActive && !isShiftHeld
-    ? (disableBrush ? "cursor-not-allowed" : "cursor-none")
+    ? (disableBrush && !editingPendingDet ? "cursor-not-allowed" : "cursor-none")
     : isPanning
       ? "cursor-grabbing"
       : "cursor-grab";
@@ -1161,7 +1561,7 @@ const LoupeView = ({
   // Removal masks for the current image + whether the dot layer should render.
   const dotMasks = removalsByImage[currentIndex] ?? [];
   const dotsVisible =
-    isPatchActive && !!imageBounds && dotMasks.length > 0 &&
+    isPatchActive && !!imageBounds && dotMasks.length > 0 && !showOriginal &&
     !isBrushing && !showStrokeHint && !isAutoRemoving && !isExternallyRemoving;
 
   return (
@@ -1177,6 +1577,13 @@ const LoupeView = ({
         onMouseLeave={handleMouseLeave}
         onContextMenu={handleContextMenu}
       >
+        {/* Before/after indicator — fixed in the viewport, unaffected by zoom/pan */}
+        {showOriginal && (
+          <div className="absolute top-3 left-3 z-10 px-2 py-1 rounded-md bg-black/60 text-white text-[11px] font-medium tracking-wide pointer-events-none">
+            Original
+          </div>
+        )}
+
         {/* Zoom + pan wrapper — image and canvas scale together */}
         <div
           className="absolute inset-0 flex items-center justify-center"
@@ -1231,7 +1638,10 @@ const LoupeView = ({
           {/* Bounding box overlay for selected distraction objects */}
           {isPatchActive && imageBounds && visibleHighlighted.length > 0 && (
             <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
-              {visibleHighlighted.map((det, i) => {
+              {visibleHighlighted
+                .filter((det) => det !== editingPendingDet)
+                .map((det) => {
+                const key = pendingKeyOf(det);
                 const imgW = imgRef.current?.naturalWidth ?? 1;
                 const imgH = imgRef.current?.naturalHeight ?? 1;
                 const rW = imageBounds.right - imageBounds.left;
@@ -1251,14 +1661,21 @@ const LoupeView = ({
                 const chipX = x + chipW * 0.25;
                 const chipY = y - chipH * 0.5;
 
+                // Hover reveals this instance's Skip/Edit hint — suppressed while
+                // another instance is mid-edit or a stroke is being drawn.
+                const hoverEnabled = !editingPendingDet && !isBrushing;
+
                 return (
-                  <g key={i}>
+                  <g key={key}>
                     <rect
                       x={x} y={y} width={w} height={h}
                       fill="rgba(59,130,246,0.08)"
                       stroke="#3b82f6"
                       strokeWidth={3 / zoom}
                       rx={3 / zoom}
+                      style={{ cursor: hoverEnabled ? "pointer" : undefined, pointerEvents: hoverEnabled ? "auto" : "none" }}
+                      onMouseEnter={() => hoverEnabled && showPendingHover(key)}
+                      onMouseLeave={() => hoverEnabled && scheduleHidePendingHover()}
                     />
                     <rect
                       x={chipX} y={chipY}
@@ -1292,45 +1709,65 @@ const LoupeView = ({
                   const rH = imageBounds.bottom - imageBounds.top;
                   const cx = imageBounds.left + ((m.nx1 + m.nx2) / 2 + m.dx) * rW;
                   const cy = imageBounds.top + ((m.ny1 + m.ny2) / 2 + m.dy) * rH;
-                  const halfW = ((m.nx2 - m.nx1) / 2) * rW;
-                  const halfH = ((m.ny2 - m.ny1) / 2) * rH;
                   const isActive = activeId === m.id;
                   const isDragging = draggingId === m.id;
                   const menuOpen = dotMenu?.id === m.id;
-                  const near = dotHoverPos
-                    ? Math.hypot(dotHoverPos.x - cx, dotHoverPos.y - cy) <= Math.max(halfW, halfH) + 36 / zoom
-                    : false;
-                  const revealed = isActive || isDragging || menuOpen || near;
-                  const r = revealed ? 6.5 / zoom : 5 / zoom;
-                  const dotOpacity = revealed ? 1 : 0.8;
-                  const borderW = isActive ? 2 / zoom : 1 / zoom;
                   const mx = imageBounds.left + (m.nx1 + m.dx) * rW;
                   const my = imageBounds.top + (m.ny1 + m.dy) * rH;
                   const mw = (m.nx2 - m.nx1) * rW;
                   const mh = (m.ny2 - m.ny1) * rH;
+                  // Reveal only once the brush cursor's exact center sits over the
+                  // mask's real footprint — the padded detection box for objects, the
+                  // actual painted shape (via alpha lookup) for brush strokes.
+                  const pointerInMask = dotHoverPos
+                    ? isInsideMaskFootprint(m, dotHoverPos.x, dotHoverPos.y, imageBounds)
+                    : false;
+                  const revealed = isActive || isDragging || menuOpen || pointerInMask;
+                  const r = revealed ? 6.5 / zoom : 5 / zoom;
+                  const dotOpacity = revealed ? 1 : 0.8;
+                  const borderW = isActive ? 2 / zoom : 1 / zoom;
                   return (
                     <g key={m.id}>
                       {revealed && m.kind === "object" && (
-                        // Actual inpaint mask: the padded detection box.
+                        // Actual inpaint mask: the padded detection box. Its bbox is the
+                        // real mask footprint, so it can host the right-click handler directly.
                         <rect
                           x={mx} y={my} width={mw} height={mh}
                           rx={3 / zoom}
                           fill="rgba(59,130,246,0.22)"
                           stroke="#3b82f6"
                           strokeWidth={2 / zoom}
+                          style={{ cursor: "pointer" }}
+                          onContextMenu={(e) => handleDotContextMenu(e, m)}
                         />
                       )}
                       {revealed && m.kind === "brush" && m.dataUrl && (
-                        // Actual brush mask, drawn in place (mask canvas is full-image sized).
-                        <image
-                          href={m.dataUrl}
-                          x={imageBounds.left + m.dx * rW}
-                          y={imageBounds.top + m.dy * rH}
-                          width={rW}
-                          height={rH}
-                          opacity={0.5}
-                          preserveAspectRatio="none"
-                        />
+                        <>
+                          {/* Actual brush mask, drawn in place (mask canvas is full-image sized). */}
+                          <image
+                            href={m.dataUrl}
+                            x={imageBounds.left + m.dx * rW}
+                            y={imageBounds.top + m.dy * rH}
+                            width={rW}
+                            height={rH}
+                            opacity={0.5}
+                            preserveAspectRatio="none"
+                          />
+                          {/* Invisible hit-region gated by the same exact alpha test used for
+                              reveal, so cursor/right-click only engage over painted pixels. */}
+                          <rect
+                            x={imageBounds.left + m.dx * rW}
+                            y={imageBounds.top + m.dy * rH}
+                            width={rW}
+                            height={rH}
+                            fill="transparent"
+                            style={{
+                              cursor: pointerInMask ? "pointer" : "default",
+                              pointerEvents: pointerInMask ? "auto" : "none",
+                            }}
+                            onContextMenu={(e) => handleDotContextMenu(e, m)}
+                          />
+                        </>
                       )}
                       <circle
                         cx={cx}
@@ -1362,7 +1799,15 @@ const LoupeView = ({
             onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
           >
             <button
-              onClick={() => { setActiveId(dotMenu.id); setDotMenu(null); }}
+              onClick={() => {
+                const mask = dotMasks.find((m) => m.id === dotMenu.id);
+                setDotMenu(null);
+                if (mask) {
+                  setActiveId(null);
+                  setEditingMaskId(mask.id);
+                  startEditingMask(mask);
+                }
+              }}
               className="w-full text-left px-3 py-1.5 text-[12px] text-[#e2e2e2] hover:bg-white/5 transition-colors"
             >
               Edit mask
@@ -1416,11 +1861,57 @@ const LoupeView = ({
                 onClick={handleHintRemove}
                 className="text-[12px] text-white font-medium px-2.5 py-1 rounded-[5px] bg-blue-500/80 hover:bg-blue-500 transition-colors"
               >
-                Remove
+                {editingPendingDet ? "Save" : "Remove"}
               </button>
             </div>
           );
         })()}
+
+        {/* Per-instance Skip/Edit hint — anchored below the hovered pending box */}
+        {isPatchActive && hoveredPendingKey && !showStrokeHint && !editingPendingDet &&
+          imageBounds && containerRef.current && (() => {
+            const det = visibleHighlighted.find((d) => pendingKeyOf(d) === hoveredPendingKey);
+            if (!det) return null;
+            const imgW = imgRef.current?.naturalWidth ?? 1;
+            const imgH = imgRef.current?.naturalHeight ?? 1;
+            const rW = imageBounds.right - imageBounds.left;
+            const rH = imageBounds.bottom - imageBounds.top;
+            const PAD = 14;
+            const boxX = imageBounds.left + (det.x1 / imgW) * rW - PAD;
+            const boxY = imageBounds.top + (det.y1 / imgH) * rH - PAD;
+            const boxW = ((det.x2 - det.x1) / imgW) * rW + PAD * 2;
+            const boxH = ((det.y2 - det.y1) / imgH) * rH + PAD * 2;
+            const cW = containerRef.current.clientWidth;
+            const cH = containerRef.current.clientHeight;
+            const midX = boxX + boxW / 2;
+            const bottomY = boxY + boxH;
+            const cx = (midX - cW / 2) * zoom + cW / 2 + pan.x;
+            const cy = (bottomY - cH / 2) * zoom + cH / 2 + pan.y + 12;
+            const x = Math.max(52, Math.min(cW - 52, cx));
+            const y = Math.min(cH - 40, Math.max(10, cy));
+            return (
+              <div
+                className="absolute flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-[8px] px-1 py-1 z-10"
+                style={{ left: x, top: y, transform: "translateX(-50%)" }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseEnter={() => showPendingHover(hoveredPendingKey)}
+                onMouseLeave={scheduleHidePendingHover}
+              >
+                <button
+                  onClick={() => handleSkipDetection(det)}
+                  className="text-[12px] text-[#ababab] hover:text-white px-2.5 py-1 rounded-[5px] hover:bg-white/10 transition-colors"
+                >
+                  Skip
+                </button>
+                <button
+                  onClick={() => startEditingPendingDet(det)}
+                  className="text-[12px] text-white font-medium px-2.5 py-1 rounded-[5px] bg-blue-500/80 hover:bg-blue-500 transition-colors"
+                >
+                  Edit
+                </button>
+              </div>
+            );
+          })()}
 
         {/* Canvas removal loader */}
         {(isAutoRemoving || isExternallyRemoving || isInpainting) && (
@@ -1436,6 +1927,7 @@ const LoupeView = ({
             brushSize={brushSize}
             onBrushSizeChange={setBrushSize}
             onBrushModeChange={(m) => { brushModeRef.current = m; }}
+            resetDisabled={!hasStrokes}
             onClear={() => {
               if (autoRemoveTimerRef.current) {
                 clearTimeout(autoRemoveTimerRef.current);
@@ -1498,6 +1990,9 @@ const LoupeView = ({
         showZoomDropdown={showZoomDropdown}
         setShowZoomDropdown={setShowZoomDropdown}
         zoomDropdownRef={zoomDropdownRef}
+        hasEdits={hasEdits}
+        showOriginal={showOriginal}
+        onToggleShowOriginal={() => setShowOriginal((v) => !v)}
       />
     </div>
   );

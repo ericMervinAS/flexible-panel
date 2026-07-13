@@ -77,7 +77,20 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
     }
     await sharedInpainter.loadModel();
     const result = await sharedInpainter.inpaint(original, mask);
-    setPatchedByIndex((prev) => ({ ...prev, [index]: result.toDataURL("image/png") }));
+    // The inpainter caps its working resolution (MAX_SIDE), so the result can come
+    // back smaller than the original — resize it back to the original's exact
+    // dimensions so before/after share the same natural size (keeps zoom % consistent).
+    let dataUrl: string;
+    if (result.width === nW && result.height === nH) {
+      dataUrl = result.toDataURL("image/png");
+    } else {
+      const full = document.createElement("canvas");
+      full.width = nW;
+      full.height = nH;
+      full.getContext("2d")!.drawImage(result, 0, 0, nW, nH);
+      dataUrl = full.toDataURL("image/png");
+    }
+    setPatchedByIndex((prev) => ({ ...prev, [index]: dataUrl }));
   }, [getSrc]);
 
   // ── Mutations (mark active set, then caller recomputes) ──
@@ -88,8 +101,13 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
     activeBoxesRef.current[index] = { ...(activeBoxesRef.current[index] ?? {}), ...grouped };
   }, []);
 
+  // Upsert: editing an existing brush stroke resubmits under the same id, and
+  // should replace its canvas in place rather than stacking a duplicate.
   const addBrushMask = useCallback((index: number, id: string, natMask: HTMLCanvasElement) => {
-    (brushMaskRef.current[index] ??= []).push({ id, canvas: natMask });
+    const list = (brushMaskRef.current[index] ??= []);
+    const i = list.findIndex((b) => b.id === id);
+    if (i >= 0) list[i] = { id, canvas: natMask };
+    else list.push({ id, canvas: natMask });
   }, []);
 
   // ── High-level actions (mutate + recompute, with the busy flag) ──
@@ -102,12 +120,22 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
     finally { runningRef.current = false; setIsBusy(false); }
   }, []);
 
-  // Loupe: apply the pending brush mask + selected boxes to one image.
+  // Loupe: apply the pending brush mask + selected boxes to one image. `extraBrushes`
+  // are previously hand-edited per-instance masks (canvas "Edit" -> "Save", queued
+  // rather than applied immediately) being included in this same removal pass —
+  // added alongside the live brush in one recompute rather than one each.
   const inpaintImage = useCallback(
-    (index: number, dets: DistractionDetection[], brushMask: HTMLCanvasElement | null, brushId?: string) =>
+    (
+      index: number,
+      dets: DistractionDetection[],
+      brushMask: HTMLCanvasElement | null,
+      brushId?: string,
+      extraBrushes?: { id: string; canvas: HTMLCanvasElement }[],
+    ) =>
       runExclusive(async () => {
         addObjectRemovals(index, dets);
         if (brushMask && brushId) addBrushMask(index, brushId, brushMask);
+        for (const eb of extraBrushes ?? []) addBrushMask(index, eb.id, eb.canvas);
         await recompute(index);
       }),
     [runExclusive, addObjectRemovals, addBrushMask, recompute],
@@ -122,6 +150,26 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
         await recompute(index);
       }),
     [runExclusive, recompute],
+  );
+
+  // Loupe "Edit mask" on an AI (object) dot: the user repainted it with the brush,
+  // so it's no longer a plain detection box. Atomically drop that one detection
+  // from the label's active boxes and add the user's shape as a brush mask, in a
+  // single recompute (two separate calls would race under the exclusivity lock).
+  const convertObjectToBrush = useCallback(
+    (index: number, uiLabel: string, det: DistractionDetection, brushId: string, natMask: HTMLCanvasElement) =>
+      runExclusive(async () => {
+        const byLabel = activeBoxesRef.current[index];
+        if (byLabel?.[uiLabel]) {
+          byLabel[uiLabel] = byLabel[uiLabel].filter(
+            (d) => !(d.x1 === det.x1 && d.y1 === det.y1 && d.x2 === det.x2 && d.y2 === det.y2),
+          );
+          if (!byLabel[uiLabel].length) delete byLabel[uiLabel];
+        }
+        addBrushMask(index, brushId, natMask);
+        await recompute(index);
+      }),
+    [runExclusive, addBrushMask, recompute],
   );
 
   const resetLabel = useCallback(
@@ -176,6 +224,7 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
     resetBrush,
     resetLabel,
     resetImage,
+    convertObjectToBrush,
     inpaintBatch,
     hasActiveLabel,
   };

@@ -33,7 +33,7 @@ interface ImageTileProps {
 }
 
 const badgeBase =
-  "backdrop-blur-[2px] bg-[rgba(17,17,17,0.85)] border-[0.5px] border-[#474747] flex h-6 min-w-6 items-center justify-center gap-1 overflow-clip px-1 py-1 rounded-[4px] shrink-0";
+  "backdrop-blur-[2px] bg-[#16A34A] border-[0.5px] border-[#474747] flex h-6 min-w-6 items-center justify-center gap-1 overflow-clip px-1 py-1 rounded-[4px] shrink-0";
 
 const ImageTile = ({
   src,
@@ -57,7 +57,12 @@ const ImageTile = ({
   onFlagToggle,
 }: ImageTileProps) => {
   const hasBadges =
-    hasWarning || isEdited || isRetouched || fileType || hasHighlights || (duplicateCount != null && duplicateCount > 0);
+    hasWarning ||
+    isEdited ||
+    isRetouched ||
+    fileType ||
+    hasHighlights ||
+    (duplicateCount != null && duplicateCount > 0);
 
   return (
     <div
@@ -69,18 +74,25 @@ const ImageTile = ({
       {isSelected && (
         <div
           className="absolute inset-0 pointer-events-none z-10"
-          style={{ background: `rgba(226, 226, 226, ${isPrimary ? 0.2 : 0.1})` }}
+          style={{
+            background: `rgba(226, 226, 226, ${isPrimary ? 0.2 : 0.1})`,
+          }}
         />
       )}
 
       {/* Metadata row */}
       <div className="flex h-6 items-center gap-8 w-full shrink-0">
-        <span className="flex-1 min-w-0 text-[12px] text-[#ababab] truncate leading-4">{filename}</span>
+        <span className="flex-1 min-w-0 text-[12px] text-[#ababab] truncate leading-4">
+          {filename}
+        </span>
         {hasBadges && (
           <div className="flex items-center gap-[2px] shrink-0">
             {hasWarning && (
               <div className="backdrop-blur-[2px] bg-[rgba(202,138,4,0.12)] border-[0.5px] border-[rgba(202,138,4,0.4)] flex h-6 min-w-6 items-center justify-center gap-1 overflow-clip px-1 py-1 rounded-[4px] shrink-0">
-                <WarningCircleIcon size={16} className="text-[rgba(202,138,4,1)] shrink-0" />
+                <WarningCircleIcon
+                  size={16}
+                  className="text-[rgba(202,138,4,1)] shrink-0"
+                />
               </div>
             )}
             {isEdited && (
@@ -95,7 +107,9 @@ const ImageTile = ({
             )}
             {fileType && (
               <div className={badgeBase}>
-                <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">{fileType}</span>
+                <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+                  {fileType}
+                </span>
               </div>
             )}
             {hasHighlights && (
@@ -106,7 +120,9 @@ const ImageTile = ({
             {duplicateCount != null && duplicateCount > 0 && (
               <div className={badgeBase}>
                 <CopySimpleIcon size={16} className="text-[#e2e2e2] shrink-0" />
-                <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">{duplicateCount}</span>
+                <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+                  {duplicateCount}
+                </span>
               </div>
             )}
           </div>
@@ -133,10 +149,13 @@ const ImageTile = ({
         {/* Left nav */}
 
         <div className="flex flex-1 items-center min-w-0">
-          {(duplicateCount != null && duplicateCount > 0) && (
+          {duplicateCount != null && duplicateCount > 0 && (
             <button
               className="flex items-center justify-center w-6 h-6 rounded-[4px] text-[#ababab] hover:text-[#e2e2e2] hover:bg-white/5 transition-colors"
-              onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onPrev?.();
+              }}
             >
               <CaretLeftIcon size={16} />
             </button>
@@ -150,7 +169,10 @@ const ImageTile = ({
               <button
                 key={i}
                 className="shrink-0"
-                onClick={(e) => { e.stopPropagation(); onRatingChange?.(i + 1 === rating ? 0 : i + 1); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRatingChange?.(i + 1 === rating ? 0 : i + 1);
+                }}
               >
                 <StarIcon
                   size={10}
@@ -162,18 +184,28 @@ const ImageTile = ({
           </div>
           <button
             className="flex items-center justify-center text-[#ababab] hover:text-[#e2e2e2] transition-colors"
-            onClick={(e) => { e.stopPropagation(); onFlagToggle?.(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onFlagToggle?.();
+            }}
           >
-            <FlagIcon size={12} weight={isFlagged ? "fill" : "regular"} className={isFlagged ? "text-[#e2e2e2]" : undefined} />
+            <FlagIcon
+              size={12}
+              weight={isFlagged ? "fill" : "regular"}
+              className={isFlagged ? "text-[#e2e2e2]" : undefined}
+            />
           </button>
         </div>
 
         {/* Right nav */}
         <div className="flex flex-1 items-center justify-end min-w-0">
-          {(duplicateCount != null && duplicateCount > 0) && (
+          {duplicateCount != null && duplicateCount > 0 && (
             <button
               className="flex items-center justify-center w-6 h-6 rounded-[4px] text-[#ababab] hover:text-[#e2e2e2] hover:bg-white/5 transition-colors"
-              onClick={(e) => { e.stopPropagation(); onNext?.(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onNext?.();
+              }}
             >
               <CaretRightIcon size={16} />
             </button>

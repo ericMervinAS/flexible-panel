@@ -34,9 +34,23 @@ interface RightPanelProps {
   canvasHasStrokes?: boolean;
   onClearCanvas?: () => void;
   onInpaintCanvas?: () => void;
+  /** Detection instance keys resolved directly on the canvas (Skip, or Edit ->
+   *  Save) for the current image — subtracted from the patch panel's counts
+   *  so the "Remove N Objects" CTA matches what will actually be removed. */
+  dismissedDetectionKeys?: Set<string>;
+  /** Detection instance keys actually inpainted so far on this image — the
+   *  permanent "done" record, independent of the label-level removedItems
+   *  flag, so a label resolved across several partial passes still shows the
+   *  right remaining count / done-vs-checkbox state. */
+  appliedDetectionKeys?: Set<string>;
+  /** UI labels that still have at least one Skipped-and-unresolved instance on
+   *  this image — Remove Object should not flip these to "removed". */
+  labelsWithSkips?: Set<string>;
   onResetImage?: (label: string) => void;
-  /** Grid-level batch: remove these UI labels across all already-scanned photos. */
-  onBatchRemove?: (uiLabels: string[]) => void;
+  /** Grid-level batch: remove these UI labels across all already-scanned photos.
+   *  Returns a promise that resolves once the batch inpaint actually finishes,
+   *  so callers can wait for it before flagging labels as "removed". */
+  onBatchRemove?: (uiLabels: string[]) => void | Promise<void>;
   /** Patch tab: scan just the current image. */
   onScanImage?: () => void;
   /** Patch tab: jump to the grid to scan the whole album. */
@@ -80,8 +94,12 @@ interface RightPanelProps {
    *  (surfaced after the user clicks "Scan this album" from the loupe patch tab). */
   showObjectCoachmark?: boolean;
   onDismissObjectCoachmark?: () => void;
-  /** Switch the app back to the grid view. */
-  onGoToGrid?: () => void;
+  /** Switch the app back to the grid view. Receives the labels that were just
+   *  removed on the current photo (from the batch-removal offer), if any. */
+  onGoToGrid?: (labels: string[]) => void;
+  /** UI labels to preselect in the grid's Smart Object Removal on arrival —
+   *  set when the user got here via the batch-removal offer's "Scan the album". */
+  initialObjectSelection?: string[];
 }
 
 const RightPanel = ({
@@ -92,6 +110,9 @@ const RightPanel = ({
   canvasHasStrokes = false,
   onClearCanvas,
   onInpaintCanvas,
+  dismissedDetectionKeys,
+  appliedDetectionKeys,
+  labelsWithSkips,
   onResetImage,
   onBatchRemove,
   onScanImage,
@@ -125,6 +146,7 @@ const RightPanel = ({
   showObjectCoachmark = false,
   onDismissObjectCoachmark,
   onGoToGrid,
+  initialObjectSelection,
 }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
@@ -255,27 +277,31 @@ const RightPanel = ({
       count: countForLabel(label),
     }));
 
-    onBatchRemove?.(labels);
-
     const newRemoved = new Set(removedItems);
     labels.forEach((label) => newRemoved.add(label));
-    onSetRemovedItems?.(newRemoved);
 
-    // Preselect the Patch tab so the removal dots are already visible if the
-    // user jumps into Loupe for an individual photo right after this.
-    setActiveTab("patch");
-    onTabChange?.("patch");
+    // Wait for the batch inpaint to actually finish before flagging labels as
+    // removed, so the Loupe dot indicators (keyed off removedItems) don't
+    // fall out of sync with the real pixel patch in useInpaintStore.
+    void Promise.resolve(onBatchRemove?.(labels)).then(() => {
+      onSetRemovedItems?.(newRemoved);
 
-    setHistory((prev) => [
-      ...prev,
-      {
-        id: prev.length + 1,
-        photoCount: selectedWithCounts.reduce((sum, o) => sum + o.count, 0),
-        presets: [],
-        objectsRemoved: selectedWithCounts,
-      },
-    ]);
-    setResetSignal((s) => s + 1);
+      // Preselect the Patch tab so the removal dots are already visible if
+      // the user jumps into Loupe for an individual photo right after this.
+      setActiveTab("patch");
+      onTabChange?.("patch");
+
+      setHistory((prev) => [
+        ...prev,
+        {
+          id: prev.length + 1,
+          photoCount: selectedWithCounts.reduce((sum, o) => sum + o.count, 0),
+          presets: [],
+          objectsRemoved: selectedWithCounts,
+        },
+      ]);
+      setResetSignal((s) => s + 1);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDistractionScanning, pendingAutoRemove, distractionMap]);
 
@@ -355,17 +381,23 @@ const RightPanel = ({
     // Grid-level batch inpaint: actually patch every already-scanned photo that
     // contains one of the selected object types.
     const objectLabels = os.selectedWithCounts.map(({ label }) => label);
-    if (objectLabels.length) onBatchRemove?.(objectLabels);
+    const batchDone = objectLabels.length
+      ? Promise.resolve(onBatchRemove?.(objectLabels))
+      : Promise.resolve();
 
     setIsProcessing(true);
 
-    setTimeout(() => {
+    // Wait for the actual batch inpaint to finish before flagging labels as
+    // removed — a fixed timer here would let the Loupe dot indicators (which
+    // key off removedItems) show or update out of sync with the real pixel
+    // patch in useInpaintStore.
+    void batchDone.then(() => {
       setHistory((prev) => [...prev, entry]);
       setAppliedPresets(newApplied);
       onSetRemovedItems?.(newRemoved);
       setResetSignal((s) => s + 1);
       setIsProcessing(false);
-    }, 3000);
+    });
   };
 
   return (
@@ -452,6 +484,9 @@ const RightPanel = ({
                 canvasHasStrokes={canvasHasStrokes}
                 onClearCanvas={onClearCanvas}
                 onInpaintCanvas={onInpaintCanvas}
+                dismissedDetectionKeys={dismissedDetectionKeys}
+                appliedDetectionKeys={appliedDetectionKeys}
+                labelsWithSkips={labelsWithSkips}
                 onRemoveAfterStrokeChange={onRemoveAfterStrokeChange}
                 onRemovingChange={onRemovingChange}
                 distractionMap={distractionMap}
@@ -516,6 +551,7 @@ const RightPanel = ({
                   objectStateRef.current = s;
                 }}
                 coachmarkVisible={showObjectCoachmark}
+                initialSelectedLabels={initialObjectSelection}
               />
             </div>
             {/* <div className="h-px bg-background" /> */}
