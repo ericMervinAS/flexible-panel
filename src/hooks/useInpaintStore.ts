@@ -26,6 +26,12 @@ const loadImg = (src: string): Promise<HTMLImageElement> =>
 export function useInpaintStore(getSrc: (index: number) => string | undefined) {
   const [patchedByIndex, setPatchedByIndex] = useState<Record<number, string>>({});
   const [isBusy, setIsBusy] = useState(false);
+  // Index actually being (re)computed right now — lets a caller ask "is *this*
+  // image mid-inpaint" instead of relying on `isBusy` alone, which stays true
+  // for as long as any recompute is running (e.g. one started before the user
+  // navigated to a different photo) and would otherwise show that unrelated
+  // photo's loupe as still "Removing…" until the old job finishes.
+  const [busyIndex, setBusyIndex] = useState<number | null>(null);
 
   const activeBoxesRef = useRef<Record<number, Record<string, DistractionDetection[]>>>({});
   // Brush strokes are kept as a keyed list per image so a single brush removal
@@ -111,13 +117,17 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
   }, []);
 
   // ── High-level actions (mutate + recompute, with the busy flag) ──
-  const runExclusive = useCallback(async (fn: () => Promise<void>) => {
+  // `index` is the image this particular call is working on (null for the
+  // grid batch, which sweeps many indices and updates `busyIndex` itself as
+  // it goes — see `inpaintBatch`).
+  const runExclusive = useCallback(async (index: number | null, fn: () => Promise<void>) => {
     if (runningRef.current) return;
     runningRef.current = true;
     setIsBusy(true);
+    setBusyIndex(index);
     try { await fn(); }
     catch (err) { console.error("[Inpaint]", err); }
-    finally { runningRef.current = false; setIsBusy(false); }
+    finally { runningRef.current = false; setIsBusy(false); setBusyIndex(null); }
   }, []);
 
   // Loupe: apply the pending brush mask + selected boxes to one image. `extraBrushes`
@@ -132,7 +142,7 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
       brushId?: string,
       extraBrushes?: { id: string; canvas: HTMLCanvasElement }[],
     ) =>
-      runExclusive(async () => {
+      runExclusive(index, async () => {
         addObjectRemovals(index, dets);
         if (brushMask && brushId) addBrushMask(index, brushId, brushMask);
         for (const eb of extraBrushes ?? []) addBrushMask(index, eb.id, eb.canvas);
@@ -144,7 +154,7 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
   // Restore a single brush removal by id — drop that stroke, recompute from original.
   const resetBrush = useCallback(
     (index: number, id: string) =>
-      runExclusive(async () => {
+      runExclusive(index, async () => {
         const list = brushMaskRef.current[index];
         if (list) brushMaskRef.current[index] = list.filter((b) => b.id !== id);
         await recompute(index);
@@ -158,7 +168,7 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
   // single recompute (two separate calls would race under the exclusivity lock).
   const convertObjectToBrush = useCallback(
     (index: number, uiLabel: string, det: DistractionDetection, brushId: string, natMask: HTMLCanvasElement) =>
-      runExclusive(async () => {
+      runExclusive(index, async () => {
         const byLabel = activeBoxesRef.current[index];
         if (byLabel?.[uiLabel]) {
           byLabel[uiLabel] = byLabel[uiLabel].filter(
@@ -174,7 +184,7 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
 
   const resetLabel = useCallback(
     (index: number, uiLabel: string) =>
-      runExclusive(async () => {
+      runExclusive(index, async () => {
         const byLabel = activeBoxesRef.current[index];
         if (byLabel && uiLabel in byLabel) delete byLabel[uiLabel];
         await recompute(index);
@@ -184,7 +194,7 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
 
   const resetImage = useCallback(
     (index: number) =>
-      runExclusive(async () => {
+      runExclusive(index, async () => {
         delete activeBoxesRef.current[index];
         delete brushMaskRef.current[index];
         await recompute(index);
@@ -205,11 +215,12 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
   // Grid batch: remove the given UI labels across every already-scanned image.
   const inpaintBatch = useCallback(
     (uiLabels: string[], distractionMap: Map<number, DistractionDetection[]>) =>
-      runExclusive(async () => {
+      runExclusive(null, async () => {
         const wanted = new Set(uiLabels);
         for (const [index, dets] of distractionMap) {
           const matching = dets.filter((d) => wanted.has(uiLabelOf(d)));
           if (!matching.length) continue;
+          setBusyIndex(index);
           addObjectRemovals(index, matching);
           await recompute(index);
         }
@@ -220,6 +231,7 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
   return {
     patchedByIndex,
     isBusy,
+    busyIndex,
     inpaintImage,
     resetBrush,
     resetLabel,

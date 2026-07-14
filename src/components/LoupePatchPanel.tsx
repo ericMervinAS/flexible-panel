@@ -18,10 +18,13 @@ const MODEL_TO_UI: Record<string, string> = {
   "Exit Sign": "Exit Signs",
   "Smoke Detector": "Fire Alarms",
   "Fire Extinguisher": "Fire Extinguishers",
-  "Electrical Outlet": "Electricity Sockets",
   Thermostat: "Thermostats",
-  "Trash Can": "Garbage Cans",
 };
+
+// Every category we scan for — used to surface the ones with zero
+// instances on this image (not just the ones actually detected) once a
+// scan has run.
+const SCAN_LABELS = Object.values(MODEL_TO_UI);
 
 // ─── Toggle ───────────────────────────────────────────────────────────────────
 
@@ -67,6 +70,9 @@ interface LoupePatchPanelProps {
    *  label stays a normal checkbox (with the remaining count) instead of
    *  flipping to the done/restore tile. */
   labelsWithSkips?: Set<string>;
+  /** Re-confirm "select all occurrences" for a label after a partial skip —
+   *  undoes the skip(s) so every instance is back in the removal batch. */
+  onSelectAllOccurrences?: (label: string) => void;
   onRemoveAfterStrokeChange?: (v: boolean) => void;
   onRemovingChange?: (v: boolean) => void;
   distractionMap?: Map<number, DistractionDetection[]>;
@@ -103,6 +109,7 @@ const LoupePatchPanel = ({
   dismissedDetectionKeys,
   appliedDetectionKeys,
   labelsWithSkips,
+  onSelectAllOccurrences,
   onRemoveAfterStrokeChange,
   onRemovingChange,
   distractionMap,
@@ -144,6 +151,10 @@ const LoupePatchPanel = ({
     setShowSuggestModal(false);
   };
 
+  const hasScanned = hasScannedProp ?? distractionMap !== undefined;
+  // Nothing scanned yet — offer the scan entry points instead of results.
+  const preScan = !hasScanned && !isModelScanning;
+
   const detected = useMemo(() => {
     const imageDets = distractionMap?.get(currentImageIndex) ?? [];
     const rawCountMap = new Map<string, number>();
@@ -163,20 +174,32 @@ const LoupePatchPanel = ({
       if (dismissedDetectionKeys?.has(key)) continue;
       remainingCountMap.set(uiLabel, (remainingCountMap.get(uiLabel) ?? 0) + 1);
     }
-    return Array.from(rawCountMap.entries()).map(([label, rawCount]) => ({
-      label,
-      rawCount,
-      count: remainingCountMap.get(label) ?? 0,
-      // Every instance of this label on this image has actually been
-      // inpainted — distinct from removedItems, which a partial pass
-      // (some instances Skipped) deliberately leaves unset.
-      isFullyApplied: appliedCountMap.get(label) === rawCount,
-    }));
-  }, [distractionMap, currentImageIndex, dismissedDetectionKeys, appliedDetectionKeys]);
-
-  const hasScanned = hasScannedProp ?? distractionMap !== undefined;
-  // Nothing scanned yet — offer the scan entry points instead of results.
-  const preScan = !hasScanned && !isModelScanning;
+    // Once scanned, surface every scannable category — including the ones
+    // with zero instances on this image — so the panel also reads as a
+    // "here's what we looked for and didn't find" list.
+    const labels = hasScanned
+      ? new Set([...rawCountMap.keys(), ...SCAN_LABELS])
+      : new Set(rawCountMap.keys());
+    return Array.from(labels).map((label) => {
+      const rawCount = rawCountMap.get(label) ?? 0;
+      const appliedCount = appliedCountMap.get(label) ?? 0;
+      return {
+        label,
+        rawCount,
+        count: remainingCountMap.get(label) ?? 0,
+        // How many instances of this label are still actually present in
+        // the photo — total minus whatever's been inpainted away. A skip
+        // alone doesn't remove pixels, so it stays in this count; only an
+        // applied instance does.
+        outstandingCount: rawCount - appliedCount,
+        // Every instance of this label on this image has actually been
+        // inpainted — distinct from removedItems, which a partial pass
+        // (some instances Skipped) deliberately leaves unset. A label with
+        // no instances at all is "not found", not "applied".
+        isFullyApplied: rawCount > 0 && appliedCount === rawCount,
+      };
+    });
+  }, [distractionMap, currentImageIndex, dismissedDetectionKeys, appliedDetectionKeys, hasScanned]);
 
   // A label reads as "done" once every instance on this image is actually
   // applied, or (album-wide path) removedItems already says so — a partial
@@ -185,11 +208,19 @@ const LoupePatchPanel = ({
   const isDone = (d: { label: string; isFullyApplied: boolean }) =>
     removedItems.has(d.label) || d.isFullyApplied;
 
-  // Non-removed first, removed at the bottom — same ordering as SmartObjectRemoval
+  // Found-and-active first, removed next, not-found (zero instances) last —
+  // same ordering as SmartObjectRemoval.
   const orderedItems = [
-    ...detected.filter((d) => !isDone(d)),
+    ...detected.filter((d) => !isDone(d) && d.rawCount > 0),
     ...detected.filter((d) => isDone(d)),
+    ...detected.filter((d) => !isDone(d) && d.rawCount === 0),
   ];
+
+  // All scannable categories came back empty — distinct from "not scanned
+  // yet"; drives the "No distractions detected" illustration instead of an
+  // itemized not-found list.
+  const noneFound =
+    hasScanned && detected.length > 0 && detected.every((d) => d.rawCount === 0);
 
   // Notify parent when removal state changes so canvas loader can be shown
   useEffect(() => {
@@ -206,11 +237,54 @@ const LoupePatchPanel = ({
     onHoveredLabelChange?.(null);
   }, [currentImageIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A selected label reads as indeterminate only when it still has a
+  // Skipped-and-unresolved instance that this Remove pass will leave behind.
+  // Remaining count can also fall short of the raw total because instances
+  // were already applied in an earlier partial pass, or are queued edits that
+  // get folded into this same pass as extra brushes (see handleInpaintCanvas)
+  // — neither of those leaves anything unresolved, so they shouldn't read as
+  // a dash; only an actual skip does.
+  const isLabelIndeterminate = (d: { label: string; count: number }) =>
+    selected.has(d.label) && d.count > 0 && !!labelsWithSkips?.has(d.label);
+
+  // A skip can bring a selected label's remaining count to zero (its last
+  // instance was skipped) — nothing is left to remove, so drop the stale
+  // selection instead of leaving a checked box over a "0" count.
+  useEffect(() => {
+    setSelected((prev) => {
+      const zeroed = detected.filter((d) => d.count === 0 && prev.has(d.label));
+      if (zeroed.length === 0) return prev;
+      const next = new Set(prev);
+      zeroed.forEach((d) => next.delete(d.label));
+      onSelectedLabelsChange?.(next);
+      return next;
+    });
+  }, [detected]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Item toggle ───────────────────────────────────────────────────────────
   const toggle = (label: string) => {
+    const d = detected.find((det) => det.label === label);
+    const isFullyChecked = selected.has(label) && !(d && isLabelIndeterminate(d));
+
+    if (isFullyChecked) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(label);
+        onSelectedLabelsChange?.(next);
+        return next;
+      });
+      return;
+    }
+
+    // Moving into a selected state — whether fresh or re-confirming from the
+    // dash (indeterminate) state — always means "every occurrence": undo any
+    // skips on this label so none are silently left out of the batch.
+    if (d && labelsWithSkips?.has(label)) {
+      onSelectAllOccurrences?.(label);
+    }
     setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(label) ? next.delete(label) : next.add(label);
+      if (prev.has(label)) return prev;
+      const next = new Set(prev).add(label);
       onSelectedLabelsChange?.(next);
       return next;
     });
@@ -234,19 +308,28 @@ const LoupePatchPanel = ({
   };
 
   // ── Remove ────────────────────────────────────────────────────────────────
+  const selectedDetected = detected.filter((d) => selected.has(d.label));
+  const remainingObjectCount =
+    selectedDetected.reduce((sum, d) => sum + d.count, 0) +
+    (canvasHasStrokes ? 1 : 0);
+  // Raw total across selected labels — differs from remainingObjectCount
+  // when a skip left some instances unresolved, so the CTA can show the
+  // "x/y" split instead of silently removing fewer than the label implies.
   const totalObjectCount =
-    detected
-      .filter((d) => selected.has(d.label))
-      .reduce((sum, d) => sum + d.count, 0) + (canvasHasStrokes ? 1 : 0);
+    selectedDetected.reduce((sum, d) => sum + d.rawCount, 0) +
+    (canvasHasStrokes ? 1 : 0);
 
   const removeLabel =
-    totalObjectCount > 1
-      ? `Remove ${totalObjectCount} Objects`
-      : "Remove Object";
+    remainingObjectCount !== totalObjectCount
+      ? `Remove ${remainingObjectCount}/${totalObjectCount} Objects`
+      : remainingObjectCount > 1
+        ? `Remove ${remainingObjectCount} Objects`
+        : "Remove Object";
 
   const canRemove =
     !isRemoving &&
-    (selected.size > 0 || (canvasHasStrokes && !removeAfterStroke));
+    ((selected.size > 0 && remainingObjectCount > 0) ||
+      (canvasHasStrokes && !removeAfterStroke));
 
   const handleRemove = () => {
     if (!canRemove) return;
@@ -363,7 +446,7 @@ const LoupePatchPanel = ({
         )}
 
         {/* Empty state */}
-        {!isModelScanning && hasScanned && detected.length === 0 && (
+        {!isModelScanning && hasScanned && noneFound && (
           <div className="flex flex-col items-center gap-3 mt-1">
             <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424] w-full">
               <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" />
@@ -411,13 +494,14 @@ const LoupePatchPanel = ({
         )}
 
         {/* Detected items grid */}
-        {!preScan && detected.length > 0 && (
+        {!preScan && !noneFound && detected.length > 0 && (
           <div
             className={`grid grid-cols-2 gap-1.5 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}
           >
             {orderedItems.map((d) => {
               const isItemRemoved = isDone(d);
               const isSelected = selected.has(d.label);
+              const isIndeterminate = isLabelIndeterminate(d);
 
               if (isItemRemoved) {
                 return (
@@ -438,6 +522,26 @@ const LoupePatchPanel = ({
                       <Check className="absolute top-0 left-0 w-3 h-3 text-[#16a34a] transition-opacity group-hover:opacity-0" />
                       <ArrowCounterClockwiseIcon className="absolute top-0 left-0 w-3 h-3 text-[#555] opacity-0 transition-opacity group-hover:opacity-100" />
                     </div>
+                  </button>
+                );
+              }
+
+              if (d.rawCount === 0) {
+                return (
+                  <button
+                    key={d.label}
+                    disabled
+                    className="flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] opacity-40 cursor-not-allowed text-left"
+                  >
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
+                        {d.label}
+                      </span>
+                      <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
+                        0
+                      </span>
+                    </div>
+                    <div className="shrink-0 w-3 h-3 rounded-[2px] border border-[#474747] bg-transparent" />
                   </button>
                 );
               }
@@ -463,7 +567,7 @@ const LoupePatchPanel = ({
                       {d.label}
                     </span>
                     <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
-                      {d.count}
+                      {d.outstandingCount}
                     </span>
                   </div>
                   <div
@@ -473,9 +577,12 @@ const LoupePatchPanel = ({
                         : "border border-[#474747] bg-transparent"
                     }`}
                   >
-                    {isSelected && (
-                      <Check className="w-2 h-2 text-white stroke-[3]" />
-                    )}
+                    {isSelected &&
+                      (isIndeterminate ? (
+                        <div className="w-1.5 h-[1.5px] rounded-full bg-white" />
+                      ) : (
+                        <Check className="w-2 h-2 text-white stroke-[3]" />
+                      ))}
                   </div>
                 </button>
               );
@@ -483,7 +590,7 @@ const LoupePatchPanel = ({
             {detected.length > 0 && (
               <button
                 onClick={() => setShowSuggestModal(true)}
-                className="group relative flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
+                className="group relative col-span-2 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
               >
                 <div className="flex items-center justify-center w-4 h-4 rounded-full bg-[#2a2a2a] group-hover:bg-[#333333] transition-colors">
                   <Plus className="w-2.5 h-2.5 text-[#ababab]" weight="bold" />

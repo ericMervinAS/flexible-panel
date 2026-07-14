@@ -19,6 +19,16 @@ export type DistractionClass = (typeof DISTRACTION_CLASSES)[number];
 
 export const DISTRACTION_MODEL_URL = '/api/models/distraction';
 
+// Classes the model can technically detect but that we don't scan for or
+// surface in the UI — excluded at decode time so they never enter a
+// detection map in the first place.
+const EXCLUDED_CLASS_IDS = new Set<number>(
+  DISTRACTION_CLASSES.reduce<number[]>((ids, cls, i) => {
+    if (cls === 'Electrical Outlet' || cls === 'Trash Can') ids.push(i);
+    return ids;
+  }, []),
+);
+
 // ── Public types ───────────────────────────────────────────────────────────────
 
 export interface DistractionDetection {
@@ -32,9 +42,7 @@ export const MODEL_TO_UI: Record<string, string> = {
   "Exit Sign": "Exit Signs",
   "Smoke Detector": "Fire Alarms",
   "Fire Extinguisher": "Fire Extinguishers",
-  "Electrical Outlet": "Electricity Sockets",
   "Thermostat": "Thermostats",
-  "Trash Can": "Garbage Cans",
 };
 
 // ── Preprocessing ─────────────────────────────────────────────────────────────
@@ -130,6 +138,7 @@ function decodeYoloOutput(
     let bestScore = 0;
     let bestClass = 0;
     for (let c = 0; c < numClasses; c++) {
+      if (EXCLUDED_CLASS_IDS.has(c)) continue;
       const s = raw[(4 + c) * numAnchors + a];
       if (s > bestScore) { bestScore = s; bestClass = c; }
     }

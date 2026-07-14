@@ -46,6 +46,10 @@ interface RightPanelProps {
   /** UI labels that still have at least one Skipped-and-unresolved instance on
    *  this image — Remove Object should not flip these to "removed". */
   labelsWithSkips?: Set<string>;
+  /** Panel checkbox re-confirmed as "select all occurrences" for a label
+   *  after a partial skip — undo the skip(s) so every instance is back in
+   *  the removal batch. */
+  onSelectAllOccurrences?: (label: string) => void;
   onResetImage?: (label: string) => void;
   /** Grid-level batch: remove these UI labels across all already-scanned photos.
    *  Returns a promise that resolves once the batch inpaint actually finishes,
@@ -75,6 +79,9 @@ interface RightPanelProps {
    *  distractionMap being defined, since a single-image scan only covers one index. */
   currentImageScanned?: boolean;
   isDistractionScanning?: boolean;
+  /** 0–100 album-scan progress, driven by the distraction model's per-image
+   *  callback — only meaningful while isDistractionScanning is true. */
+  distractionScanProgress?: number;
   onDistractionRerun?: () => void;
   onDistractionRerunCurrent?: () => void;
   onDistractionSelectionChange?: (labels: Set<string>) => void;
@@ -113,6 +120,7 @@ const RightPanel = ({
   dismissedDetectionKeys,
   appliedDetectionKeys,
   labelsWithSkips,
+  onSelectAllOccurrences,
   onResetImage,
   onBatchRemove,
   onScanImage,
@@ -132,6 +140,7 @@ const RightPanel = ({
   hasScannedAlbum = false,
   currentImageScanned,
   isDistractionScanning = false,
+  distractionScanProgress = 0,
   onDistractionRerun,
   onDistractionRerunCurrent,
   onDistractionSelectionChange,
@@ -250,9 +259,14 @@ const RightPanel = ({
 
   // "Find and remove" (grid pre-scan CTA): kicks off the album scan, then once
   // it completes, immediately removes every selected label with no extra click.
+  // pendingAutoRemove only gates the scan->remove handoff effect below; the
+  // whole click-to-inpaint-done span (what the progress bar tracks) is
+  // isAutoRemoveInFlight, which stays true through both the scan and the
+  // batch-inpaint promise.
   const [pendingAutoRemove, setPendingAutoRemove] = useState<string[] | null>(
     null,
   );
+  const [isAutoRemoveInFlight, setIsAutoRemoveInFlight] = useState(false);
   const wasScanningRef = useRef(false);
 
   useEffect(() => {
@@ -301,6 +315,7 @@ const RightPanel = ({
         },
       ]);
       setResetSignal((s) => s + 1);
+      setIsAutoRemoveInFlight(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDistractionScanning, pendingAutoRemove, distractionMap]);
@@ -311,8 +326,49 @@ const RightPanel = ({
     );
     if (!labels.length) return;
     setPendingAutoRemove(labels);
+    setIsAutoRemoveInFlight(true);
     onScanAlbumRun?.(labels);
   };
+
+  // Cancelling only stops us from acting on the result once the in-flight
+  // scan/inpaint settles — there's no abort hook into the model or the
+  // batch inpaint promise itself, so the work already queued still runs.
+  const handleCancelFindAndRemove = () => {
+    setPendingAutoRemove(null);
+    setIsAutoRemoveInFlight(false);
+  };
+
+  // Ticks once a second while the operation is running so the ETA below
+  // keeps counting down even during the batch-inpaint sub-phase, where the
+  // percent itself has no finer-grained signal to move on.
+  const findAndRemoveStartRef = useRef<number | null>(null);
+  const [, setFindAndRemoveTick] = useState(0);
+  useEffect(() => {
+    if (!isAutoRemoveInFlight) {
+      findAndRemoveStartRef.current = null;
+      return;
+    }
+    findAndRemoveStartRef.current ??= Date.now();
+    const id = setInterval(() => setFindAndRemoveTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [isAutoRemoveInFlight]);
+
+  // Scanning reports real per-image progress; the batch-inpaint sub-phase
+  // that follows has no equivalent signal, so it just holds just shy of done.
+  const findAndRemovePercent = isDistractionScanning
+    ? Math.min(95, Math.max(0, Math.round(distractionScanProgress)))
+    : 97;
+  const findAndRemoveEta = (() => {
+    const elapsedMs = findAndRemoveStartRef.current
+      ? Date.now() - findAndRemoveStartRef.current
+      : 0;
+    if (findAndRemovePercent <= 1 || elapsedMs < 1000) return "estimating…";
+    const totalEstimateMs = (elapsedMs / findAndRemovePercent) * 100;
+    const remainingMs = Math.max(0, totalEstimateMs - elapsedMs);
+    if (remainingMs < 60000) return "<1 min";
+    const mins = Math.round(remainingMs / 60000);
+    return `${mins} min${mins === 1 ? "" : "s"}`;
+  })();
 
   const isActive = subjectActive || objectActive;
 
@@ -487,6 +543,7 @@ const RightPanel = ({
                 dismissedDetectionKeys={dismissedDetectionKeys}
                 appliedDetectionKeys={appliedDetectionKeys}
                 labelsWithSkips={labelsWithSkips}
+                onSelectAllOccurrences={onSelectAllOccurrences}
                 onRemoveAfterStrokeChange={onRemoveAfterStrokeChange}
                 onRemovingChange={onRemovingChange}
                 distractionMap={distractionMap}
@@ -516,43 +573,72 @@ const RightPanel = ({
           <>
             {/* Subject sync hidden for now. */}
             <div className="py-5">
-              <SmartObjectRemoval
-                isScanning={isDistractionScanning}
-                preScan={!hasScannedAlbum && !isDistractionScanning}
-                disabled={isProcessing}
-                resetSignal={resetSignal}
-                removedItems={removedItems}
-                distractionMap={distractionMap}
-                onRerun={onDistractionRerun}
-                onReport={() =>
-                  console.log(
-                    "[DistractionDetection] User reported a missed detection",
-                  )
-                }
-                onSuggestSubmit={onSuggestObject}
-                onResetItem={(label) => onResetRemovedItem?.(label)}
-                onResetConfirmed={(label, count) =>
-                  setHistory((prev) => [
-                    ...prev,
-                    {
-                      id: prev.length + 1,
-                      photoCount: count,
-                      presets: [],
-                      objectsRemoved: [],
-                      restoredObjects: [{ label, count }],
-                    },
-                  ])
-                }
-                onSelectionsChange={(hasSelections) => {
-                  setObjectActive(hasSelections);
-                  if (hasSelections) onDismissObjectCoachmark?.();
-                }}
-                onStateChange={(s) => {
-                  objectStateRef.current = s;
-                }}
-                coachmarkVisible={showObjectCoachmark}
-                initialSelectedLabels={initialObjectSelection}
-              />
+              {isAutoRemoveInFlight && (
+                <div className="px-5 pb-4 flex flex-col gap-2">
+                  <span className="text-[14px] text-[#e2e2e2] leading-4">
+                    Finding and removing detections
+                  </span>
+                  <div className="h-1 w-full rounded-full bg-[#2e2e2e] overflow-hidden">
+                    <div
+                      className="h-full bg-[#2563eb] rounded-full transition-all duration-300"
+                      style={{ width: `${findAndRemovePercent}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] text-[#777] leading-4">
+                      {findAndRemovePercent}% • {findAndRemoveEta}
+                    </span>
+                    <button
+                      onClick={handleCancelFindAndRemove}
+                      className="text-[12px] text-[#777] hover:text-[#e2e2e2] leading-4 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div className="h-px bg-[#303030] mt-2" />
+                </div>
+              )}
+              <div
+                className={`transition-opacity ${isAutoRemoveInFlight ? "opacity-25 pointer-events-none" : ""}`}
+              >
+                <SmartObjectRemoval
+                  isScanning={isDistractionScanning}
+                  preScan={!hasScannedAlbum && !isDistractionScanning}
+                  disabled={isProcessing}
+                  resetSignal={resetSignal}
+                  removedItems={removedItems}
+                  distractionMap={distractionMap}
+                  onRerun={onDistractionRerun}
+                  onReport={() =>
+                    console.log(
+                      "[DistractionDetection] User reported a missed detection",
+                    )
+                  }
+                  onSuggestSubmit={onSuggestObject}
+                  onResetItem={(label) => onResetRemovedItem?.(label)}
+                  onResetConfirmed={(label, count) =>
+                    setHistory((prev) => [
+                      ...prev,
+                      {
+                        id: prev.length + 1,
+                        photoCount: count,
+                        presets: [],
+                        objectsRemoved: [],
+                        restoredObjects: [{ label, count }],
+                      },
+                    ])
+                  }
+                  onSelectionsChange={(hasSelections) => {
+                    setObjectActive(hasSelections);
+                    if (hasSelections) onDismissObjectCoachmark?.();
+                  }}
+                  onStateChange={(s) => {
+                    objectStateRef.current = s;
+                  }}
+                  coachmarkVisible={showObjectCoachmark}
+                  initialSelectedLabels={initialObjectSelection}
+                />
+              </div>
             </div>
             {/* <div className="h-px bg-background" /> */}
             {/* <div className="px-5 py-5">
@@ -596,27 +682,26 @@ const RightPanel = ({
 
         {!isLoupeView &&
           (() => {
-            const isFindingAndRemoving = pendingAutoRemove !== null;
             const preScan =
               (!hasScannedAlbum && !isDistractionScanning) ||
-              isFindingAndRemoving;
+              isAutoRemoveInFlight;
             if (preScan) {
               return (
                 <div className="p-4">
                   <button
                     disabled={
-                      isProcessing || isFindingAndRemoving || !objectActive
+                      isProcessing || isAutoRemoveInFlight || !objectActive
                     }
                     onClick={handleFindAndRemove}
                     className={`w-full py-2 rounded text-[12px] font-medium transition-colors ${
-                      isFindingAndRemoving
+                      isAutoRemoveInFlight
                         ? "bg-[#1d56d1] text-white cursor-not-allowed"
                         : objectActive
                           ? "bg-[#2563eb] text-white hover:bg-[#1d56d1]"
                           : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
                     }`}
                   >
-                    {isFindingAndRemoving
+                    {isAutoRemoveInFlight
                       ? "Finding and removing…"
                       : "Find and remove"}
                   </button>

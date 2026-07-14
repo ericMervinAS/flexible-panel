@@ -470,6 +470,7 @@ const LoupeView = ({
     setMaskBBox(null);
     setEditingMaskId(null);
     setEditingPendingDet(null);
+    setShowOriginal(false);
     autoRemoveTimerRef.current = null;
   };
 
@@ -650,6 +651,7 @@ const LoupeView = ({
     }
 
     setEditingMaskId(null);
+    setShowOriginal(false);
     if (editingDet && brush && bbox && brushId) {
       onConvertObjectMask?.(idx, editingDet, brushId, brush);
     } else {
@@ -665,6 +667,20 @@ const LoupeView = ({
       void performInpaint();
     }, 2000);
   };
+
+  // Cancel a pending auto-remove timer if this view unmounts (e.g. navigating
+  // back to the grid) before it fires. Without this, the 2s timeout survives
+  // the unmount and later calls performInpaint() against the stale mask/index
+  // it closed over — silently inpainting a leftover mask onto whatever image
+  // the store ends up applying it to once the user is back in loupe.
+  useEffect(() => {
+    return () => {
+      if (autoRemoveTimerRef.current) {
+        clearTimeout(autoRemoveTimerRef.current);
+        autoRemoveTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // ── Filmstrip auto-scroll ────────────────────────────────────────────────────
   useEffect(() => {
@@ -924,9 +940,25 @@ const LoupeView = ({
     return () => container.removeEventListener("wheel", onWheel);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // `clearCanvasSignal`/`inpaintSignal` are ever-incrementing counters owned by
+  // Index.tsx, which never unmounts — so their value already reflects however
+  // many removals have happened *anywhere in the session*, not just on this
+  // photo. A fresh LoupeView mount (e.g. opening a different image from the
+  // grid) has no prior render to diff against, so `useEffect`'s dependency
+  // check treats that already-nonzero value as "new" and fires immediately —
+  // running performInpaint() against the new image using whatever stale
+  // pendingInpaintDetections/pendingExtraBrushes are still sitting in
+  // Index.tsx from the last photo's action, silently inpainting a bogus
+  // region. Seed each tracker with the signal's value as of mount so the
+  // effect only reacts to a genuinely new increment received while this
+  // instance is actually mounted.
+  const lastHandledClearSignalRef = useRef(clearCanvasSignal);
+  const lastHandledInpaintSignalRef = useRef(inpaintSignal);
+
   // ── Clear canvas on demand (e.g. after patch removal) ────────────────────────
   useEffect(() => {
-    if (!clearCanvasSignal) return;
+    if (clearCanvasSignal === lastHandledClearSignalRef.current) return;
+    lastHandledClearSignalRef.current = clearCanvasSignal;
     const canvas = canvasRef.current;
     const maskCanvas = maskCanvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
@@ -941,7 +973,8 @@ const LoupeView = ({
 
   // ── Inpaint on demand (right-panel "Remove Object" for brush strokes) ────────
   useEffect(() => {
-    if (!inpaintSignal) return;
+    if (inpaintSignal === lastHandledInpaintSignalRef.current) return;
+    lastHandledInpaintSignalRef.current = inpaintSignal;
     performInpaint();
   }, [inpaintSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -996,6 +1029,7 @@ const LoupeView = ({
         onHasStrokesChangeRef.current?.(false);
         setShowStrokeHint(false);
         setEditingMaskId(null);
+        setShowOriginal(false);
         return;
       }
       // Fine-tuning an existing mask shouldn't auto-submit after every stroke.
@@ -1519,6 +1553,7 @@ const LoupeView = ({
       committedHasStrokesRef.current = false;
       onHasStrokesChange?.(false);
       setEditingMaskId(null);
+      setShowOriginal(false);
       return;
     }
     // Fine-tuning an existing mask shouldn't auto-submit after every stroke.
@@ -1544,6 +1579,7 @@ const LoupeView = ({
           committedHasStrokesRef.current = false;
           onHasStrokesChange?.(false);
           setEditingMaskId(null);
+          setShowOriginal(false);
           return;
         }
         setShowStrokeHint(true);
@@ -1805,6 +1841,7 @@ const LoupeView = ({
                 if (mask) {
                   setActiveId(null);
                   setEditingMaskId(mask.id);
+                  setShowOriginal(true);
                   startEditingMask(mask);
                 }
               }}

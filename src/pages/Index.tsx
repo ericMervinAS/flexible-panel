@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import TopBar from "@/components/TopBar";
 import Toast from "@/components/Toast";
 import FilterBar from "@/components/FilterBar";
@@ -23,6 +23,10 @@ const Index = ({ importSource }: IndexProps) => {
   const [isScanning, setIsScanning] = useState(true);
   const [view, setView] = useState<"grid" | "loupe">("loupe");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  // Read inside async inpaint callbacks (below) to check whether the user is
+  // still on the photo an in-flight edit was started against.
+  const selectedIndexRef = useRef(selectedIndex);
+  selectedIndexRef.current = selectedIndex;
   // Seed from the import source so loupe view (the default) has images even
   // before the grid mounts; the grid takes over via onImagesChange once opened.
   const [images, setImages] = useState<ImageData[]>(() =>
@@ -169,6 +173,7 @@ const Index = ({ importSource }: IndexProps) => {
     hasScannedAlbum,
     isDetecting: isDistractionDetecting,
     isLoadingModel: isDistractionModelLoading,
+    detectionProgress: distractionScanProgress,
     rerun: rerunDistractionDetection,
     rerunSingle: rerunDistractionDetectionForImage,
   } = useDistractionDetection(images, distractionEnabled);
@@ -252,6 +257,20 @@ const Index = ({ importSource }: IndexProps) => {
       const next = new Set(prev[idx] ?? []);
       next.add(detKey(det));
       return { ...prev, [idx]: next };
+    });
+  };
+
+  // Panel checkbox re-confirmed as "select all occurrences" after a partial
+  // skip — undo the skip(s) for this label so every instance goes back into
+  // the removal batch instead of leaving the skipped one silently excluded.
+  const handleSelectAllOccurrences = (label: string) => {
+    setSkippedDetections((prev) => {
+      const current = prev[selectedIndex];
+      if (!current?.size) return prev;
+      const next = new Set(
+        [...current].filter((key) => key.split(":")[0] !== label),
+      );
+      return { ...prev, [selectedIndex]: next };
     });
   };
 
@@ -470,11 +489,16 @@ const Index = ({ importSource }: IndexProps) => {
               pendingInpaintDetections={inpaintBoxes}
               pendingExtraBrushes={pendingExtraBrushes}
               patchedSrc={inpaintStore.patchedByIndex[selectedIndex]}
-              isInpainting={inpaintStore.isBusy}
+              isInpainting={inpaintStore.busyIndex === selectedIndex}
               onInpaint={(idx, dets, brush, brushId, extraBrushes) => {
                 void inpaintStore
                   .inpaintImage(idx, dets, brush, brushId, extraBrushes)
-                  .then(() => handleRemoveSuccess(1, true));
+                  .then(() => {
+                    // Inference can outlast the user's stay on this photo — a
+                    // stale success toast for whatever they're looking at now
+                    // would read as this image just got edited.
+                    if (selectedIndexRef.current === idx) handleRemoveSuccess(1, true);
+                  });
               }}
               onResetImageAll={handleResetImageAll}
               onResetBrush={(id) => {
@@ -483,7 +507,9 @@ const Index = ({ importSource }: IndexProps) => {
               onConvertObjectMask={(idx, det, brushId, natMask) => {
                 void inpaintStore
                   .convertObjectToBrush(idx, MODEL_TO_UI[det.label] ?? det.label, det, brushId, natMask)
-                  .then(() => handleRemoveSuccess(1, true));
+                  .then(() => {
+                    if (selectedIndexRef.current === idx) handleRemoveSuccess(1, true);
+                  });
               }}
               autoRemoveAfterStroke={autoRemoveAfterStroke}
               isExternallyRemoving={isRemoving}
@@ -517,6 +543,7 @@ const Index = ({ importSource }: IndexProps) => {
           dismissedDetectionKeys={dismissedDetectionKeys}
           appliedDetectionKeys={appliedDetectionKeys}
           labelsWithSkips={labelsWithSkips}
+          onSelectAllOccurrences={handleSelectAllOccurrences}
           onResetImage={(label) => {
             void inpaintStore.resetLabel(selectedIndex, label);
           }}
@@ -541,6 +568,7 @@ const Index = ({ importSource }: IndexProps) => {
           isDistractionScanning={
             isDistractionModelLoading || isDistractionDetecting
           }
+          distractionScanProgress={distractionScanProgress}
           onScanImage={handleScanImage}
           onScanAlbum={handleScanAlbum}
           onScanAlbumRun={handleRunAlbumScan}

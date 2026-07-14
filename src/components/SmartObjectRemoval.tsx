@@ -17,18 +17,14 @@ const UI_LABELS = [
   "Exit Signs",
   "Fire Alarms",
   "Fire Extinguishers",
-  "Electricity Sockets",
   "Thermostats",
-  "Garbage Cans",
 ] as const;
 
 const MODEL_TO_UI: Record<string, string> = {
   "Exit Sign": "Exit Signs",
   "Smoke Detector": "Fire Alarms",
   "Fire Extinguisher": "Fire Extinguishers",
-  "Electrical Outlet": "Electricity Sockets",
   Thermostat: "Thermostats",
-  "Trash Can": "Garbage Cans",
 };
 
 export interface SmartObjectState {
