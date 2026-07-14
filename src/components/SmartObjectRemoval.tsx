@@ -39,11 +39,15 @@ interface SmartObjectRemovalProps {
   resetSignal?: number;
   removedItems?: Set<string>;
   distractionMap?: Map<number, DistractionDetection[]>;
+  /** UI labels actually included in a completed scan — a label missing from
+   *  this set shows a 0 count because nobody has looked for it yet, not
+   *  because a scan came up empty, so it stays selectable instead of disabled. */
+  scannedLabels?: Set<string>;
   onResetItem?: (label: string) => void;
   onResetConfirmed?: (label: string, count: number) => void;
   onSelectionsChange?: (hasSelections: boolean) => void;
   onStateChange?: (state: SmartObjectState) => void;
-  onRerun?: () => void;
+  onRerun?: (labels: string[]) => void;
   onReport?: () => void;
   onSuggestSubmit?: (suggestion: string) => void;
   /** Highlight this section with a one-time coachmark (e.g. after "Scan this album" from the loupe). */
@@ -62,6 +66,7 @@ const SmartObjectRemoval = ({
   resetSignal,
   removedItems,
   distractionMap,
+  scannedLabels,
   onResetItem,
   onResetConfirmed,
   onSelectionsChange,
@@ -96,7 +101,14 @@ const SmartObjectRemoval = ({
     }));
   }, [distractionMap]);
 
-  const noneFound = !preScan && distractions.every((d) => d.count === 0);
+  // Labels an actual completed scan has looked for — falls back to "assume
+  // everything" so callers that don't pass this keep the old all-or-nothing
+  // behavior instead of silently disabling every option.
+  const scanned = scannedLabels ?? new Set(UI_LABELS);
+  const noneFound =
+    !preScan &&
+    UI_LABELS.every((label) => scanned.has(label)) &&
+    distractions.every((d) => d.count === 0);
   const [pendingReset, setPendingReset] = useState<{
     label: string;
     count: number;
@@ -106,9 +118,19 @@ const SmartObjectRemoval = ({
   const [hasRescanned, setHasRescanned] = useState(false);
   const [flaskHovered, setFlaskHovered] = useState(false);
 
+  // Top-corner rescan icon — carries along whatever's currently checked, so
+  // a newly-selected (previously unscanned) object layers into the next scan
+  // instead of requiring the album filter to be picked all over again.
   const handleRerun = () => {
     setHasRescanned(true);
-    onRerun?.();
+    onRerun?.(Array.from(selected));
+  };
+
+  // "No distractions detected" retry — every label already came back empty,
+  // so start over across the full set rather than just what's checked.
+  const handleRerunAll = () => {
+    setHasRescanned(true);
+    onRerun?.([...UI_LABELS]);
   };
 
   const handleSuggestSubmit = (suggestion: string) => {
@@ -244,7 +266,7 @@ const SmartObjectRemoval = ({
               </div>
               <div className="flex items-center justify-center gap-2 w-full">
                 <button
-                  onClick={handleRerun}
+                  onClick={handleRerunAll}
                   className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
                 >
                   <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
@@ -300,7 +322,10 @@ const SmartObjectRemoval = ({
               const isRemoved =
                 !preScan && (removedItems?.has(d.label) ?? false);
               const isSelected = selected.has(d.label);
-              const isDisabled = !preScan && d.count === 0;
+              // Only disable once a scan actually looked for this label and
+              // came up empty — an unscanned label stays selectable so it can
+              // be layered into the next scan.
+              const isDisabled = !preScan && scanned.has(d.label) && d.count === 0;
 
               if (isRemoved) {
                 return (

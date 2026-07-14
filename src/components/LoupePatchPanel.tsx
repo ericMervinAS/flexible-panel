@@ -80,6 +80,10 @@ interface LoupePatchPanelProps {
    *  covers every image, but a single "Scan this image" only covers one, so
    *  this can't be derived from distractionMap being defined alone. */
   hasScanned?: boolean;
+  /** UI labels a scan has actually covered for this image. A partial scan (only
+   *  some categories) that finds nothing shouldn't claim the image is clean —
+   *  other distraction types may still be unscanned, so keep offering a scan. */
+  scannedLabels?: Set<string>;
   isModelScanning?: boolean;
   onRerun?: () => void;
   /** Scan just the current image. */
@@ -114,6 +118,7 @@ const LoupePatchPanel = ({
   onRemovingChange,
   distractionMap,
   hasScanned: hasScannedProp,
+  scannedLabels,
   isModelScanning = false,
   onRerun,
   onScanImage,
@@ -152,8 +157,6 @@ const LoupePatchPanel = ({
   };
 
   const hasScanned = hasScannedProp ?? distractionMap !== undefined;
-  // Nothing scanned yet — offer the scan entry points instead of results.
-  const preScan = !hasScanned && !isModelScanning;
 
   const detected = useMemo(() => {
     const imageDets = distractionMap?.get(currentImageIndex) ?? [];
@@ -216,11 +219,28 @@ const LoupePatchPanel = ({
     ...detected.filter((d) => !isDone(d) && d.rawCount === 0),
   ];
 
-  // All scannable categories came back empty — distinct from "not scanned
-  // yet"; drives the "No distractions detected" illustration instead of an
-  // itemized not-found list.
+  // Whether every scannable category has actually been looked for on this
+  // image. Defaults to "all covered" when the caller doesn't tell us, so a
+  // panel without scan-tracking keeps its old all-or-nothing behavior.
+  const scanned = scannedLabels ?? new Set(SCAN_LABELS);
+  const allLabelsScanned = SCAN_LABELS.every((l) => scanned.has(l));
+  const nothingFound = detected.every((d) => d.rawCount === 0);
+
+  // Offer the scan entry points instead of results when nothing's been scanned
+  // yet, OR when only some categories were scanned and none of them turned up
+  // anything — the remaining, unscanned types might still be present, so we
+  // can't honestly show an empty "clean image" state.
+  const preScan =
+    (!hasScanned || (!allLabelsScanned && nothingFound)) && !isModelScanning;
+
+  // All scannable categories were looked for and came back empty — distinct
+  // from "not fully scanned yet"; drives the "No distractions detected"
+  // illustration instead of an itemized not-found list.
   const noneFound =
-    hasScanned && detected.length > 0 && detected.every((d) => d.rawCount === 0);
+    hasScanned &&
+    allLabelsScanned &&
+    detected.length > 0 &&
+    detected.every((d) => d.rawCount === 0);
 
   // Notify parent when removal state changes so canvas loader can be shown
   useEffect(() => {

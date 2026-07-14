@@ -82,7 +82,10 @@ interface RightPanelProps {
   /** 0–100 album-scan progress, driven by the distraction model's per-image
    *  callback — only meaningful while isDistractionScanning is true. */
   distractionScanProgress?: number;
-  onDistractionRerun?: () => void;
+  /** UI labels actually included in a completed album scan — distinct from
+   *  which ones currently have a nonzero count, so an object type nobody has
+   *  scanned for yet reads as "not yet searched" rather than "found none". */
+  scannedLabels?: Set<string>;
   onDistractionRerunCurrent?: () => void;
   onDistractionSelectionChange?: (labels: Set<string>) => void;
   onDistractionHoverChange?: (label: string | null) => void;
@@ -141,7 +144,7 @@ const RightPanel = ({
   currentImageScanned,
   isDistractionScanning = false,
   distractionScanProgress = 0,
-  onDistractionRerun,
+  scannedLabels,
   onDistractionRerunCurrent,
   onDistractionSelectionChange,
   onDistractionHoverChange,
@@ -161,6 +164,12 @@ const RightPanel = ({
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
   const [subjectActive, setSubjectActive] = useState(false);
   const [objectActive, setObjectActive] = useState(false);
+  // Reactive copy of the object labels currently checked in the grid panel —
+  // objectStateRef holds the same data but a ref won't re-render the CTA, and
+  // the button text depends on whether any selected label is still unscanned.
+  const [selectedObjectLabels, setSelectedObjectLabels] = useState<string[]>(
+    [],
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [resetSignal, setResetSignal] = useState(0);
   const [history, setHistory] = useState<RetouchHistoryEntry[]>([]);
@@ -268,6 +277,22 @@ const RightPanel = ({
   );
   const [isAutoRemoveInFlight, setIsAutoRemoveInFlight] = useState(false);
   const wasScanningRef = useRef(false);
+
+  // Whether the album itself has no scan data yet — drives the object panel's
+  // switch from checkbox-picker to results.
+  const albumPreScan = !hasScannedAlbum && !isDistractionScanning;
+  // A selected object we haven't actually scanned for yet still needs finding
+  // before it can be removed, so the CTA has to run a fresh scan+remove pass
+  // rather than the plain retouch. Empty scannedLabels (pre-scan) makes every
+  // selection count as unscanned, matching albumPreScan.
+  const hasUnscannedSelection = selectedObjectLabels.some(
+    (label) => !(scannedLabels?.has(label) ?? false),
+  );
+  // Show the "Find and remove" CTA whenever there's still something to scan
+  // for (nothing scanned yet, or a newly-picked object outside the last scan),
+  // or while a find-and-remove pass is already in flight.
+  const showFindAndRemove =
+    albumPreScan || hasUnscannedSelection || isAutoRemoveInFlight;
 
   useEffect(() => {
     const justFinishedScanning =
@@ -548,6 +573,7 @@ const RightPanel = ({
                 onRemovingChange={onRemovingChange}
                 distractionMap={distractionMap}
                 hasScanned={currentImageScanned}
+                scannedLabels={scannedLabels}
                 isModelScanning={isDistractionScanning}
                 onRerun={onDistractionRerunCurrent}
                 onScanImage={onScanImage}
@@ -603,12 +629,13 @@ const RightPanel = ({
               >
                 <SmartObjectRemoval
                   isScanning={isDistractionScanning}
-                  preScan={!hasScannedAlbum && !isDistractionScanning}
+                  preScan={albumPreScan}
                   disabled={isProcessing}
                   resetSignal={resetSignal}
                   removedItems={removedItems}
                   distractionMap={distractionMap}
-                  onRerun={onDistractionRerun}
+                  scannedLabels={scannedLabels}
+                  onRerun={(labels) => onScanAlbumRun?.(labels)}
                   onReport={() =>
                     console.log(
                       "[DistractionDetection] User reported a missed detection",
@@ -634,6 +661,9 @@ const RightPanel = ({
                   }}
                   onStateChange={(s) => {
                     objectStateRef.current = s;
+                    setSelectedObjectLabels(
+                      s.selectedWithCounts.map((o) => o.label),
+                    );
                   }}
                   coachmarkVisible={showObjectCoachmark}
                   initialSelectedLabels={initialObjectSelection}
@@ -682,10 +712,7 @@ const RightPanel = ({
 
         {!isLoupeView &&
           (() => {
-            const preScan =
-              (!hasScannedAlbum && !isDistractionScanning) ||
-              isAutoRemoveInFlight;
-            if (preScan) {
+            if (showFindAndRemove) {
               return (
                 <div className="p-4">
                   <button

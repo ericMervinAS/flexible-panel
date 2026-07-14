@@ -191,6 +191,18 @@ const Index = ({ importSource }: IndexProps) => {
     return next;
   }, [rawDistractionMap, scanLabelFilter]);
 
+  // Which UI object categories a scan has actually covered. An album scan only
+  // looks for the labels the user picked (scanLabelFilter), so anything not in
+  // here reads as "not searched yet" rather than "searched, found none". A
+  // cleared filter after a scan means a full "Scan this image" pass (every
+  // category), so treat empty-but-scanned as all labels.
+  const scannedLabels = useMemo(() => {
+    if (scanLabelFilter.length) return new Set(scanLabelFilter);
+    return scannedIndices.size
+      ? new Set(Object.values(MODEL_TO_UI))
+      : new Set<string>();
+  }, [scanLabelFilter, scannedIndices]);
+
   // "Scan this image" — run detection on just the current photo (no album filter).
   const handleScanImage = () => {
     setScanLabelFilter([]);
@@ -205,9 +217,12 @@ const Index = ({ importSource }: IndexProps) => {
     setShowObjectCoachmark(false);
   };
 
-  // Triggered from the grid once the user has selected which objects to scan for.
+  // Triggered from the grid once the user has selected which objects to scan
+  // for — accumulates onto any labels already scanned in a prior round, so
+  // picking a new object after the first scan layers it in rather than
+  // replacing what was already found.
   const handleRunAlbumScan = (labels: string[]) => {
-    setScanLabelFilter(labels);
+    setScanLabelFilter((prev) => Array.from(new Set([...prev, ...labels])));
     setDistractionEnabled(true);
     setScannedIndices(new Set(images.map((_, i) => i)));
     rerunDistractionDetection();
@@ -572,9 +587,9 @@ const Index = ({ importSource }: IndexProps) => {
           onScanImage={handleScanImage}
           onScanAlbum={handleScanAlbum}
           onScanAlbumRun={handleRunAlbumScan}
+          scannedLabels={scannedLabels}
           showObjectCoachmark={showObjectCoachmark}
           onDismissObjectCoachmark={() => setShowObjectCoachmark(false)}
-          onDistractionRerun={rerunDistractionDetection}
           onDistractionRerunCurrent={() =>
             rerunDistractionDetectionForImage(selectedIndex)
           }
