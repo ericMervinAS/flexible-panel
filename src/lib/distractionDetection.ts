@@ -22,12 +22,7 @@ export const DISTRACTION_MODEL_URL = '/api/models/distraction';
 // Classes the model can technically detect but that we don't scan for or
 // surface in the UI — excluded at decode time so they never enter a
 // detection map in the first place.
-const EXCLUDED_CLASS_IDS = new Set<number>(
-  DISTRACTION_CLASSES.reduce<number[]>((ids, cls, i) => {
-    if (cls === 'Electrical Outlet' || cls === 'Trash Can') ids.push(i);
-    return ids;
-  }, []),
-);
+const EXCLUDED_CLASS_IDS = new Set<number>();
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -43,6 +38,8 @@ export const MODEL_TO_UI: Record<string, string> = {
   "Smoke Detector": "Fire Alarms",
   "Fire Extinguisher": "Fire Extinguishers",
   "Thermostat": "Thermostats",
+  "Trash Can": "Trash Cans",
+  "Electrical Outlet": "Electrical Outlets",
 };
 
 // ── Preprocessing ─────────────────────────────────────────────────────────────

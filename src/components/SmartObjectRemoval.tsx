@@ -18,6 +18,8 @@ const UI_LABELS = [
   "Fire Alarms",
   "Fire Extinguishers",
   "Thermostats",
+  "Trash Cans",
+  "Electrical Outlets",
 ] as const;
 
 const MODEL_TO_UI: Record<string, string> = {
@@ -25,6 +27,8 @@ const MODEL_TO_UI: Record<string, string> = {
   "Smoke Detector": "Fire Alarms",
   "Fire Extinguisher": "Fire Extinguishers",
   Thermostat: "Thermostats",
+  "Trash Can": "Trash Cans",
+  "Electrical Outlet": "Electrical Outlets",
 };
 
 export interface SmartObjectState {
@@ -285,7 +289,7 @@ const SmartObjectRemoval = ({
                 )}
               </div>
             </div>
-            <button
+            {/* <button
               onClick={() => setShowSuggestModal(true)}
               className="group relative mt-2 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
             >
@@ -298,7 +302,7 @@ const SmartObjectRemoval = ({
               <span className="text-[12px] font-medium text-[#ababab] group-hover:text-[#e2e2e2] transition-colors">
                 Suggest a new object
               </span>
-            </button>
+            </button> */}
           </div>
         )}
 
@@ -325,7 +329,8 @@ const SmartObjectRemoval = ({
               // Only disable once a scan actually looked for this label and
               // came up empty — an unscanned label stays selectable so it can
               // be layered into the next scan.
-              const isDisabled = !preScan && scanned.has(d.label) && d.count === 0;
+              const isDisabled =
+                !preScan && scanned.has(d.label) && d.count === 0;
 
               if (isRemoved) {
                 return (
@@ -388,7 +393,7 @@ const SmartObjectRemoval = ({
           </div>
         )}
 
-        {!isScanning && !noneFound && (
+        {/* {!isScanning && !noneFound && (
           <button
             onClick={() => setShowSuggestModal(true)}
             className="group relative mt-1 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
@@ -400,7 +405,7 @@ const SmartObjectRemoval = ({
               Suggest a new object
             </span>
           </button>
-        )}
+        )} */}
       </div>
 
       {/* Reset confirmation modal */}
