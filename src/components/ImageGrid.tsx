@@ -31,9 +31,9 @@ const sampleImages: ImageData[] = Object.entries(sampleModules)
 /** Initial image set for a given import source — used to seed loupe view before
  *  the grid mounts (the grid still owns uploads/edits after that). */
 export const resolveInitialImages = (
-  importSource?: "sample" | ImportFolder
+  importSource?: "sample" | "sample-v2" | ImportFolder
 ): ImageData[] =>
-  importSource && importSource !== "sample" ? importSource.images : sampleImages;
+  importSource && typeof importSource !== "string" ? importSource.images : sampleImages;
 
 interface ImageGridProps {
   columns: number;
@@ -43,14 +43,14 @@ interface ImageGridProps {
   subjectFilter?: number[];
   modelImageMap?: Map<number, number[]>;
   initialSelectedIndex?: number;
-  importSource?: "sample" | ImportFolder;
+  importSource?: "sample" | "sample-v2" | ImportFolder;
   /** Patched (inpainted) result data URLs by original image index. */
   patchedByIndex?: Record<number, string>;
 }
 
 const ImageGrid = ({ columns, isScanning, onImageDoubleClick, onImagesChange, subjectFilter, modelImageMap, initialSelectedIndex, importSource, patchedByIndex = {} }: ImageGridProps) => {
   const [allImages, setAllImages] = useState<ImageData[]>(
-    importSource && importSource !== "sample" ? importSource.images : sampleImages
+    importSource && typeof importSource !== "string" ? importSource.images : sampleImages
   );
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(

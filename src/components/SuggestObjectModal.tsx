@@ -26,7 +26,8 @@ const SuggestObjectModal = ({ onClose, onSubmit }: SuggestObjectModalProps) => {
               Suggest a New Object Type
             </h3>
             <p className="text-[14px] font-normal text-[#ababab] leading-5">
-              Tell us what other objects you'd like us to detect and remove. We'll consider it for a future update.
+              Tell us what other objects you'd like us to detect and remove.
+              We'll consider it for a future update.
             </p>
           </div>
           <button
@@ -60,17 +61,18 @@ const SuggestObjectModal = ({ onClose, onSubmit }: SuggestObjectModalProps) => {
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className={`px-4 py-2 rounded text-[14px] font-medium transition-colors ${canSubmit
-              ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
-              : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
-              }`}
+            className={`px-4 py-2 rounded text-[14px] font-medium transition-colors ${
+              canSubmit
+                ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
+                : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
+            }`}
           >
             Submit
           </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 };
 

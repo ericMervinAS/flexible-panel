@@ -8,7 +8,7 @@ export interface ImportFolder {
 }
 
 interface ImportGateProps {
-  onReady: (source: "sample" | ImportFolder) => void;
+  onReady: (source: "sample" | "sample-v2" | ImportFolder) => void;
 }
 
 const toJpegName = (name: string) => name.replace(/\.[^.]+$/, ".jpeg");
@@ -68,6 +68,7 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
         </div>
       ) : (
         <div className="flex gap-4">
+          {/* Upload option — temporarily disabled.
           <button
             onClick={() => inputRef.current?.click()}
             className="group flex flex-col items-center gap-4 w-[268px] py-12 px-8 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
@@ -80,7 +81,9 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
               <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">First 24 Images from folder</span>
             </div>
           </button>
+          */}
 
+          {/* Option 1 — sample album, original behavior. */}
           <button
             onClick={() => onReady("sample")}
             className="group flex flex-col items-center gap-4 w-[268px] py-12 px-8 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
@@ -91,7 +94,23 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
               <polyline points="21 15 16 10 5 21" />
             </svg>
             <div className="flex flex-col gap-1 text-center">
-              <span className="text-[18px] font-medium text-[#d8d8d8]">Sample Album</span>
+              <span className="text-[18px] font-medium text-[#d8d8d8]">Option 1</span>
+              <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">Juliana Wedding</span>
+            </div>
+          </button>
+
+          {/* Option 2 — sample album, inline album-scan in the loupe patch tab. */}
+          <button
+            onClick={() => onReady("sample-v2")}
+            className="group flex flex-col items-center gap-4 w-[268px] py-12 px-8 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#ababab] transition-colors">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+            <div className="flex flex-col gap-1 text-center">
+              <span className="text-[18px] font-medium text-[#d8d8d8]">Option 2</span>
               <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">Juliana Wedding</span>
             </div>
           </button>

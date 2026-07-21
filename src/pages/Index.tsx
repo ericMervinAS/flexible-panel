@@ -15,7 +15,7 @@ import type { DistractionDetection } from "@/lib/distractionDetection";
 import { useInpaintStore } from "@/hooks/useInpaintStore";
 
 interface IndexProps {
-  importSource: "sample" | ImportFolder;
+  importSource: "sample" | "sample-v2" | ImportFolder;
 }
 
 const Index = ({ importSource }: IndexProps) => {
@@ -482,7 +482,7 @@ const Index = ({ importSource }: IndexProps) => {
                 totalPhotos={images.length}
                 visiblePhotos={filteredImages.length}
                 albumName={
-                  importSource === "sample"
+                  typeof importSource === "string"
                     ? "Juliana Wedding"
                     : importSource.name
                 }
@@ -587,6 +587,9 @@ const Index = ({ importSource }: IndexProps) => {
           onScanImage={handleScanImage}
           onScanAlbum={handleScanAlbum}
           onScanAlbumRun={handleRunAlbumScan}
+          // Option 2 (sample-v2): "Scan this album" surfaces the album picker
+          // inline in the loupe patch tab instead of hopping to the grid.
+          loupeInlineAlbumScan={importSource === "sample-v2"}
           scannedLabels={scannedLabels}
           showObjectCoachmark={showObjectCoachmark}
           onDismissObjectCoachmark={() => setShowObjectCoachmark(false)}

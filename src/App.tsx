@@ -12,7 +12,7 @@ import ImportGate, { type ImportFolder } from "./components/ImportGate";
 const queryClient = new QueryClient();
 
 const App = () => {
-  const [importSource, setImportSource] = useState<"pending" | "sample" | ImportFolder>("pending");
+  const [importSource, setImportSource] = useState<"pending" | "sample" | "sample-v2" | ImportFolder>("pending");
 
   return (
     <AccessGate>
