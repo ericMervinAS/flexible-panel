@@ -512,7 +512,8 @@ const LoupePatchPanel = ({
 
         {preScan && (
           <p className="text-[12px] text-[#ababab] leading-4">
-            Scan for distracting objects to remove.
+            Scan for distracting objects like exit signs, fire alarms, fire
+            extinguishers, and thermostats to remove.
           </p>
         )}
 
