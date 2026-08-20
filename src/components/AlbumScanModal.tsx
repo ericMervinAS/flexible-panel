@@ -49,7 +49,7 @@ interface AlbumScanModalProps {
 
 const DialogShell = ({ children }: { children: ReactNode }) =>
   createPortal(
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 bg-[#111111e4] z-50 flex items-center justify-center">
       <div className="bg-[#1c1c1c] border border-[#303030] rounded-[12px] p-5 flex flex-col gap-4 w-[448px]">
         {children}
       </div>
