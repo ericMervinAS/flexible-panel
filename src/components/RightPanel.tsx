@@ -119,6 +119,9 @@ interface RightPanelProps {
   /** Switch the app to Loupe view — retouching only happens there now that
    *  Smart Object Removal is hidden in the grid. */
   onSwitchToLoupe?: () => void;
+  /** Fires whenever the set of images with slider/preset ("AI Retouched")
+   *  edits changes, so the page can drive the Edit Status filter. */
+  onEditStateChange?: (indices: Set<number>) => void;
 }
 
 const RightPanel = ({
@@ -170,6 +173,7 @@ const RightPanel = ({
   onGoToGrid,
   initialObjectSelection,
   onSwitchToLoupe,
+  onEditStateChange,
 }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
@@ -262,6 +266,15 @@ const RightPanel = ({
     );
     return hasSliders || hasPresets || state.customized.size > 0;
   };
+
+  useEffect(() => {
+    const edited = new Set(
+      Object.entries(perImageState)
+        .filter(([, state]) => hasRetouches(state))
+        .map(([idx]) => Number(idx)),
+    );
+    onEditStateChange?.(edited);
+  }, [perImageState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canPaste =
     pasteSourceIndex !== null && hasRetouches(perImageState[pasteSourceIndex]);

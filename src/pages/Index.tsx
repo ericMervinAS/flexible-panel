@@ -79,6 +79,14 @@ const Index = ({ importSource }: IndexProps) => {
   const [isRemoving, setIsRemoving] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [subjectFilter, setSubjectFilter] = useState<number[]>([]);
+  const [editStatusFilter, setEditStatusFilter] = useState<Set<string>>(
+    new Set(),
+  );
+  // Images with slider/preset ("AI Retouched") edits — reported up from
+  // RightPanel's per-image loupe state, keyed by image index.
+  const [aiRetouchedIndices, setAiRetouchedIndices] = useState<Set<number>>(
+    new Set(),
+  );
   const [highlightedLabels, setHighlightedLabels] = useState<Set<string>>(
     new Set(),
   );
@@ -276,14 +284,63 @@ const Index = ({ importSource }: IndexProps) => {
   };
 
   const filteredImages = useMemo(() => {
-    const mapped = images.map((img, i) => ({ ...img, originalIndex: i }));
-    if (!subjectFilter.length) return mapped;
-    return mapped.filter(({ originalIndex }) => {
-      const clusters = modelImageMap.get(originalIndex);
-      if (!clusters) return false;
-      return subjectFilter.some((id) => clusters.includes(id));
-    });
-  }, [images, subjectFilter, modelImageMap]);
+    let mapped = images.map((img, i) => ({ ...img, originalIndex: i }));
+    if (subjectFilter.length) {
+      mapped = mapped.filter(({ originalIndex }) => {
+        const clusters = modelImageMap.get(originalIndex);
+        if (!clusters) return false;
+        return subjectFilter.some((id) => clusters.includes(id));
+      });
+    }
+    if (editStatusFilter.size) {
+      mapped = mapped.filter(({ originalIndex }) => {
+        const isAiRetouched = aiRetouchedIndices.has(originalIndex);
+        const isDistractionRemoved = originalIndex in inpaintStore.patchedByIndex;
+        const isRetouched = isAiRetouched || isDistractionRemoved;
+        return (
+          (editStatusFilter.has("aiRetouched") && isAiRetouched) ||
+          (editStatusFilter.has("distractionRemoved") && isDistractionRemoved) ||
+          (editStatusFilter.has("nonRetouched") && !isRetouched)
+        );
+      });
+    }
+    return mapped;
+  }, [
+    images,
+    subjectFilter,
+    modelImageMap,
+    editStatusFilter,
+    aiRetouchedIndices,
+    inpaintStore.patchedByIndex,
+  ]);
+
+  // Counts for the Edit Status filter badges — computed against the full
+  // album, independent of any other active filter.
+  const editStatusCounts = useMemo(() => {
+    let aiRetouched = 0;
+    let distractionRemoved = 0;
+    let retouched = 0;
+    for (let i = 0; i < images.length; i++) {
+      const isAi = aiRetouchedIndices.has(i);
+      const isDist = i in inpaintStore.patchedByIndex;
+      if (isAi) aiRetouched++;
+      if (isDist) distractionRemoved++;
+      if (isAi || isDist) retouched++;
+    }
+    return {
+      retouched,
+      aiRetouched,
+      distractionRemoved,
+      nonRetouched: images.length - retouched,
+    };
+  }, [images.length, aiRetouchedIndices, inpaintStore.patchedByIndex]);
+
+  // Union of both retouch mechanisms — drives the filmstrip thumbnail badge.
+  const retouchedIndices = useMemo(() => {
+    const set = new Set(aiRetouchedIndices);
+    Object.keys(inpaintStore.patchedByIndex).forEach((k) => set.add(Number(k)));
+    return set;
+  }, [aiRetouchedIndices, inpaintStore.patchedByIndex]);
 
   const highlightedDetections = useMemo(() => {
     if (!highlightedLabels.size) return [];
@@ -507,6 +564,8 @@ const Index = ({ importSource }: IndexProps) => {
                 modelSubjects={modelSubjects}
                 isModelDetecting={isDetecting || isLoadingModel}
                 detectionProgress={detectionProgress}
+                onEditStatusFilter={setEditStatusFilter}
+                editStatusCounts={editStatusCounts}
               />
             </div>
           </div>
@@ -554,6 +613,7 @@ const Index = ({ importSource }: IndexProps) => {
               pendingInpaintDetections={inpaintBoxes}
               pendingExtraBrushes={pendingExtraBrushes}
               patchedSrc={inpaintStore.patchedByIndex[selectedIndex]}
+              retouchedIndices={retouchedIndices}
               isInpainting={inpaintStore.busyIndex === selectedIndex}
               onInpaint={(idx, dets, brush, brushId, extraBrushes) => {
                 void inpaintStore
@@ -610,9 +670,7 @@ const Index = ({ importSource }: IndexProps) => {
           appliedDetectionKeys={appliedDetectionKeys}
           labelsWithSkips={labelsWithSkips}
           onSelectAllOccurrences={handleSelectAllOccurrences}
-          onResetImage={(label) => {
-            void inpaintStore.resetLabel(selectedIndex, label);
-          }}
+          onResetImage={handleRestoreObject}
           onBatchRemove={(uiLabels, indices) => {
             if (!distractionMap) return Promise.resolve();
             const map = indices
@@ -679,6 +737,7 @@ const Index = ({ importSource }: IndexProps) => {
           onAddRemovedItems={addRemovedItems}
           onResetRemovedItem={resetRemovedItem}
           onSetRemovedItems={replaceRemovedItems}
+          onEditStateChange={setAiRetouchedIndices}
         />
       </div>
       {removeToast && (

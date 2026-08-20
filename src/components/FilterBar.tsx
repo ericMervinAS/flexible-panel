@@ -7,6 +7,7 @@ import star3 from "../assets/stars/Star 3.png";
 import star4 from "../assets/stars/Star 4.png";
 import star5 from "../assets/stars/Star 5.png";
 import PeopleFilterDropdown from "./PeopleFilterDropdown";
+import EditStatusFilterDropdown from "./EditStatusFilterDropdown";
 import type { ModelSubject } from "@/hooks/useFaceDetection";
 
 const COLOR_TAGS = [
@@ -41,9 +42,16 @@ interface FilterBarProps {
   modelSubjects?: ModelSubject[];
   isModelDetecting?: boolean;
   detectionProgress?: number;
+  onEditStatusFilter: (values: Set<string>) => void;
+  editStatusCounts?: {
+    retouched: number;
+    aiRetouched: number;
+    distractionRemoved: number;
+    nonRetouched: number;
+  };
 }
 
-const FilterBar = ({ onPeopleFilter, modelSubjects, isModelDetecting, detectionProgress }: FilterBarProps) => {
+const FilterBar = ({ onPeopleFilter, modelSubjects, isModelDetecting, detectionProgress, onEditStatusFilter, editStatusCounts }: FilterBarProps) => {
   const [selectedFlags, setSelectedFlags] = useState<Set<string>>(new Set());
   const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
   const [selectedStars, setSelectedStars] = useState<Set<number>>(new Set());
@@ -127,6 +135,11 @@ const FilterBar = ({ onPeopleFilter, modelSubjects, isModelDetecting, detectionP
           isModelDetecting={isModelDetecting}
           detectionProgress={detectionProgress}
         />
+
+        <Divider />
+
+        {/* Edit Status */}
+        <EditStatusFilterDropdown onFilterChange={onEditStatusFilter} counts={editStatusCounts} />
       </div>
 
       {/* Right */}

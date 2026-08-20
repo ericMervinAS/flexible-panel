@@ -1,4 +1,5 @@
 import type { RefObject, MutableRefObject } from "react";
+import RetouchIcon from "./icons/RetouchIcon";
 import type { ImageData, ColorTag } from "./ImageGrid";
 
 const pillBg: Record<ColorTag, string> = {
@@ -15,9 +16,12 @@ interface FilmstripBarProps {
   onSelectImage: (index: number, e: React.MouseEvent) => void;
   stripRef: RefObject<HTMLDivElement>;
   tileRefs: MutableRefObject<(HTMLDivElement | null)[]>;
+  /** Image indices with any retouch (AI slider/preset edits or distraction
+   *  removal) — shows a small badge on the thumbnail's top-left corner. */
+  retouchedIndices?: Set<number>;
 }
 
-const FilmstripBar = ({ stripImages, currentIndex, selectedIndices, onSelectImage, stripRef, tileRefs }: FilmstripBarProps) => {
+const FilmstripBar = ({ stripImages, currentIndex, selectedIndices, onSelectImage, stripRef, tileRefs, retouchedIndices }: FilmstripBarProps) => {
   return (
     <div className="bg-[#1c1c1c] shrink-0">
       <div
@@ -44,13 +48,18 @@ const FilmstripBar = ({ stripImages, currentIndex, selectedIndices, onSelectImag
                     : "border border-[#303030] hover:border-[#5e5e5e]"
                 }`}
               >
-                <div className="w-[96px] h-[64px] overflow-hidden rounded-[2px]">
+                <div className="relative w-[96px] h-[64px] overflow-hidden rounded-[2px]">
                   <img
                     src={img.src}
                     alt={img.filename}
                     className="w-full h-full object-contain"
                     loading="lazy"
                   />
+                  {retouchedIndices?.has(img.originalIndex) && (
+                    <div className="absolute top-1 left-1 flex items-center justify-center bg-[#16a34a] rounded-[2px] px-1 py-0.5">
+                      <RetouchIcon size={13} className="text-white shrink-0" />
+                    </div>
+                  )}
                 </div>
               </div>
               <div

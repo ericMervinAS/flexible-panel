@@ -108,6 +108,9 @@ interface LoupeViewProps {
    *  selected label(s) — captured by the parent right before it bumps
    *  inpaintSignal, mirroring pendingInpaintDetections. */
   pendingExtraBrushes?: { id: string; canvas: HTMLCanvasElement; det: DistractionDetection }[];
+  /** Image indices with any retouch (AI slider/preset edits or distraction
+   *  removal) — drives the filmstrip thumbnail badge. */
+  retouchedIndices?: Set<number>;
 }
 
 const LoupeView = ({
@@ -146,6 +149,7 @@ const LoupeView = ({
   disableBrush = false,
   onSkipDetection,
   onSaveEditedDetection,
+  retouchedIndices,
 }: LoupeViewProps) => {
   const stripImages = filteredImages ?? images.map((img, i) => ({ ...img, originalIndex: i }));
 
@@ -2011,6 +2015,7 @@ const LoupeView = ({
         onSelectImage={handleFilmstripClick}
         stripRef={stripRef}
         tileRefs={tileRefs}
+        retouchedIndices={retouchedIndices}
       />
 
       {/* ── Bottom bar ──────────────────────────────────────────────────────── */}
