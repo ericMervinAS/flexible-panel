@@ -51,19 +51,22 @@ interface RightPanelProps {
    *  the removal batch. */
   onSelectAllOccurrences?: (label: string) => void;
   onResetImage?: (label: string) => void;
-  /** Grid-level batch: remove these UI labels across all already-scanned photos.
-   *  Returns a promise that resolves once the batch inpaint actually finishes,
-   *  so callers can wait for it before flagging labels as "removed". */
-  onBatchRemove?: (uiLabels: string[]) => void | Promise<void>;
+  /** Grid-level batch: remove these UI labels across all already-scanned photos
+   *  (or, when `indices` is given, only those specific images). Returns a
+   *  promise that resolves once the batch inpaint actually finishes, so
+   *  callers can wait for it before flagging labels as "removed". */
+  onBatchRemove?: (uiLabels: string[], indices?: number[]) => void | Promise<void>;
   /** Patch tab: scan just the current image. */
   onScanImage?: () => void;
-  /** Patch tab: jump to the grid to scan the whole album. */
-  onScanAlbum?: () => void;
-  /** When true, the loupe patch tab's "Scan this album" opens the album-wide
-   *  object picker inline (Option 2) instead of navigating to the grid. */
-  loupeInlineAlbumScan?: boolean;
   /** Grid: run album-wide detection for the selected UI labels. */
   onScanAlbumRun?: (labels: string[]) => void;
+  /** Scan only these image indices (a filmstrip multi-selection) for the given
+   *  UI labels — used instead of onScanAlbumRun when more than one image is
+   *  selected in the loupe filmstrip. */
+  onScanIndices?: (labels: string[], indices: number[]) => void;
+  /** Filmstrip multi-selection (loupe view) — when it holds more than one
+   *  image, "Scan Entire Album" scopes itself to just these instead. */
+  selectedImageIndices?: Set<number>;
   onRemoveAfterStrokeChange?: (v: boolean) => void;
   onRemovingChange?: (v: boolean) => void;
   visibleSubjectIndices?: Set<number> | null;
@@ -113,6 +116,9 @@ interface RightPanelProps {
   /** UI labels to preselect in the grid's Smart Object Removal on arrival —
    *  set when the user got here via the batch-removal offer's "Scan the album". */
   initialObjectSelection?: string[];
+  /** Switch the app to Loupe view — retouching only happens there now that
+   *  Smart Object Removal is hidden in the grid. */
+  onSwitchToLoupe?: () => void;
 }
 
 const RightPanel = ({
@@ -130,9 +136,9 @@ const RightPanel = ({
   onResetImage,
   onBatchRemove,
   onScanImage,
-  onScanAlbum,
   onScanAlbumRun,
-  loupeInlineAlbumScan = false,
+  onScanIndices,
+  selectedImageIndices,
   onRemoveAfterStrokeChange,
   onRemovingChange,
   visibleSubjectIndices,
@@ -163,6 +169,7 @@ const RightPanel = ({
   onDismissObjectCoachmark,
   onGoToGrid,
   initialObjectSelection,
+  onSwitchToLoupe,
 }: RightPanelProps) => {
   const [activeTab, setActiveTab] = useState<LoupeTab>("subject");
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(false);
@@ -185,12 +192,6 @@ const RightPanel = ({
   const [batchOffer, setBatchOffer] = useState<{ labels: string[] } | null>(
     null,
   );
-
-  // Loupe patch tab: when the user clicks "Scan this album" we no longer hop to
-  // the grid — instead we swap the patch panel for the same album-wide Smart
-  // Object Removal picker + "Find and remove" flow the grid uses, rendered
-  // inline right here. Toggled off by the panel's own back affordance.
-  const [loupeAlbumScanMode, setLoupeAlbumScanMode] = useState(false);
 
   // Dismiss any pending offer when the user navigates to another image.
   useEffect(() => {
@@ -288,6 +289,26 @@ const RightPanel = ({
   const [isAutoRemoveInFlight, setIsAutoRemoveInFlight] = useState(false);
   const wasScanningRef = useRef(false);
 
+  // Results screen for the "Remove Distractions from Album" modal — set once
+  // a triggered pass finishes; cleared on retry or dismissal. lastAlbumLabels
+  // remembers what was scanned for so Retry can run the exact same pass.
+  const [albumRemoveResults, setAlbumRemoveResults] = useState<
+    { label: string; count: number; imageCount: number }[] | null
+  >(null);
+  const lastAlbumLabelsRef = useRef<string[]>([]);
+  // Non-null while the in-flight (or last) find-and-remove pass is scoped to a
+  // filmstrip multi-selection rather than the whole album — read by the
+  // completion effect, the count helpers, and the batch-remove call below so
+  // every part of the pass stays scoped to the same set of images.
+  const lastScanIndicesRef = useRef<number[] | null>(null);
+  /** Number of images the *next* "Scan Entire Album" pass would actually
+   *  touch — the filmstrip selection when it holds more than one image,
+   *  otherwise undefined (whole album). */
+  const scanSelectionCount =
+    selectedImageIndices && selectedImageIndices.size > 1
+      ? selectedImageIndices.size
+      : undefined;
+
   // Whether the album itself has no scan data yet — drives the object panel's
   // switch from checkbox-picker to results.
   const albumPreScan = !hasScannedAlbum && !isDistractionScanning;
@@ -313,11 +334,28 @@ const RightPanel = ({
     const labels = pendingAutoRemove;
     setPendingAutoRemove(null);
 
+    // Images touched — one per image that had at least one instance. Scoped
+    // to lastScanIndicesRef when this pass was a filmstrip multi-selection,
+    // so counts/results only reflect the images actually scanned this time.
+    const scanIndices = lastScanIndicesRef.current;
+    const inScope = (idx: number) => !scanIndices || scanIndices.includes(idx);
     const countForLabel = (label: string) => {
       if (!distractionMap) return 0;
       let count = 0;
-      for (const dets of distractionMap.values()) {
+      for (const [idx, dets] of distractionMap) {
+        if (!inScope(idx)) continue;
         if (dets.some((d) => MODEL_TO_UI[d.label] === label)) count++;
+      }
+      return count;
+    };
+    // Raw instances removed across the scanned scope, for the modal's results
+    // screen (e.g. "120 Thermostats").
+    const instanceCountForLabel = (label: string) => {
+      if (!distractionMap) return 0;
+      let count = 0;
+      for (const [idx, dets] of distractionMap) {
+        if (!inScope(idx)) continue;
+        count += dets.filter((d) => MODEL_TO_UI[d.label] === label).length;
       }
       return count;
     };
@@ -332,7 +370,9 @@ const RightPanel = ({
     // Wait for the batch inpaint to actually finish before flagging labels as
     // removed, so the Loupe dot indicators (keyed off removedItems) don't
     // fall out of sync with the real pixel patch in useInpaintStore.
-    void Promise.resolve(onBatchRemove?.(labels)).then(() => {
+    void Promise.resolve(
+      onBatchRemove?.(labels, scanIndices ?? undefined),
+    ).then(() => {
       onSetRemovedItems?.(newRemoved);
 
       // Preselect the Patch tab so the removal dots are already visible if
@@ -351,18 +391,45 @@ const RightPanel = ({
       ]);
       setResetSignal((s) => s + 1);
       setIsAutoRemoveInFlight(false);
+      setAlbumRemoveResults(
+        labels.map((label) => ({
+          label,
+          count: instanceCountForLabel(label),
+          imageCount: countForLabel(label),
+        })),
+      );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDistractionScanning, pendingAutoRemove, distractionMap]);
 
-  const handleFindAndRemove = () => {
-    const labels = objectStateRef.current.selectedWithCounts.map(
-      (o) => o.label,
-    );
+  // Shared core of "find and remove across the album" — scans for the given
+  // labels, then (via the effect above) inpaints every match once the scan
+  // completes. Used by both the grid's Smart Object Removal picker and the
+  // loupe's "Remove Distractions from Album" modal.
+  const runAlbumFindAndRemove = (labels: string[]) => {
     if (!labels.length) return;
+    lastAlbumLabelsRef.current = labels;
+    setAlbumRemoveResults(null);
     setPendingAutoRemove(labels);
     setIsAutoRemoveInFlight(true);
-    onScanAlbumRun?.(labels);
+    if (selectedImageIndices && selectedImageIndices.size > 1) {
+      const indices = Array.from(selectedImageIndices);
+      lastScanIndicesRef.current = indices;
+      onScanIndices?.(labels, indices);
+    } else {
+      lastScanIndicesRef.current = null;
+      onScanAlbumRun?.(labels);
+    }
+  };
+
+  const handleRetryAlbumRemove = () => {
+    runAlbumFindAndRemove(lastAlbumLabelsRef.current);
+  };
+
+  const handleFindAndRemove = () => {
+    runAlbumFindAndRemove(
+      objectStateRef.current.selectedWithCounts.map((o) => o.label),
+    );
   };
 
   // Cancelling only stops us from acting on the result once the in-flight
@@ -584,141 +651,26 @@ const RightPanel = ({
                 distractionMap={distractionMap}
                 hasScanned={currentImageScanned}
                 scannedLabels={scannedLabels}
+                selectedImageCount={scanSelectionCount}
                 isModelScanning={isDistractionScanning}
                 onRerun={onDistractionRerunCurrent}
                 onScanImage={onScanImage}
-                // Option 2 swaps the Smart Object section for the album-wide
-                // picker inline (below); Option 1 keeps the hop to the grid.
-                onScanAlbum={
-                  loupeInlineAlbumScan
-                    ? () => setLoupeAlbumScanMode(true)
-                    : onScanAlbum
+                // "Scan this album" opens the "Remove Distractions from Album"
+                // modal (LoupePatchPanel-owned); this fires once the user
+                // confirms which categories to find and remove.
+                onScanAlbum={runAlbumFindAndRemove}
+                albumRemoveProgress={
+                  isAutoRemoveInFlight
+                    ? {
+                        percent: findAndRemovePercent,
+                        eta: findAndRemoveEta,
+                      }
+                    : null
                 }
-                albumScanActive={loupeInlineAlbumScan && loupeAlbumScanMode}
-                albumScanContent={
-                  <div className="flex flex-col gap-3">
-                    {isAutoRemoveInFlight && (
-                      <div className="pb-2 flex flex-col gap-2">
-                        <span className="text-[14px] text-[#e2e2e2] leading-4">
-                          Finding and removing detections
-                        </span>
-                        <div className="h-1 w-full rounded-full bg-[#2e2e2e] overflow-hidden">
-                          <div
-                            className="h-full bg-[#2563eb] rounded-full transition-all duration-300"
-                            style={{ width: `${findAndRemovePercent}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[12px] text-[#777] leading-4">
-                            {findAndRemovePercent}% • {findAndRemoveEta}
-                          </span>
-                          <button
-                            onClick={handleCancelFindAndRemove}
-                            className="text-[12px] text-[#777] hover:text-[#e2e2e2] leading-4 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                        <div className="h-px bg-[#303030] mt-1" />
-                      </div>
-                    )}
-                    {/* SmartObjectRemoval carries its own px-5; cancel out the
-                        panel's px-5 so it lines up with the rest of the tab. */}
-                    <div
-                      className={`-mx-5 transition-opacity ${isAutoRemoveInFlight ? "opacity-25 pointer-events-none" : ""}`}
-                    >
-                      <SmartObjectRemoval
-                        isScanning={isDistractionScanning}
-                        preScan={albumPreScan}
-                        disabled={isProcessing}
-                        resetSignal={resetSignal}
-                        removedItems={removedItems}
-                        distractionMap={distractionMap}
-                        scannedLabels={scannedLabels}
-                        onRerun={(labels) => onScanAlbumRun?.(labels)}
-                        onReport={() =>
-                          console.log(
-                            "[DistractionDetection] User reported a missed detection",
-                          )
-                        }
-                        onSuggestSubmit={onSuggestObject}
-                        onResetItem={(label) => onResetRemovedItem?.(label)}
-                        onResetConfirmed={(label, count) =>
-                          setHistory((prev) => [
-                            ...prev,
-                            {
-                              id: prev.length + 1,
-                              photoCount: count,
-                              presets: [],
-                              objectsRemoved: [],
-                              restoredObjects: [{ label, count }],
-                            },
-                          ])
-                        }
-                        onSelectionsChange={(hasSelections) =>
-                          setObjectActive(hasSelections)
-                        }
-                        onStateChange={(s) => {
-                          objectStateRef.current = s;
-                          setSelectedObjectLabels(
-                            s.selectedWithCounts.map((o) => o.label),
-                          );
-                        }}
-                      />
-                    </div>
-                    {/* Find and remove sits right after the picker's "Suggest"
-                        row, with "Scan this image" as an alternative below.
-                        While a scan is in flight the progress header above
-                        already owns the state + Cancel, so hide this whole
-                        action block rather than repeat it disabled. */}
-                    {showFindAndRemove && !isAutoRemoveInFlight && (
-                      <div className="flex flex-col gap-3">
-                        <button
-                          disabled={
-                            isProcessing ||
-                            isAutoRemoveInFlight ||
-                            !objectActive
-                          }
-                          onClick={handleFindAndRemove}
-                          className={`w-full py-2 rounded text-[12px] font-medium transition-colors ${
-                            isAutoRemoveInFlight
-                              ? "bg-[#1d56d1] text-white cursor-not-allowed"
-                              : objectActive
-                                ? "bg-[#2563eb] text-white hover:bg-[#1d56d1]"
-                                : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
-                          }`}
-                        >
-                          {isAutoRemoveInFlight
-                            ? "Finding and removing…"
-                            : "Find and remove"}
-                        </button>
-                        <div className="flex items-center gap-3">
-                          <div className="h-px flex-1 bg-[#303030]" />
-                          <span className="text-[11px] text-[#777] leading-3">
-                            or
-                          </span>
-                          <div className="h-px flex-1 bg-[#303030]" />
-                        </div>
-                        <button
-                          disabled={isAutoRemoveInFlight}
-                          onClick={() => {
-                            setLoupeAlbumScanMode(false);
-                            onScanImage?.();
-                          }}
-                          className={`flex items-center justify-center h-9 px-3 rounded bg-[#303030] transition-colors ${
-                            isAutoRemoveInFlight
-                              ? "opacity-50 cursor-not-allowed"
-                              : "hover:bg-[#3a3a3a]"
-                          }`}
-                        >
-                          <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
-                            Scan this image
-                          </span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                }
+                onCancelAlbumRemove={handleCancelFindAndRemove}
+                albumRemoveResults={albumRemoveResults}
+                onRetryAlbumRemove={handleRetryAlbumRemove}
+                onDismissAlbumRemoveResults={() => setAlbumRemoveResults(null)}
                 onReport={() =>
                   console.log(
                     "[DistractionDetection] User reported a missed detection",
@@ -739,6 +691,7 @@ const RightPanel = ({
         ) : (
           <>
             {/* Subject sync hidden for now. */}
+            {/* Smart Object Removal hidden in Grid view for now.
             <div className="py-5">
               {isAutoRemoveInFlight && (
                 <div className="px-5 pb-4 flex flex-col gap-2">
@@ -811,6 +764,7 @@ const RightPanel = ({
                 />
               </div>
             </div>
+            */}
             {/* <div className="h-px bg-background" /> */}
             {/* <div className="px-5 py-5">
               <div className="w-1/2 flex gap-2">
@@ -851,49 +805,26 @@ const RightPanel = ({
           </>
         )}
 
-        {!isLoupeView &&
-          (() => {
-            if (showFindAndRemove) {
-              return (
-                <div className="p-4">
-                  <button
-                    disabled={
-                      isProcessing || isAutoRemoveInFlight || !objectActive
-                    }
-                    onClick={handleFindAndRemove}
-                    className={`w-full py-2 rounded text-[12px] font-medium transition-colors ${
-                      isAutoRemoveInFlight
-                        ? "bg-[#1d56d1] text-white cursor-not-allowed"
-                        : objectActive
-                          ? "bg-[#2563eb] text-white hover:bg-[#1d56d1]"
-                          : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
-                    }`}
-                  >
-                    {isAutoRemoveInFlight
-                      ? "Finding and removing…"
-                      : "Find and remove"}
-                  </button>
-                </div>
-              );
-            }
-            return (
-              <div className="p-4">
-                <button
-                  disabled={isProcessing || !isActive}
-                  onClick={handleStart}
-                  className={`w-full py-2 rounded text-[12px] font-medium transition-colors ${
-                    isProcessing
-                      ? "bg-[#1d56d1] text-white cursor-not-allowed"
-                      : isActive
-                        ? "bg-[#2563eb] text-white hover:bg-[#1d56d1]"
-                        : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
-                  }`}
-                >
-                  {isProcessing ? "Processing..." : "Start AI Retouching"}
-                </button>
+        {!isLoupeView && (
+          <div className="p-0">
+            <div className="rounded-lg bg-[#1c1c1c] p-4 flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <span className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
+                  Begin Retouching
+                </span>
+                <span className="text-[13px] text-[#777] leading-4">
+                  Retouching is only available in loupe view.
+                </span>
               </div>
-            );
-          })()}
+              <button
+                onClick={onSwitchToLoupe}
+                className="w-full py-2 rounded text-[12px] font-medium bg-[#303030] text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors"
+              >
+                Switch to Loupe View
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       {/* {!isLoupeView && (() => {
         const isFindingAndRemoving = pendingAutoRemove !== null;

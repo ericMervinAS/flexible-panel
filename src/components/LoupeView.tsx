@@ -40,6 +40,10 @@ interface LoupeViewProps {
   currentIndex: number;
   totalImages: number;
   onSelectImage: (index: number) => void;
+  /** Filmstrip multi-selection (always includes currentIndex) — owned by the
+   *  parent so batch scan/remove actions elsewhere can read it. */
+  selectedIndices: Set<number>;
+  onSelectedIndicesChange: (indices: Set<number>) => void;
   onGoToGrid?: () => void;
   isPatchActive?: boolean;
   onHasStrokesChange?: (has: boolean) => void;
@@ -113,6 +117,8 @@ const LoupeView = ({
   currentIndex,
   totalImages,
   onSelectImage,
+  selectedIndices,
+  onSelectedIndicesChange,
   onGoToGrid,
   isPatchActive = false,
   onHasStrokesChange,
@@ -153,6 +159,35 @@ const LoupeView = ({
   );
   const stripRef = useRef<HTMLDivElement>(null);
   const tileRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // ── Filmstrip multi-select ───────────────────────────────────────────────────
+  // Shift/cmd/ctrl-click grow `selectedIndices` (owned by the parent) for batch
+  // use without touching the large preview — only a plain click or arrow-key
+  // nav moves `currentIndex`, and that always collapses the set back down to
+  // just that index. `filmstripAnchor` is purely local shift-range bookkeeping.
+  const [filmstripAnchor, setFilmstripAnchor] = useState<number>(currentIndex);
+
+  const filmstripRangeSet = (a: number, b: number): Set<number> => {
+    const [lo, hi] = a <= b ? [a, b] : [b, a];
+    return new Set(Array.from({ length: hi - lo + 1 }, (_, k) => lo + k));
+  };
+
+  const handleFilmstripClick = (index: number, e: React.MouseEvent) => {
+    if (e.shiftKey) {
+      onSelectedIndicesChange(filmstripRangeSet(filmstripAnchor, index));
+      return;
+    }
+    if (e.metaKey || e.ctrlKey) {
+      const next = new Set(selectedIndices);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      onSelectedIndicesChange(next);
+      setFilmstripAnchor(index);
+      return;
+    }
+    onSelectedIndicesChange(new Set([index]));
+    setFilmstripAnchor(index);
+    onSelectImage(index);
+  };
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -736,8 +771,18 @@ const LoupeView = ({
         });
         return;
       }
-      if (e.key === "ArrowLeft") onSelectImage(Math.max(0, currentIndex - 1));
-      if (e.key === "ArrowRight") onSelectImage(Math.min(totalImages - 1, currentIndex + 1));
+      if (e.key === "ArrowLeft") {
+        const next = Math.max(0, currentIndex - 1);
+        onSelectedIndicesChange(new Set([next]));
+        setFilmstripAnchor(next);
+        onSelectImage(next);
+      }
+      if (e.key === "ArrowRight") {
+        const next = Math.min(totalImages - 1, currentIndex + 1);
+        onSelectedIndicesChange(new Set([next]));
+        setFilmstripAnchor(next);
+        onSelectImage(next);
+      }
 
       if (e.key === "\\") {
         const t = e.target as HTMLElement | null;
@@ -1904,52 +1949,6 @@ const LoupeView = ({
           );
         })()}
 
-        {/* Per-instance Skip/Edit hint — anchored below the hovered pending box */}
-        {isPatchActive && hoveredPendingKey && !showStrokeHint && !editingPendingDet &&
-          imageBounds && containerRef.current && (() => {
-            const det = visibleHighlighted.find((d) => pendingKeyOf(d) === hoveredPendingKey);
-            if (!det) return null;
-            const imgW = imgRef.current?.naturalWidth ?? 1;
-            const imgH = imgRef.current?.naturalHeight ?? 1;
-            const rW = imageBounds.right - imageBounds.left;
-            const rH = imageBounds.bottom - imageBounds.top;
-            const PAD = 14;
-            const boxX = imageBounds.left + (det.x1 / imgW) * rW - PAD;
-            const boxY = imageBounds.top + (det.y1 / imgH) * rH - PAD;
-            const boxW = ((det.x2 - det.x1) / imgW) * rW + PAD * 2;
-            const boxH = ((det.y2 - det.y1) / imgH) * rH + PAD * 2;
-            const cW = containerRef.current.clientWidth;
-            const cH = containerRef.current.clientHeight;
-            const midX = boxX + boxW / 2;
-            const bottomY = boxY + boxH;
-            const cx = (midX - cW / 2) * zoom + cW / 2 + pan.x;
-            const cy = (bottomY - cH / 2) * zoom + cH / 2 + pan.y + 12;
-            const x = Math.max(52, Math.min(cW - 52, cx));
-            const y = Math.min(cH - 40, Math.max(10, cy));
-            return (
-              <div
-                className="absolute flex items-center gap-1 bg-black/70 backdrop-blur-sm rounded-[8px] px-1 py-1 z-10"
-                style={{ left: x, top: y, transform: "translateX(-50%)" }}
-                onMouseDown={(e) => e.stopPropagation()}
-                onMouseEnter={() => showPendingHover(hoveredPendingKey)}
-                onMouseLeave={scheduleHidePendingHover}
-              >
-                <button
-                  onClick={() => handleSkipDetection(det)}
-                  className="text-[12px] text-[#ababab] hover:text-white px-2.5 py-1 rounded-[5px] hover:bg-white/10 transition-colors"
-                >
-                  Skip
-                </button>
-                <button
-                  onClick={() => startEditingPendingDet(det)}
-                  className="text-[12px] text-white font-medium px-2.5 py-1 rounded-[5px] bg-blue-500/80 hover:bg-blue-500 transition-colors"
-                >
-                  Edit
-                </button>
-              </div>
-            );
-          })()}
-
         {/* Canvas removal loader */}
         {(isAutoRemoving || isExternallyRemoving || isInpainting) && (
           <div className="absolute bottom-4 right-4 flex items-center gap-2 bg-black/80 rounded-lg px-3 py-1.5 pointer-events-none">
@@ -2008,7 +2007,8 @@ const LoupeView = ({
       <FilmstripBar
         stripImages={stripImages}
         currentIndex={currentIndex}
-        onSelectImage={onSelectImage}
+        selectedIndices={selectedIndices}
+        onSelectImage={handleFilmstripClick}
         stripRef={stripRef}
         tileRefs={tileRefs}
       />

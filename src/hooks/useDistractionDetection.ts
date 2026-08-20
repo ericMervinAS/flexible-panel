@@ -15,6 +15,9 @@ export interface UseDistractionDetectionResult {
   detectionProgress: number;
   rerun: () => void;
   rerunSingle: (index: number) => void;
+  /** Scan just these indices (e.g. a filmstrip multi-selection) — merges
+   *  results into distractionMap without touching any other image's entry. */
+  rerunMany: (indices: number[]) => void;
 }
 
 export function useDistractionDetection(images: ImageData[], enabled: boolean = true): UseDistractionDetectionResult {
@@ -61,6 +64,41 @@ export function useDistractionDetection(images: ImageData[], enabled: boolean = 
       });
     } catch (e) {
       console.error('[DistractionDetection] Single-image rerun failed:', e);
+    } finally {
+      setIsDetecting(false);
+      setIsLoadingModel(false);
+    }
+  }, [images]);
+
+  const rerunMany = useCallback(async (indices: number[]) => {
+    const svc = serviceRef.current;
+    if (!svc || indices.length === 0) return;
+
+    try {
+      if (!svc.isReady) {
+        setIsLoadingModel(true);
+        await svc.loadModel(undefined, (msg) => setStatusMessage(msg));
+        setIsLoadingModel(false);
+      }
+      setIsDetecting(true);
+      setDetectionProgress(0);
+      console.log(`[DistractionDetection] Rerunning ${indices.length} selected image(s)`);
+      for (let i = 0; i < indices.length; i++) {
+        const idx = indices[i];
+        const img = images[idx];
+        if (!img) continue;
+        const result = await svc.processImages([img.src]);
+        const dets = result.get(0) ?? [];
+        setDistractionMap((prev) => {
+          const next = new Map(prev ?? []);
+          if (dets.length > 0) next.set(idx, dets);
+          else next.delete(idx);
+          return next;
+        });
+        setDetectionProgress(Math.round(((i + 1) / indices.length) * 100));
+      }
+    } catch (e) {
+      console.error('[DistractionDetection] Multi-image rerun failed:', e);
     } finally {
       setIsDetecting(false);
       setIsLoadingModel(false);
@@ -151,5 +189,5 @@ export function useDistractionDetection(images: ImageData[], enabled: boolean = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [images.length, rerunKey, enabled]);
 
-  return { distractionMap, hasScannedAlbum, isDetecting, isLoadingModel, statusMessage, detectionProgress, rerun, rerunSingle };
+  return { distractionMap, hasScannedAlbum, isDetecting, isLoadingModel, statusMessage, detectionProgress, rerun, rerunSingle, rerunMany };
 }

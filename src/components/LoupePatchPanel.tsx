@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   Check,
@@ -9,10 +9,13 @@ import {
   ArrowsCounterClockwiseIcon,
   Plus,
   ArrowsClockwiseIcon,
+  WarningIcon,
 } from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 import SuggestObjectModal from "./SuggestObjectModal";
+import AlbumScanModal, { type AlbumRemoveResult } from "./AlbumScanModal";
 import Tooltip from "./Tooltip";
+import graphic1 from "@/assets/Graphic_1.png";
 
 const MODEL_TO_UI: Record<string, string> = {
   "Exit Sign": "Exit Signs",
@@ -84,18 +87,24 @@ interface LoupePatchPanelProps {
    *  some categories) that finds nothing shouldn't claim the image is clean —
    *  other distraction types may still be unscanned, so keep offering a scan. */
   scannedLabels?: Set<string>;
+  /** Number of images selected in the filmstrip when it's a multi-selection
+   *  (>1) — undefined means "whole album". Swaps "Scan Entire Album" for
+   *  "Scan N Images" and scopes the modal it opens to just those photos. */
+  selectedImageCount?: number;
   isModelScanning?: boolean;
   onRerun?: () => void;
   /** Scan just the current image. */
   onScanImage?: () => void;
-  /** Jump to the grid to scan the whole album. */
-  onScanAlbum?: () => void;
-  /** When true, the Smart Object section is replaced by `albumScanContent`
-   *  (the inline album-wide picker) — the rest of the panel (brush options
-   *  etc.) is left untouched. */
-  albumScanActive?: boolean;
-  /** Inline album-scan UI rendered in place of the Smart Object section. */
-  albumScanContent?: ReactNode;
+  /** Run a find-and-remove pass across the whole album for the given
+   *  UI labels — triggered from the "Remove Distractions from Album" modal. */
+  onScanAlbum?: (labels: string[]) => void;
+  /** Non-null while a scan+remove pass triggered from the album modal is running. */
+  albumRemoveProgress?: { percent: number; eta: string } | null;
+  onCancelAlbumRemove?: () => void;
+  /** Non-null once a triggered pass has finished — shows the modal's results screen. */
+  albumRemoveResults?: AlbumRemoveResult[] | null;
+  onRetryAlbumRemove?: () => void;
+  onDismissAlbumRemoveResults?: () => void;
   onReport?: () => void;
   onSuggestSubmit?: (suggestion: string) => void;
   removedItems?: Set<string>;
@@ -125,12 +134,16 @@ const LoupePatchPanel = ({
   distractionMap,
   hasScanned: hasScannedProp,
   scannedLabels,
+  selectedImageCount,
   isModelScanning = false,
   onRerun,
   onScanImage,
   onScanAlbum,
-  albumScanActive = false,
-  albumScanContent,
+  albumRemoveProgress = null,
+  onCancelAlbumRemove,
+  albumRemoveResults = null,
+  onRetryAlbumRemove,
+  onDismissAlbumRemoveResults,
   onReport,
   onSuggestSubmit,
   removedItems = new Set(),
@@ -151,12 +164,27 @@ const LoupePatchPanel = ({
   } | null>(null);
   const [skipConfirmation, setSkipConfirmation] = useState(false);
   const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [showAlbumScanModal, setShowAlbumScanModal] = useState(false);
   const [hasRescanned, setHasRescanned] = useState(false);
   const [flaskHovered, setFlaskHovered] = useState(false);
+
+  const scanAlbumLabel =
+    selectedImageCount && selectedImageCount > 1
+      ? `Scan ${selectedImageCount} Images`
+      : "Scan Entire Album";
 
   const handleRerun = () => {
     setHasRescanned(true);
     onRerun?.();
+  };
+
+  // Full per-image rescan (clears any album label-filter for this image,
+  // marks it fully scanned) — used when everything currently found is
+  // already resolved but not every category has actually been looked for,
+  // so "Remove Objects" would be meaningless.
+  const handleRescanImage = () => {
+    setHasRescanned(true);
+    onScanImage?.();
   };
 
   const handleSuggestSubmit = (suggestion: string) => {
@@ -222,8 +250,19 @@ const LoupePatchPanel = ({
   // applied, or (album-wide path) removedItems already says so — a partial
   // pass (some instances Skipped) deliberately leaves both unset so the
   // label stays a normal, re-selectable checkbox showing what's left.
-  const isDone = (d: { label: string; isFullyApplied: boolean }) =>
-    removedItems.has(d.label) || d.isFullyApplied;
+  // removedItems is a single flat, album-wide set (not scoped per image), so
+  // its fallback must require rawCount > 0 here — otherwise a label removed
+  // on one image would trivially satisfy outstandingCount === 0 (0 - 0) on
+  // every OTHER image too, including ones where it was never even detected,
+  // and falsely show a "removed" tile for a category never found there.
+  const isDone = (d: {
+    label: string;
+    rawCount: number;
+    isFullyApplied: boolean;
+    outstandingCount: number;
+  }) =>
+    d.isFullyApplied ||
+    (removedItems.has(d.label) && d.rawCount > 0 && d.outstandingCount === 0);
 
   // Found-and-active first, removed next, not-found (zero instances) last —
   // same ordering as SmartObjectRemoval.
@@ -255,6 +294,19 @@ const LoupePatchPanel = ({
     allLabelsScanned &&
     detected.length > 0 &&
     detected.every((d) => d.rawCount === 0);
+
+  // Nothing currently selectable on this image (everything found so far is
+  // already resolved), but not every category has actually been scanned —
+  // "Remove Objects" would be meaningless here, so offer a rescan instead.
+  const activeItemCount = detected.filter(
+    (d) => !isDone(d) && d.rawCount > 0,
+  ).length;
+  const showRescanCTA =
+    !preScan &&
+    !isModelScanning &&
+    !noneFound &&
+    activeItemCount === 0 &&
+    !allLabelsScanned;
 
   // Notify parent when removal state changes so canvas loader can be shown
   useEffect(() => {
@@ -408,213 +460,217 @@ const LoupePatchPanel = ({
       style={{ scrollbarWidth: "none" }}
     >
       {/* ── Smart Object ──────────────────────────────────────────────────── */}
-      {albumScanActive ? (
-        albumScanContent
-      ) : (
-        <div className="flex flex-col gap-2">
-          {/* Title row */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
-                Smart Object Removal
-              </span>
-              {/* <span className="px-1 py-0.5 text-[11px] font-medium leading-3 rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
+      <div className="flex flex-col gap-2">
+        {/* Title row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
+              Distraction Removal
+            </span>
+            {/* <span className="px-1 py-0.5 text-[11px] font-medium leading-3 rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
               Beta
             </span> */}
-              <span
-                className="relative inline-flex"
-                onMouseEnter={() => setFlaskHovered(true)}
-                onMouseLeave={() => setFlaskHovered(false)}
-              >
-                <Tooltip label="Beta" visible={flaskHovered} />
-                <FlaskIcon className="w-4 h-4" weight="fill" color="#EAB308" />
-              </span>
-            </div>
-
-            {/* Scan icon */}
-            {!preScan && (
-              <button
-                onClick={handleRerun}
-                disabled={isModelScanning || isRemoving}
-                title="Rerun object scan"
-                className={`flex items-center justify-center w-6 h-6 rounded transition-opacity ${
-                  isRemoving
-                    ? "opacity-30 cursor-not-allowed"
-                    : isModelScanning
-                      ? "opacity-60 cursor-not-allowed"
-                      : "opacity-70 hover:opacity-100 cursor-pointer"
-                }`}
-              >
-                {isModelScanning ? (
-                  <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
-                ) : (
-                  <ArrowsClockwiseIcon className="w-5 h-5 text-[#555]" />
-                )}
-              </button>
-            )}
+            <span
+              className="relative inline-flex"
+              onMouseEnter={() => setFlaskHovered(true)}
+              onMouseLeave={() => setFlaskHovered(false)}
+            >
+              <Tooltip label="Beta" visible={flaskHovered} />
+              <FlaskIcon className="w-4 h-4" weight="fill" color="#EAB308" />
+            </span>
           </div>
 
-          {preScan && (
-            <p className="text-[12px] text-[#ababab] leading-4">
-              Scan for distracting objects to remove.
-            </p>
-          )}
+          {/* Scan icon — always mounted (even pre-scan, as an invisible
+              placeholder) so the title row's height stays constant and the
+              heading doesn't shift when the panel switches states. */}
+          <button
+            onClick={handleRerun}
+            disabled={preScan || isModelScanning || isRemoving}
+            title="Rerun object scan"
+            className={`flex items-center justify-center w-6 h-6 rounded transition-opacity ${
+              preScan
+                ? "opacity-0 pointer-events-none"
+                : isRemoving
+                  ? "opacity-30 cursor-not-allowed"
+                  : isModelScanning
+                    ? "opacity-60 cursor-not-allowed"
+                    : "opacity-70 hover:opacity-100 cursor-pointer"
+            }`}
+          >
+            {isModelScanning ? (
+              <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
+            ) : (
+              // <ArrowsClockwiseIcon className="w-5 h-5 text-[#555]" />
+              <></>
+            )}
+          </button>
+        </div>
 
-          {/* Pre-scan entry points */}
-          {preScan && (
-            <div className="flex flex-col gap-2 mt-1">
-              <button
-                onClick={onScanImage}
-                // className="flex-1 flex items-center justify-center h-9 px-3 rounded bg-[#2563eb] hover:bg-[#1d56d1] transition-colors"
-                className="flex items-center justify-center h-9 px-3 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
-              >
-                <span className="text-[12px] font-medium text-white leading-4">
-                  Scan this image
-                </span>
-              </button>
-              <button
-                onClick={onScanAlbum}
-                className="flex items-center justify-center h-9 px-3 rounded border border-[#303030] hover:border-[#3a3a3a] transition-colors"
-              >
-                <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
-                  Scan this album
-                </span>
-              </button>
-            </div>
-          )}
+        {preScan && (
+          <img src={graphic1} className="w-full h-100 object-cover" />
+        )}
 
-          {/* Empty state */}
-          {!isModelScanning && hasScanned && noneFound && (
-            <div className="flex flex-col items-center gap-3 mt-1">
-              <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424] w-full">
-                <ArrowsClockwiseIcon className="w-8 h-8 text-[#e2e2e2]" />
-                <div className="flex flex-col gap-1 text-center w-full">
-                  <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
-                    No distractions detected
-                  </p>
-                  <p className="text-[13px] font-normal text-[#ababab] leading-4">
-                    Think we missed something?
-                  </p>
-                </div>
-                <div className="flex items-center justify-center gap-2 w-full">
+        {preScan && (
+          <p className="text-[12px] text-[#ababab] leading-4">
+            Scan for distracting objects to remove.
+          </p>
+        )}
+
+        {/* Pre-scan entry points */}
+        {preScan && (
+          <div className="flex flex-col gap-2 mt-1">
+            <button
+              onClick={onScanImage}
+              className="flex items-center justify-center h-9 px-3 rounded bg-[#2563eb] hover:bg-[#1d56d1] transition-colors"
+              // className="flex items-center justify-center h-9 px-3 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
+            >
+              <span className="text-[12px] font-medium text-white leading-4">
+                Scan this image
+              </span>
+            </button>
+            <button
+              onClick={() => setShowAlbumScanModal(true)}
+              className="flex items-center justify-center h-9 px-3 rounded border border-[#303030] hover:border-[#3a3a3a] transition-colors"
+            >
+              <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+                {scanAlbumLabel}
+              </span>
+            </button>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!isModelScanning && hasScanned && noneFound && (
+          <div className="flex flex-col items-center gap-3 mt-1">
+            <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424] w-full">
+              <WarningIcon className="w-8 h-8 text-[#e2e2e2]" />
+              <div className="flex flex-col gap-1 text-center w-full">
+                <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
+                  No distractions detected
+                </p>
+                <p className="text-[13px] font-normal text-[#ababab] leading-4">
+                  Think we missed something?
+                </p>
+              </div>
+              {/* <div className="flex items-center justify-center gap-2 w-full">
+                <button
+                  onClick={handleRerun}
+                  className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
+                >
+                  <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+                    Rescan Image
+                  </span>
+                </button>
+                {hasRescanned && (
                   <button
-                    onClick={handleRerun}
-                    className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
+                    onClick={onReport}
+                    className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded hover:bg-white/5 transition-colors"
                   >
-                    <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
-                      Rescan Image
+                    <span className="text-[12px] font-medium text-[#ababab] leading-4">
+                      Report Issue
                     </span>
                   </button>
-                  {hasRescanned && (
-                    <button
-                      onClick={onReport}
-                      className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded hover:bg-white/5 transition-colors"
-                    >
-                      <span className="text-[12px] font-medium text-[#ababab] leading-4">
-                        Report Issue
-                      </span>
-                    </button>
-                  )}
-                </div>
-              </div>
+                )}
+              </div> */}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Detected items grid */}
-          {!preScan && !noneFound && detected.length > 0 && (
-            <div
-              className={`grid grid-cols-2 gap-1.5 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}
-            >
-              {orderedItems.map((d) => {
-                const isItemRemoved = isDone(d);
-                const isSelected = selected.has(d.label);
-                const isIndeterminate = isLabelIndeterminate(d);
+        {/* Detected items grid */}
+        {!preScan && !noneFound && detected.length > 0 && (
+          <div
+            className={`grid grid-cols-2 mt-2 gap-4 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}
+          >
+            {orderedItems.map((d) => {
+              const isItemRemoved = isDone(d);
+              const isSelected = selected.has(d.label);
+              const isIndeterminate = isLabelIndeterminate(d);
 
-                if (isItemRemoved) {
-                  return (
-                    <button
-                      key={d.label}
-                      onClick={() => handleResetClick(d.label, d.rawCount)}
-                      className="flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] transition-colors text-left cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-1 min-w-0">
-                        <span className="text-[11px] text-[#555] leading-4 truncate">
-                          {d.label}
-                        </span>
-                        <span className="text-[10px] font-medium text-[#474747] leading-3 shrink-0">
-                          {d.rawCount}
-                        </span>
+              if (isItemRemoved) {
+                return (
+                  <button
+                    key={d.label}
+                    onClick={() => handleResetClick(d.label, d.rawCount)}
+                    className="flex items-center justify-between gap-2 h-4 rounded-[6px] transition-colors text-left cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center bg-[#2563eb] opacity-50">
+                        <Check className="w-2 h-2 text-white stroke-[3]" />
                       </div>
-                      <div className="shrink-0 relative w-3 h-3">
-                        <Check className="absolute top-0 left-0 w-3 h-3 text-[#16a34a] transition-opacity group-hover:opacity-0" />
-                        <ArrowCounterClockwiseIcon className="absolute top-0 left-0 w-3 h-3 text-[#555] opacity-0 transition-opacity group-hover:opacity-100" />
-                      </div>
-                    </button>
-                  );
-                }
-
-                if (d.rawCount === 0) {
-                  return (
-                    <button
-                      key={d.label}
-                      disabled
-                      className="flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] opacity-40 cursor-not-allowed text-left"
-                    >
                       <div className="flex items-center gap-1 min-w-0">
                         <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
                           {d.label}
                         </span>
                         <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
-                          0
+                          {d.rawCount}
                         </span>
                       </div>
-                      <div className="shrink-0 w-3 h-3 rounded-[2px] border border-[#474747] bg-transparent" />
-                    </button>
-                  );
-                }
+                    </div>
+                    <ArrowCounterClockwiseIcon className="shrink-0 w-3 h-3 text-[#777] transition-colors group-hover:text-[#e2e2e2]" />
+                  </button>
+                );
+              }
 
+              if (d.rawCount === 0) {
                 return (
                   <button
                     key={d.label}
-                    onClick={() => toggle(d.label)}
-                    onMouseEnter={() =>
-                      !itemsDisabled && onHoveredLabelChange?.(d.label)
-                    }
-                    onMouseLeave={() =>
-                      !itemsDisabled && onHoveredLabelChange?.(null)
-                    }
-                    className={`flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left ${
-                      itemsDisabled
-                        ? "cursor-not-allowed"
-                        : "hover:bg-[#2a2a2a] cursor-pointer"
-                    }`}
+                    disabled
+                    className="flex items-center gap-2 h-4 rounded-[6px] opacity-40 cursor-not-allowed text-left"
                   >
+                    <div className="shrink-0 w-3 h-3 rounded-[2px] border border-[#474747] bg-transparent" />
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
                         {d.label}
                       </span>
                       <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
-                        {d.outstandingCount}
+                        0
                       </span>
-                    </div>
-                    <div
-                      className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
-                        isSelected
-                          ? "bg-[#2563eb]"
-                          : "border border-[#474747] bg-transparent"
-                      }`}
-                    >
-                      {isSelected &&
-                        (isIndeterminate ? (
-                          <div className="w-1.5 h-[1.5px] rounded-full bg-white" />
-                        ) : (
-                          <Check className="w-2 h-2 text-white stroke-[3]" />
-                        ))}
                     </div>
                   </button>
                 );
-              })}
-              {detected.length > 0 && (
+              }
+
+              return (
+                <button
+                  key={d.label}
+                  onClick={() => toggle(d.label)}
+                  onMouseEnter={() =>
+                    !itemsDisabled && onHoveredLabelChange?.(d.label)
+                  }
+                  onMouseLeave={() =>
+                    !itemsDisabled && onHoveredLabelChange?.(null)
+                  }
+                  className={`flex items-center gap-2 h-4 rounded-[6px] transition-colors text-left ${
+                    itemsDisabled ? "cursor-not-allowed" : "cursor-pointer"
+                  }`}
+                >
+                  <div
+                    className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
+                      isSelected
+                        ? "bg-[#2563eb]"
+                        : "border border-[#474747] bg-transparent"
+                    }`}
+                  >
+                    {isSelected &&
+                      (isIndeterminate ? (
+                        <div className="w-1.5 h-[1.5px] rounded-full bg-white" />
+                      ) : (
+                        <Check className="w-2 h-2 text-white stroke-[3]" />
+                      ))}
+                  </div>
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
+                      {d.label}
+                    </span>
+                    <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
+                      {d.outstandingCount}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+            {/* {detected.length > 0 && (
                 <button
                   onClick={() => setShowSuggestModal(true)}
                   className="group relative col-span-2 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
@@ -629,11 +685,11 @@ const LoupePatchPanel = ({
                     Suggest objects
                   </span>
                 </button>
-              )}
-            </div>
-          )}
+              )} */}
+          </div>
+        )}
 
-          {/* {detected.length > 0 && (
+        {/* {detected.length > 0 && (
           <button
             onClick={() => setShowSuggestModal(true)}
             className="group relative mt-1 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
@@ -645,8 +701,8 @@ const LoupePatchPanel = ({
           </button>
         )} */}
 
-          {/* Remove CTA — matches Grid View processing style */}
-          {/* <button
+        {/* Remove CTA — matches Grid View processing style */}
+        {/* <button
           disabled={!canRemove}
           onClick={handleRemove}
           className={`flex items-center justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium transition-colors ${isRemoving
@@ -658,10 +714,18 @@ const LoupePatchPanel = ({
         >
           <span>{isRemoving ? "Removing…" : removeLabel}</span>
         </button> */}
-        </div>
+      </div>
+
+      {!preScan && showRescanCTA && (
+        <button
+          onClick={handleRescanImage}
+          className="flex items-center mt-[-8px] justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium bg-[#2563eb] text-white hover:bg-[#1d56d1] transition-colors cursor-pointer"
+        >
+          <span>Rescan Image</span>
+        </button>
       )}
 
-      {!albumScanActive && !preScan && (
+      {!preScan && !showRescanCTA && (
         <button
           disabled={!canRemove}
           onClick={handleRemove}
@@ -677,14 +741,26 @@ const LoupePatchPanel = ({
         </button>
       )}
 
-      <div className="h-[1px] w-full bg-[#e2e2e20d]"></div>
+      {/* Post-scan: still offer to scan the rest of the album */}
+      {!preScan && !isModelScanning && (
+        <button
+          onClick={() => setShowAlbumScanModal(true)}
+          className="flex items-center justify-center h-9 px-3 mt-[-12px] rounded border border-[#303030] hover:border-[#3a3a3a] transition-colors"
+        >
+          <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+            {scanAlbumLabel}
+          </span>
+        </button>
+      )}
+
+      {/* <div className="h-[1px] w-full bg-[#e2e2e20d]"></div> */}
 
       {/* ── Brush Options ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3">
-        {/* <span className="text-[11px] font-semibold tracking-[0.5px] uppercase text-[#ababab] leading-3">
+      {/* <div className="flex flex-col gap-3"> */}
+      {/* <span className="text-[11px] font-semibold tracking-[0.5px] uppercase text-[#ababab] leading-3">
           Brush Options
         </span> */}
-
+      {/* 
         <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
           Brush Options
         </span>
@@ -693,11 +769,11 @@ const LoupePatchPanel = ({
           <div className="flex flex-col gap-0.5">
             <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
               Remove after each stroke
-            </span>
-            {/* <span className="text-[11px] text-[#ababab] leading-4">
+            </span> */}
+      {/* <span className="text-[11px] text-[#ababab] leading-4">
               Review each removal
             </span> */}
-          </div>
+      {/* </div>
           <Toggle
             checked={removeAfterStroke}
             onChange={(v) => {
@@ -707,7 +783,7 @@ const LoupePatchPanel = ({
             }}
           />
         </div>
-      </div>
+      </div> */}
 
       {/* ── Restore confirmation modal (same as SmartObjectRemoval) ───────── */}
       {pendingReset &&
@@ -778,6 +854,25 @@ const LoupePatchPanel = ({
         <SuggestObjectModal
           onClose={() => setShowSuggestModal(false)}
           onSubmit={handleSuggestSubmit}
+        />
+      )}
+
+      {(showAlbumScanModal || albumRemoveProgress || albumRemoveResults) && (
+        <AlbumScanModal
+          onClose={() => setShowAlbumScanModal(false)}
+          onFindAndRemove={(labels) => onScanAlbum?.(labels)}
+          imageCount={selectedImageCount}
+          progress={albumRemoveProgress}
+          onCancelProgress={() => {
+            onCancelAlbumRemove?.();
+            setShowAlbumScanModal(false);
+          }}
+          result={albumRemoveResults}
+          onRetry={onRetryAlbumRemove}
+          onDone={() => {
+            onDismissAlbumRemoveResults?.();
+            setShowAlbumScanModal(false);
+          }}
         />
       )}
     </div>

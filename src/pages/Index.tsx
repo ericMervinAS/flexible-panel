@@ -23,6 +23,13 @@ const Index = ({ importSource }: IndexProps) => {
   const [isScanning, setIsScanning] = useState(true);
   const [view, setView] = useState<"grid" | "loupe">("loupe");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  // Filmstrip multi-select (Loupe view) — always includes selectedIndex, since
+  // the large preview is always the most recently clicked/navigated tile.
+  // Batch scan/remove operations below scope themselves to this set whenever
+  // it holds more than one image.
+  const [filmstripSelection, setFilmstripSelection] = useState<Set<number>>(
+    () => new Set([0]),
+  );
   // Read inside async inpaint callbacks (below) to check whether the user is
   // still on the photo an in-flight edit was started against.
   const selectedIndexRef = useRef(selectedIndex);
@@ -36,8 +43,15 @@ const Index = ({ importSource }: IndexProps) => {
   // Distraction detection is opt-in — the model only runs once the user triggers
   // a scan ("Scan this image" / "Scan this album").
   const [distractionEnabled, setDistractionEnabled] = useState(false);
-  // UI labels the user chose to scan the album for; empty = no album filter.
-  const [scanLabelFilter, setScanLabelFilter] = useState<string[]>([]);
+  // Per-image record of which UI labels a scan has actually looked for on
+  // that image — keyed by image index so an album scan restricted to one
+  // object (e.g. "Exit Signs") never leaks other, still-hidden categories
+  // into images it didn't touch. `null` means "fully scanned, no
+  // restriction" (a single-image "Scan this image"/rescan pass); a missing
+  // key means "never scanned"; a string[] restricts display to those labels.
+  const [scanLabelFilter, setScanLabelFilter] = useState<
+    Record<number, string[] | null>
+  >({});
   // Which image indices have actually been scanned — a single "Scan this image"
   // only covers one index, so this can't be derived from distractionMap alone.
   const [scannedIndices, setScannedIndices] = useState<Set<number>>(new Set());
@@ -176,56 +190,89 @@ const Index = ({ importSource }: IndexProps) => {
     detectionProgress: distractionScanProgress,
     rerun: rerunDistractionDetection,
     rerunSingle: rerunDistractionDetectionForImage,
+    rerunMany: rerunDistractionDetectionForIndices,
   } = useDistractionDetection(images, distractionEnabled);
 
   // When the user picks specific objects to scan the album for, restrict the
-  // detections surfaced everywhere to just those UI labels.
+  // detections surfaced for each image to just the labels *that image's* scan
+  // actually covered — an album scan for "Exit Signs" only should never reveal
+  // other, still-unscanned categories, and only on the images it touched.
   const distractionMap = useMemo(() => {
-    if (!rawDistractionMap || !scanLabelFilter.length) return rawDistractionMap;
-    const allowed = new Set(scanLabelFilter);
+    if (!rawDistractionMap) return rawDistractionMap;
     const next = new Map<number, DistractionDetection[]>();
     for (const [i, dets] of rawDistractionMap) {
+      const filter = scanLabelFilter[i];
+      if (!filter || filter.length === 0) {
+        next.set(i, dets);
+        continue;
+      }
+      const allowed = new Set(filter);
       const filtered = dets.filter((d) => allowed.has(MODEL_TO_UI[d.label]));
       if (filtered.length) next.set(i, filtered);
     }
     return next;
   }, [rawDistractionMap, scanLabelFilter]);
 
-  // Which UI object categories a scan has actually covered. An album scan only
-  // looks for the labels the user picked (scanLabelFilter), so anything not in
-  // here reads as "not searched yet" rather than "searched, found none". A
-  // cleared filter after a scan means a full "Scan this image" pass (every
-  // category), so treat empty-but-scanned as all labels.
+  // Which UI object categories a scan has actually covered for the *current*
+  // image. `null`/missing means unrestricted (a full per-image scan, or never
+  // scanned at all — scannedIndices tells those apart), a string[] means only
+  // those labels were looked for on this specific image.
   const scannedLabels = useMemo(() => {
-    if (scanLabelFilter.length) return new Set(scanLabelFilter);
-    return scannedIndices.size
-      ? new Set(Object.values(MODEL_TO_UI))
-      : new Set<string>();
-  }, [scanLabelFilter, scannedIndices]);
+    if (!scannedIndices.has(selectedIndex)) return new Set<string>();
+    const filter = scanLabelFilter[selectedIndex];
+    if (!filter || filter.length === 0) return new Set(Object.values(MODEL_TO_UI));
+    return new Set(filter);
+  }, [scanLabelFilter, scannedIndices, selectedIndex]);
 
-  // "Scan this image" — run detection on just the current photo (no album filter).
+  // "Scan this image" — run detection on just the current photo, fully open
+  // (no label restriction) for this image only; other images' filters are untouched.
   const handleScanImage = () => {
-    setScanLabelFilter([]);
+    setScanLabelFilter((prev) => ({ ...prev, [selectedIndex]: null }));
     setScannedIndices((prev) => new Set(prev).add(selectedIndex));
     void rerunDistractionDetectionForImage(selectedIndex);
   };
 
-  // "Scan this album" — hop to the grid where the user picks which objects to
-  // detect across every photo, with a coachmark pointing at where to do that.
-  const handleScanAlbum = () => {
-    setView("grid");
-    setShowObjectCoachmark(false);
-  };
-
   // Triggered from the grid once the user has selected which objects to scan
-  // for — accumulates onto any labels already scanned in a prior round, so
-  // picking a new object after the first scan layers it in rather than
-  // replacing what was already found.
+  // for — accumulates onto any labels already scanned in a prior round for
+  // each image, so picking a new object after the first scan layers it in
+  // rather than replacing what was already found. An image already fully
+  // opened by a single-image scan stays that way — an album-wide pick for one
+  // label shouldn't re-restrict what that image already reveals.
   const handleRunAlbumScan = (labels: string[]) => {
-    setScanLabelFilter((prev) => Array.from(new Set([...prev, ...labels])));
+    setScanLabelFilter((prev) => {
+      const next = { ...prev };
+      images.forEach((_, i) => {
+        const existing = next[i];
+        if (existing === null) return; // already fully open — leave it that way
+        next[i] = Array.from(new Set([...(existing ?? []), ...labels]));
+      });
+      return next;
+    });
     setDistractionEnabled(true);
     setScannedIndices(new Set(images.map((_, i) => i)));
     rerunDistractionDetection();
+  };
+
+  // Same as handleRunAlbumScan, but scoped to a filmstrip multi-selection
+  // instead of every image — only those indices' scan-label-filter and
+  // scanned-status get touched, and only they get rescanned.
+  const handleRunSelectionScan = (labels: string[], indices: number[]) => {
+    setScanLabelFilter((prev) => {
+      const next = { ...prev };
+      indices.forEach((i) => {
+        const existing = next[i];
+        if (existing === null) return; // already fully open — leave it that way
+        next[i] = Array.from(new Set([...(existing ?? []), ...labels]));
+      });
+      return next;
+    });
+    setDistractionEnabled(true);
+    setScannedIndices((prev) => {
+      const next = new Set(prev);
+      indices.forEach((i) => next.add(i));
+      return next;
+    });
+    rerunDistractionDetectionForIndices(indices);
   };
 
   const filteredImages = useMemo(() => {
@@ -415,6 +462,7 @@ const Index = ({ importSource }: IndexProps) => {
   const handleOpenLoupe = (index: number) => {
     if (!images[index]) return;
     setSelectedIndex(index);
+    setFilmstripSelection(new Set([index]));
     setView("loupe");
   };
 
@@ -496,6 +544,8 @@ const Index = ({ importSource }: IndexProps) => {
               currentIndex={selectedIndex}
               totalImages={images.length}
               onSelectImage={setSelectedIndex}
+              selectedIndices={filmstripSelection}
+              onSelectedIndicesChange={setFilmstripSelection}
               onGoToGrid={() => setView("grid")}
               isPatchActive={loupeActiveTab === "patch"}
               onHasStrokesChange={setCanvasHasStrokes}
@@ -550,6 +600,7 @@ const Index = ({ importSource }: IndexProps) => {
             setGridPreselectLabels(labels);
             setView("grid");
           }}
+          onSwitchToLoupe={() => setView("loupe")}
           initialObjectSelection={gridPreselectLabels}
           onTabChange={setLoupeActiveTab}
           canvasHasStrokes={canvasHasStrokes}
@@ -562,11 +613,37 @@ const Index = ({ importSource }: IndexProps) => {
           onResetImage={(label) => {
             void inpaintStore.resetLabel(selectedIndex, label);
           }}
-          onBatchRemove={(uiLabels) =>
-            distractionMap
-              ? inpaintStore.inpaintBatch(uiLabels, distractionMap)
-              : Promise.resolve()
-          }
+          onBatchRemove={(uiLabels, indices) => {
+            if (!distractionMap) return Promise.resolve();
+            const map = indices
+              ? new Map(
+                  indices
+                    .filter((i) => distractionMap.has(i))
+                    .map((i) => [i, distractionMap.get(i)!]),
+                )
+              : distractionMap;
+            return inpaintStore.inpaintBatch(uiLabels, map).then(() => {
+              // Record every instance of these labels, on every image the
+              // batch touched, as actually applied — otherwise the per-image
+              // patch panel keeps showing them as outstanding/unchecked even
+              // though they were genuinely inpainted (only removedItems was
+              // ever set for the album-wide path before this).
+              const labelSet = new Set(uiLabels);
+              setAppliedDetections((prev) => {
+                const next = { ...prev };
+                for (const [idx, dets] of map) {
+                  const toApply = dets.filter((d) =>
+                    labelSet.has(MODEL_TO_UI[d.label] ?? d.label),
+                  );
+                  if (!toApply.length) continue;
+                  const set = new Set(next[idx] ?? []);
+                  toApply.forEach((det) => set.add(detKey(det)));
+                  next[idx] = set;
+                }
+                return next;
+              });
+            });
+          }}
           onRemoveAfterStrokeChange={setAutoRemoveAfterStroke}
           onRemovingChange={setIsRemoving}
           visibleSubjectIndices={visibleSubjectIndices}
@@ -585,11 +662,9 @@ const Index = ({ importSource }: IndexProps) => {
           }
           distractionScanProgress={distractionScanProgress}
           onScanImage={handleScanImage}
-          onScanAlbum={handleScanAlbum}
           onScanAlbumRun={handleRunAlbumScan}
-          // Option 2 (sample-v2): "Scan this album" surfaces the album picker
-          // inline in the loupe patch tab instead of hopping to the grid.
-          loupeInlineAlbumScan={importSource === "sample-v2"}
+          onScanIndices={handleRunSelectionScan}
+          selectedImageIndices={filmstripSelection}
           scannedLabels={scannedLabels}
           showObjectCoachmark={showObjectCoachmark}
           onDismissObjectCoachmark={() => setShowObjectCoachmark(false)}
