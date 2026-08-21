@@ -518,7 +518,7 @@ const LoupePatchPanel = ({
               // className="flex items-center justify-center h-9 px-3 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
             >
               <span className="text-[12px] font-medium text-white leading-4">
-                Remove from This Image
+                Remove from this Image
               </span>
             </button>
             <button

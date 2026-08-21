@@ -17,11 +17,17 @@ interface EditStatusFilterDropdownProps {
 const Checkbox = ({ state }: { state: CheckState }) => (
   <div
     className={`w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors ${
-      state !== "unchecked" ? "bg-[#2563eb] border-[#2563eb]" : "border-[#5e5e5e]"
+      state !== "unchecked"
+        ? "bg-[#2563eb] border-[#2563eb]"
+        : "border-[#5e5e5e]"
     }`}
   >
-    {state === "checked" && <Check weight="bold" className="w-3 h-3 text-white" />}
-    {state === "indeterminate" && <Minus weight="bold" className="w-3 h-3 text-white" />}
+    {state === "checked" && (
+      <Check weight="bold" className="w-3 h-3 text-white" />
+    )}
+    {state === "indeterminate" && (
+      <Minus weight="bold" className="w-3 h-3 text-white" />
+    )}
   </div>
 );
 
@@ -41,7 +47,10 @@ const EditStatusFilterDropdown = ({
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (!buttonRef.current?.contains(target) && !dropdownRef.current?.contains(target)) {
+      if (
+        !buttonRef.current?.contains(target) &&
+        !dropdownRef.current?.contains(target)
+      ) {
         setOpen(false);
       }
     };
@@ -84,7 +93,9 @@ const EditStatusFilterDropdown = ({
     // Exactly one child is checked — if the other bucket is empty, the
     // checked child already covers every retouched image, so the parent
     // reads as fully checked rather than partial.
-    const otherCount = hasAi ? counts?.distractionRemoved ?? 0 : counts?.aiRetouched ?? 0;
+    const otherCount = hasAi
+      ? (counts?.distractionRemoved ?? 0)
+      : (counts?.aiRetouched ?? 0);
     return otherCount === 0 ? "checked" : "indeterminate";
   })();
 
@@ -147,55 +158,58 @@ const EditStatusFilterDropdown = ({
             {activeCount}
           </span>
         )}
-        <CaretDown className={`w-3 h-3 shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+        <CaretDown
+          className={`w-3 h-3 shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
-      {open && createPortal(
-        <div
-          ref={dropdownRef}
-          className="fixed z-[9999] flex flex-col gap-1 bg-[#242424] border border-[#474747] rounded-lg px-2 py-2"
-          style={{ top: pos.top, left: pos.left, width: 240 }}
-        >
-          <Row
-            label="Edited"
-            state={placeholder.has("edited") ? "checked" : "unchecked"}
-            onClick={() => togglePlaceholder("edited")}
-          />
-          <Row
-            label="Non Edited"
-            state={placeholder.has("nonEdited") ? "checked" : "unchecked"}
-            onClick={() => togglePlaceholder("nonEdited")}
-          />
-          <div className="h-px bg-[#333] my-1" />
-          <Row
-            label="Retouched"
-            state={retouchedState}
-            onClick={toggleRetouched}
-            count={counts?.retouched}
-          />
-          <Row
-            label="AI Retouched"
-            state={hasAi ? "checked" : "unchecked"}
-            onClick={() => toggle("aiRetouched")}
-            indent
-            count={counts?.aiRetouched}
-          />
-          <Row
-            label="Distraction Removed"
-            state={hasDist ? "checked" : "unchecked"}
-            onClick={() => toggle("distractionRemoved")}
-            indent
-            count={counts?.distractionRemoved}
-          />
-          <Row
-            label="Non Retouched"
-            state={selected.has("nonRetouched") ? "checked" : "unchecked"}
-            onClick={() => toggle("nonRetouched")}
-            count={counts?.nonRetouched}
-          />
-        </div>,
-        document.body
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="fixed z-[9999] flex flex-col gap-1 bg-[#242424] border border-[#474747] rounded-lg px-2 py-2"
+            style={{ top: pos.top, left: pos.left, width: 240 }}
+          >
+            <Row
+              label="Edited"
+              state={placeholder.has("edited") ? "checked" : "unchecked"}
+              onClick={() => togglePlaceholder("edited")}
+            />
+            <Row
+              label="Non Edited"
+              state={placeholder.has("nonEdited") ? "checked" : "unchecked"}
+              onClick={() => togglePlaceholder("nonEdited")}
+            />
+            <div className="h-px bg-[#333] my-1" />
+            <Row
+              label="Retouched"
+              state={retouchedState}
+              onClick={toggleRetouched}
+              count={counts?.retouched}
+            />
+            <Row
+              label="AI Retouched"
+              state={hasAi ? "checked" : "unchecked"}
+              onClick={() => toggle("aiRetouched")}
+              indent
+              count={counts?.aiRetouched}
+            />
+            <Row
+              label="Distraction Removed"
+              state={hasDist ? "checked" : "unchecked"}
+              onClick={() => toggle("distractionRemoved")}
+              indent
+              count={counts?.distractionRemoved}
+            />
+            <Row
+              label="Non Retouched"
+              state={selected.has("nonRetouched") ? "checked" : "unchecked"}
+              onClick={() => toggle("nonRetouched")}
+              count={counts?.nonRetouched}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };

@@ -947,6 +947,21 @@ const LoupeView = ({
   // ── Keyboard navigation + spacebar zoom toggle ───────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.key === "a" || e.key === "A") && (e.metaKey || e.ctrlKey)) {
+        const t = e.target as HTMLElement | null;
+        if (
+          t &&
+          (t.tagName === "INPUT" ||
+            t.tagName === "TEXTAREA" ||
+            t.isContentEditable)
+        )
+          return;
+        e.preventDefault();
+        onSelectedIndicesChange(
+          new Set(Array.from({ length: totalImages }, (_, i) => i)),
+        );
+        return;
+      }
       if ((e.key === "g" || e.key === "G") && !e.metaKey && !e.ctrlKey) {
         onGoToGrid?.();
         return;

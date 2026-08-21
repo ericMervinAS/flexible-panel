@@ -55,7 +55,10 @@ interface RightPanelProps {
    *  (or, when `indices` is given, only those specific images). Returns a
    *  promise that resolves once the batch inpaint actually finishes, so
    *  callers can wait for it before flagging labels as "removed". */
-  onBatchRemove?: (uiLabels: string[], indices?: number[]) => void | Promise<void>;
+  onBatchRemove?: (
+    uiLabels: string[],
+    indices?: number[],
+  ) => void | Promise<void>;
   /** Patch tab: scan just the current image. */
   onScanImage?: () => void;
   /** Grid: run album-wide detection for the selected UI labels. */
@@ -892,7 +895,7 @@ const RightPanel = ({
       )}
       {/* ── Album-wide batch-removal offer — pinned above the footer, above the
            scroll-fade gradient (z-20 > z-10). ─────────────────────────────── */}
-      {isLoupeView && activeTab === "patch" && batchOffer && (
+      {/* {isLoupeView && activeTab === "patch" && batchOffer && (
         <div className="absolute left-0 right-0 bottom-0 z-20 px-4 pb-4">
           <BatchRemovalOffer
             labels={batchOffer.labels}
@@ -900,7 +903,7 @@ const RightPanel = ({
             onGoToGrid={onGoToGrid}
           />
         </div>
-      )}
+      )} */}
       {isLoupeView && activeTab === "subject" && (
         <div className="flex gap-3 items-center px-4 py-3 bg-[#1c1c1c] shrink-0">
           <button
