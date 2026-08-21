@@ -168,10 +168,10 @@ const LoupePatchPanel = ({
   const [hasRescanned, setHasRescanned] = useState(false);
   const [flaskHovered, setFlaskHovered] = useState(false);
 
-  const scanAlbumLabel =
+  const removeAlbumLabel =
     selectedImageCount && selectedImageCount > 1
-      ? `Scan ${selectedImageCount} Images`
-      : "Scan Entire Album";
+      ? `Remove from ${selectedImageCount} Images`
+      : "Remove from Album";
 
   const handleRerun = () => {
     setHasRescanned(true);
@@ -399,19 +399,11 @@ const LoupePatchPanel = ({
   const remainingObjectCount =
     selectedDetected.reduce((sum, d) => sum + d.count, 0) +
     (canvasHasStrokes ? 1 : 0);
-  // Raw total across selected labels — differs from remainingObjectCount
-  // when a skip left some instances unresolved, so the CTA can show the
-  // "x/y" split instead of silently removing fewer than the label implies.
-  const totalObjectCount =
-    selectedDetected.reduce((sum, d) => sum + d.rawCount, 0) +
-    (canvasHasStrokes ? 1 : 0);
 
   const removeLabel =
-    remainingObjectCount !== totalObjectCount
-      ? `Remove ${remainingObjectCount}/${totalObjectCount} Objects`
-      : remainingObjectCount > 1
-        ? `Remove ${remainingObjectCount} Objects`
-        : "Remove Object";
+    remainingObjectCount > 1
+      ? `Remove ${remainingObjectCount} Objects`
+      : "Remove Object";
 
   const canRemove =
     !isRemoving &&
@@ -526,7 +518,7 @@ const LoupePatchPanel = ({
               // className="flex items-center justify-center h-9 px-3 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
             >
               <span className="text-[12px] font-medium text-white leading-4">
-                Scan this image
+                Remove from This Image
               </span>
             </button>
             <button
@@ -534,7 +526,7 @@ const LoupePatchPanel = ({
               className="flex items-center justify-center h-9 px-3 rounded border border-[#303030] hover:border-[#3a3a3a] transition-colors"
             >
               <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
-                {scanAlbumLabel}
+                {removeAlbumLabel}
               </span>
             </button>
           </div>
@@ -589,10 +581,9 @@ const LoupePatchPanel = ({
 
               if (isItemRemoved) {
                 return (
-                  <button
+                  <div
                     key={d.label}
-                    onClick={() => handleResetClick(d.label, d.rawCount)}
-                    className="flex items-center justify-between gap-2 h-4 rounded-[6px] transition-colors text-left cursor-pointer group"
+                    className="flex items-center justify-between gap-2 h-4 rounded-[6px] transition-colors text-left group"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center bg-[#2563eb] opacity-50">
@@ -607,8 +598,13 @@ const LoupePatchPanel = ({
                         </span>
                       </div>
                     </div>
-                    <ArrowCounterClockwiseIcon className="shrink-0 w-3 h-3 text-[#777] transition-colors group-hover:text-[#e2e2e2]" />
-                  </button>
+                    <button
+                      onClick={() => handleResetClick(d.label, d.rawCount)}
+                      className="shrink-0 cursor-pointer"
+                    >
+                      <ArrowCounterClockwiseIcon className="w-3 h-3 text-[#777] transition-colors group-hover:text-[#e2e2e2]" />
+                    </button>
+                  </div>
                 );
               }
 
@@ -665,7 +661,13 @@ const LoupePatchPanel = ({
                       {d.label}
                     </span>
                     <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
-                      {d.outstandingCount}
+                      {/* Once some (but not all) instances are already resolved
+                          (e.g. one dot restored out of several removed), show
+                          "remaining/total" instead of a bare count that reads
+                          as the full total. */}
+                      {d.outstandingCount !== d.rawCount
+                        ? `${d.outstandingCount}/${d.rawCount}`
+                        : d.rawCount}
                     </span>
                   </div>
                 </button>
@@ -746,10 +748,10 @@ const LoupePatchPanel = ({
       {!preScan && !isModelScanning && (
         <button
           onClick={() => setShowAlbumScanModal(true)}
-          className="flex items-center justify-center h-9 px-3 mt-[-12px] rounded border border-[#303030] hover:border-[#3a3a3a] transition-colors"
+          className="flex items-center justify-center h-9 px-3 mt-[-16px] rounded border border-[#303030] hover:border-[#3a3a3a] transition-colors"
         >
           <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
-            {scanAlbumLabel}
+            {removeAlbumLabel}
           </span>
         </button>
       )}

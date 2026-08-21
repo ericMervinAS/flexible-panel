@@ -334,10 +334,9 @@ const SmartObjectRemoval = ({
 
               if (isRemoved) {
                 return (
-                  <button
+                  <div
                     key={d.label}
-                    onClick={() => handleResetClick(d.label, d.count)}
-                    className="flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] hover:bg-[#2a2a2a] transition-colors text-left cursor-pointer group"
+                    className="flex items-center justify-between h-9 px-2 rounded-[6px] bg-[#242424] transition-colors text-left group"
                   >
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
@@ -347,11 +346,14 @@ const SmartObjectRemoval = ({
                         {d.count}
                       </span>
                     </div>
-                    <div className="shrink-0 relative w-3 h-3">
+                    <button
+                      onClick={() => handleResetClick(d.label, d.count)}
+                      className="shrink-0 relative w-3 h-3 cursor-pointer"
+                    >
                       <Check className="absolute top-0 left-0 w-3 h-3 text-[#16a34a] transition-opacity group-hover:opacity-0" />
                       <ArrowCounterClockwiseIcon className="absolute top-0 left-0 w-3 h-3 text-[#e2e2e2] opacity-0 transition-opacity group-hover:opacity-100" />
-                    </div>
-                  </button>
+                    </button>
+                  </div>
                 );
               }
 

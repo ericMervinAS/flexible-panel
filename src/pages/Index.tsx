@@ -234,11 +234,54 @@ const Index = ({ importSource }: IndexProps) => {
 
   // "Scan this image" — run detection on just the current photo, fully open
   // (no label restriction) for this image only; other images' filters are untouched.
+  // Whatever this scan finds gets auto-removed once detection finishes (see the
+  // effect below) — a single-image scan shouldn't require a second manual
+  // "Remove Object" click for objects it just found.
+  const [pendingScanAutoRemove, setPendingScanAutoRemove] = useState<
+    number | null
+  >(null);
   const handleScanImage = () => {
     setScanLabelFilter((prev) => ({ ...prev, [selectedIndex]: null }));
     setScannedIndices((prev) => new Set(prev).add(selectedIndex));
+    setPendingScanAutoRemove(selectedIndex);
     void rerunDistractionDetectionForImage(selectedIndex);
   };
+
+  // Fires once the single-image scan above actually finishes (isDetecting
+  // false→true→false), so it reads the freshly-populated distractionMap
+  // rather than the stale value captured at click time.
+  const wasDistractionDetectingRef = useRef(false);
+  useEffect(() => {
+    const justFinished =
+      wasDistractionDetectingRef.current && !isDistractionDetecting;
+    wasDistractionDetectingRef.current = isDistractionDetecting;
+    if (!justFinished || pendingScanAutoRemove == null) return;
+
+    const idx = pendingScanAutoRemove;
+    setPendingScanAutoRemove(null);
+    const dets = distractionMap?.get(idx) ?? [];
+    if (!dets.length) return;
+
+    const uiLabels = Array.from(
+      new Set(
+        dets
+          .map((det) => MODEL_TO_UI[det.label])
+          .filter((label): label is string => !!label),
+      ),
+    );
+    void inpaintStore.inpaintBatch(uiLabels, new Map([[idx, dets]])).then(() => {
+      setAppliedDetections((prev) => {
+        const next = { ...prev };
+        const set = new Set(next[idx] ?? []);
+        dets.forEach((det) => set.add(detKey(det)));
+        next[idx] = set;
+        return next;
+      });
+      addRemovedItems(new Set(uiLabels));
+      if (selectedIndexRef.current === idx) handleRemoveSuccess(dets.length, false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDistractionDetecting, pendingScanAutoRemove, distractionMap]);
 
   // Triggered from the grid once the user has selected which objects to scan
   // for — accumulates onto any labels already scanned in a prior round for
@@ -353,20 +396,22 @@ const Index = ({ importSource }: IndexProps) => {
   }, [distractionMap, selectedIndex, highlightedLabels, dismissedDetectionKeys]);
 
   // Per-object geometry for the loupe canvas: detections actually applied on
-  // this image — either individually (loupe per-instance review) or because
-  // their whole label was removed some other way (grid album-wide batch, or
-  // the simple no-skip loupe flow, both of which only set removedItems).
-  // Always excludes a currently-Skipped instance, even if its label happens to
-  // be removedItems from a different image, since this one was never inpainted.
+  // this image. `removedItems` is a global (label-only, cross-image) set and
+  // must NOT gate this — a label removed on one image doesn't mean a fresh
+  // instance detected on a different image (e.g. a later single-image scan)
+  // was ever inpainted there. `appliedDetectionKeys` is the real per-image
+  // record, kept up to date by every removal path (single-image "Remove
+  // Object", album/selection batch remove, and cleared on reset).
+  // Always excludes a currently-Skipped instance, since it was never inpainted.
   const removedDetections = useMemo(() => {
     const imageDets = distractionMap?.get(selectedIndex) ?? [];
     const skipped = skippedDetections[selectedIndex];
     return imageDets.filter((det) => {
       const key = detKey(det);
       if (skipped?.has(key)) return false;
-      return appliedDetectionKeys.has(key) || removedItems.has(MODEL_TO_UI[det.label] ?? det.label);
+      return appliedDetectionKeys.has(key);
     });
-  }, [distractionMap, selectedIndex, appliedDetectionKeys, removedItems, skippedDetections]);
+  }, [distractionMap, selectedIndex, appliedDetectionKeys, skippedDetections]);
 
   // Canvas "Skip": exclude this instance from the next batch removal / dot
   // seeding — retained in distractionMap, so it's still a real pending
@@ -464,6 +509,32 @@ const Index = ({ importSource }: IndexProps) => {
       return { ...prev, [selectedIndex]: filtered };
     });
     void inpaintStore.resetLabel(selectedIndex, label);
+  };
+
+  // Restore a single removed instance (one dot) rather than the whole label —
+  // e.g. two "Exit Signs" removed on this image, deleting one dot must leave
+  // the other one removed. Only drops the label from the shared "removed" set
+  // once no instance of it remains active anywhere (mirrors handleResetImageAll).
+  const handleRestoreDetection = (det: DistractionDetection) => {
+    const label = MODEL_TO_UI[det.label] ?? det.label;
+    const key = detKey(det);
+    setSkippedDetections((prev) => {
+      const set = prev[selectedIndex];
+      if (!set?.has(key)) return prev;
+      const filtered = new Set(set);
+      filtered.delete(key);
+      return { ...prev, [selectedIndex]: filtered };
+    });
+    setAppliedDetections((prev) => {
+      const set = prev[selectedIndex];
+      if (!set?.has(key)) return prev;
+      const filtered = new Set(set);
+      filtered.delete(key);
+      return { ...prev, [selectedIndex]: filtered };
+    });
+    void inpaintStore.resetDetection(selectedIndex, label, det).then(() => {
+      if (!inpaintStore.hasActiveLabel(label)) resetRemovedItem(label);
+    });
   };
 
   // Full-image reset (R key): clears this image's mask, then drops any label
@@ -647,6 +718,7 @@ const Index = ({ importSource }: IndexProps) => {
               onSetRemovedItems={replaceRemovedItems}
               removedDetections={removedDetections}
               onRestoreObject={handleRestoreObject}
+              onRestoreDetection={handleRestoreDetection}
               onSkipDetection={handleSkipDetection}
               onSaveEditedDetection={handleSaveEditedDetection}
             />

@@ -2,8 +2,9 @@ import { useCallback, useRef, useState } from "react";
 import { sharedInpainter } from "@/lib/inpainting";
 import { MODEL_TO_UI } from "@/lib/distractionDetection";
 import type { DistractionDetection } from "@/lib/distractionDetection";
+import { REFERENCE_AFTER, USE_REFERENCE_SAMPLES } from "@/lib/referenceSamples";
 
-const BOX_PAD = 6;
+const BOX_PAD = 20;
 
 const uiLabelOf = (d: DistractionDetection) => MODEL_TO_UI[d.label] ?? d.label;
 
@@ -81,20 +82,53 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
       });
       return;
     }
-    await sharedInpainter.loadModel();
-    const result = await sharedInpainter.inpaint(original, mask);
-    // The inpainter caps its working resolution (MAX_SIDE), so the result can come
-    // back smaller than the original — resize it back to the original's exact
-    // dimensions so before/after share the same natural size (keeps zoom % consistent).
+    const referenceAfterSrc = USE_REFERENCE_SAMPLES ? REFERENCE_AFTER[src] : undefined;
     let dataUrl: string;
-    if (result.width === nW && result.height === nH) {
-      dataUrl = result.toDataURL("image/png");
-    } else {
+    if (referenceAfterSrc) {
+      // Ground-truth patch source: composite real "after" pixels within the active
+      // mask instead of running MI-GAN, so partial category selection still only
+      // touches the masked regions (mask is reused as the paste's alpha stencil).
+      const after = await loadImg(referenceAfterSrc);
       const full = document.createElement("canvas");
       full.width = nW;
       full.height = nH;
-      full.getContext("2d")!.drawImage(result, 0, 0, nW, nH);
+      const fctx = full.getContext("2d")!;
+      fctx.drawImage(original, 0, 0, nW, nH);
+
+      // Feather the hard-edged mask a little so the patch boundary blends instead
+      // of showing a seam if before/after aren't pixel-perfect at the edges.
+      const blurredMask = document.createElement("canvas");
+      blurredMask.width = nW;
+      blurredMask.height = nH;
+      const bctx = blurredMask.getContext("2d")!;
+      bctx.filter = "blur(6px)";
+      bctx.drawImage(mask, 0, 0);
+
+      const patch = document.createElement("canvas");
+      patch.width = nW;
+      patch.height = nH;
+      const pctx = patch.getContext("2d")!;
+      pctx.drawImage(after, 0, 0, nW, nH);
+      pctx.globalCompositeOperation = "destination-in";
+      pctx.drawImage(blurredMask, 0, 0);
+
+      fctx.drawImage(patch, 0, 0);
       dataUrl = full.toDataURL("image/png");
+    } else {
+      await sharedInpainter.loadModel();
+      const result = await sharedInpainter.inpaint(original, mask);
+      // The inpainter caps its working resolution (MAX_SIDE), so the result can come
+      // back smaller than the original — resize it back to the original's exact
+      // dimensions so before/after share the same natural size (keeps zoom % consistent).
+      if (result.width === nW && result.height === nH) {
+        dataUrl = result.toDataURL("image/png");
+      } else {
+        const full = document.createElement("canvas");
+        full.width = nW;
+        full.height = nH;
+        full.getContext("2d")!.drawImage(result, 0, 0, nW, nH);
+        dataUrl = full.toDataURL("image/png");
+      }
     }
     setPatchedByIndex((prev) => ({ ...prev, [index]: dataUrl }));
   }, [getSrc]);
@@ -192,6 +226,24 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
     [runExclusive, recompute],
   );
 
+  // Restore a single detection instance (one dot) rather than the whole label —
+  // e.g. two "Exit Signs" removed, deleting one dot should leave the other in
+  // place. Same exact-box match as convertObjectToBrush, minus adding a brush.
+  const resetDetection = useCallback(
+    (index: number, uiLabel: string, det: DistractionDetection) =>
+      runExclusive(index, async () => {
+        const byLabel = activeBoxesRef.current[index];
+        if (byLabel?.[uiLabel]) {
+          byLabel[uiLabel] = byLabel[uiLabel].filter(
+            (d) => !(d.x1 === det.x1 && d.y1 === det.y1 && d.x2 === det.x2 && d.y2 === det.y2),
+          );
+          if (!byLabel[uiLabel].length) delete byLabel[uiLabel];
+        }
+        await recompute(index);
+      }),
+    [runExclusive, recompute],
+  );
+
   const resetImage = useCallback(
     (index: number) =>
       runExclusive(index, async () => {
@@ -235,6 +287,7 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
     inpaintImage,
     resetBrush,
     resetLabel,
+    resetDetection,
     resetImage,
     convertObjectToBrush,
     inpaintBatch,

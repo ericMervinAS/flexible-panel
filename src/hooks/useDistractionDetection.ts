@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DistractionDetectionService, DistractionDetection } from '@/lib/distractionDetection';
 import type { ImageData } from '@/components/ImageGrid';
+import { REFERENCE_DETECTIONS, USE_REFERENCE_SAMPLES } from '@/lib/referenceSamples';
+
+// For sample images with known ground-truth boxes (detections.csv), prefer those
+// over whatever the live model found — lets the removal flow work even when the
+// model misses the object entirely. Gated by USE_REFERENCE_SAMPLES so the normal
+// live-model flow can still be exercised for these same images.
+const withReferenceOverride = (src: string, dets: DistractionDetection[]) =>
+  USE_REFERENCE_SAMPLES ? REFERENCE_DETECTIONS[src] ?? dets : dets;
 
 export interface UseDistractionDetectionResult {
   /** imageIndex → detections in that image; undefined = scan not yet completed */
@@ -55,7 +63,7 @@ export function useDistractionDetection(images: ImageData[], enabled: boolean = 
       setIsDetecting(true);
       console.log(`[DistractionDetection] Rerunning image ${index}`);
       const result = await svc.processImages([img.src]);
-      const dets = result.get(0) ?? [];
+      const dets = withReferenceOverride(img.src, result.get(0) ?? []);
       setDistractionMap((prev) => {
         const next = new Map(prev ?? []);
         if (dets.length > 0) next.set(index, dets);
@@ -88,7 +96,7 @@ export function useDistractionDetection(images: ImageData[], enabled: boolean = 
         const img = images[idx];
         if (!img) continue;
         const result = await svc.processImages([img.src]);
-        const dets = result.get(0) ?? [];
+        const dets = withReferenceOverride(img.src, result.get(0) ?? []);
         setDistractionMap((prev) => {
           const next = new Map(prev ?? []);
           if (dets.length > 0) next.set(idx, dets);
@@ -154,6 +162,15 @@ export function useDistractionDetection(images: ImageData[], enabled: boolean = 
         );
 
         if (abortRef.current) return;
+
+        if (USE_REFERENCE_SAMPLES) {
+          images.forEach((img, idx) => {
+            if (!(img.src in REFERENCE_DETECTIONS)) return;
+            const dets = withReferenceOverride(img.src, result.get(idx) ?? []);
+            if (dets.length > 0) result.set(idx, dets);
+            else result.delete(idx);
+          });
+        }
 
         setDistractionMap(result);
         setHasScannedAlbum(true);

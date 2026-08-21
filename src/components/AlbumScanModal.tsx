@@ -83,10 +83,15 @@ const AlbumScanModal = ({
   };
 
   const canSubmit = selected.size > 0;
+  const allSelected = selected.size === CATEGORIES.length;
 
   const handleSubmit = () => {
     if (!canSubmit) return;
     onFindAndRemove(Array.from(selected));
+  };
+
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(CATEGORIES));
   };
 
   // ── Result: scan+remove finished ────────────────────────────────────────
@@ -123,12 +128,12 @@ const AlbumScanModal = ({
         </div>
 
         <div className="flex items-center gap-3 justify-end">
-          <button
+          {/* <button
             onClick={onRetry}
             className="min-w-[44px] px-4 py-2 rounded bg-[#303030] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors"
           >
             Retry
-          </button>
+          </button> */}
           <button
             onClick={onDone}
             className="min-w-[44px] px-4 py-2 rounded bg-[#2563eb] text-[14px] font-medium text-white hover:bg-[#1d56d1] transition-colors"
@@ -194,14 +199,14 @@ const AlbumScanModal = ({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-4 mb-2 mt-1">
         {CATEGORIES.map((label) => {
           const isSelected = selected.has(label);
           return (
             <button
               key={label}
               onClick={() => toggle(label)}
-              className="flex items-center gap-1.5 justify-self-start"
+              className="flex items-center gap-2 justify-self-start"
             >
               <div
                 className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center border transition-colors ${
@@ -214,7 +219,7 @@ const AlbumScanModal = ({
                   <Check className="w-2 h-2 text-white stroke-[3]" />
                 )}
               </div>
-              <span className="text-[13px] font-normal text-[#ababab] leading-4 whitespace-nowrap">
+              <span className="text-[14px] font-normal text-[#ababab] leading-4 whitespace-nowrap">
                 {label}
               </span>
             </button>
@@ -222,24 +227,33 @@ const AlbumScanModal = ({
         })}
       </div>
 
-      <div className="flex items-center gap-3 justify-end">
+      <div className="flex items-center justify-between">
         <button
-          onClick={onClose}
-          className="min-w-[44px] px-4 py-2 rounded bg-[#303030] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors"
+          onClick={toggleSelectAll}
+          className=" text-[14px] font-medium text-[#ababab] hover:text-[#e2e2e2] transition-colors"
         >
-          Cancel
+          {allSelected ? "Deselect All" : "Select All"}
         </button>
-        <button
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          className={`min-w-[44px] px-4 py-2 rounded text-[14px] font-medium transition-colors ${
-            canSubmit
-              ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
-              : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
-          }`}
-        >
-          Find & Remove
-        </button>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            className="min-w-[44px] px-4 py-2 rounded bg-[#303030] text-[14px] font-medium text-[#e2e2e2] hover:bg-[#3a3a3a] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className={`min-w-[44px] px-4 py-2 rounded text-[14px] font-medium transition-colors ${
+              canSubmit
+                ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
+                : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
+            }`}
+          >
+            Remove
+          </button>
+        </div>
       </div>
     </DialogShell>
   );
