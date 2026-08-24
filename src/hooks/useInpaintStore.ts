@@ -297,6 +297,34 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
     return false;
   }, []);
 
+  // Undo a prior album-wide removal for the given UI labels — restores the
+  // original pixels on every image that has an active removal for that label
+  // (or just `indices`, when the prior batch was scoped to a selection),
+  // ahead of a "reset & retry" pass from the album results modal.
+  const resetLabelsAcrossAlbum = useCallback(
+    (uiLabels: string[], indices?: number[]) =>
+      runExclusive(null, async () => {
+        const wanted = new Set(uiLabels);
+        const targets =
+          indices ?? Object.keys(activeBoxesRef.current).map(Number);
+        for (const index of targets) {
+          const byLabel = activeBoxesRef.current[index];
+          if (!byLabel) continue;
+          let touched = false;
+          for (const label of wanted) {
+            if (label in byLabel) {
+              delete byLabel[label];
+              touched = true;
+            }
+          }
+          if (!touched) continue;
+          setBusyIndex(index);
+          await recompute(index);
+        }
+      }),
+    [runExclusive, recompute],
+  );
+
   // Grid batch: remove the given UI labels across every already-scanned image.
   const inpaintBatch = useCallback(
     (uiLabels: string[], distractionMap: Map<number, DistractionDetection[]>) =>
@@ -324,6 +352,7 @@ export function useInpaintStore(getSrc: (index: number) => string | undefined) {
     resetImage,
     convertObjectToBrush,
     inpaintBatch,
+    resetLabelsAcrossAlbum,
     hasActiveLabel,
   };
 }

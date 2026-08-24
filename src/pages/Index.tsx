@@ -65,6 +65,11 @@ const Index = ({ importSource }: IndexProps) => {
   // a later, unrelated visit doesn't reapply a stale selection.
   const [gridPreselectLabels, setGridPreselectLabels] = useState<string[]>([]);
   const [canvasHasStrokes, setCanvasHasStrokes] = useState(false);
+  // Brush mode is opt-in — the user must enable it in the patch panel before
+  // canvas strokes do anything. Both import options land on the Auto
+  // (distraction removal) tab by default; Option 2 just adds the "Manual"
+  // brush tab as an entry point the user switches to themselves.
+  const [brushEnabled, setBrushEnabled] = useState(false);
   const [clearCanvasSignal, setClearCanvasSignal] = useState(0);
   const [inpaintSignal, setInpaintSignal] = useState(0);
   // Detection boxes captured at "Remove Object" click, fed to LoupeView as a mask.
@@ -260,7 +265,17 @@ const Index = ({ importSource }: IndexProps) => {
     const idx = pendingScanAutoRemove;
     setPendingScanAutoRemove(null);
     const dets = distractionMap?.get(idx) ?? [];
-    if (!dets.length) return;
+
+    // handleScanImage always opens every scannable category for this image
+    // (no label filter), so a category that turns up zero instances is just
+    // as "processed" as one that was found and removed — it should get the
+    // same done tile, not linger as an unresolved checkbox forever.
+    const allScannedLabels = new Set(Object.values(MODEL_TO_UI));
+
+    if (!dets.length) {
+      addRemovedItems(allScannedLabels);
+      return;
+    }
 
     const uiLabels = Array.from(
       new Set(
@@ -277,7 +292,7 @@ const Index = ({ importSource }: IndexProps) => {
         next[idx] = set;
         return next;
       });
-      addRemovedItems(new Set(uiLabels));
+      addRemovedItems(allScannedLabels);
       if (selectedIndexRef.current === idx) handleRemoveSuccess(dets.length, false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -709,7 +724,15 @@ const Index = ({ importSource }: IndexProps) => {
               }}
               autoRemoveAfterStroke={autoRemoveAfterStroke}
               isExternallyRemoving={isRemoving}
-              disableBrush={highlightedLabels.size > 0}
+              disableBrush={
+                // Option 1 (Auto-only) keeps the original behavior: the brush
+                // is always available except while an object checkbox is
+                // selected. Option 2's Auto/Manual split additionally gates
+                // it behind the Manual tab (brushEnabled).
+                importSource === "sample-v2"
+                  ? highlightedLabels.size > 0 || !brushEnabled
+                  : highlightedLabels.size > 0
+              }
               highlightedDetections={highlightedDetections}
               hoveredDetections={hoveredDetections}
               removedItems={removedItems}
@@ -774,8 +797,38 @@ const Index = ({ importSource }: IndexProps) => {
               });
             });
           }}
+          onResetLabelsAcrossAlbum={(uiLabels, indices) => {
+            inpaintStore.resetLabelsAcrossAlbum(uiLabels, indices);
+            const labelSet = new Set(uiLabels);
+            const map = indices
+              ? new Map(
+                  indices
+                    .filter((i) => distractionMap?.has(i))
+                    .map((i) => [i, distractionMap!.get(i)!]),
+                )
+              : distractionMap;
+            setAppliedDetections((prev) => {
+              const next = { ...prev };
+              for (const [idx, dets] of map ?? []) {
+                if (!next[idx]) continue;
+                const toClear = new Set(
+                  dets
+                    .filter((d) => labelSet.has(MODEL_TO_UI[d.label] ?? d.label))
+                    .map(detKey),
+                );
+                const set = new Set(next[idx]);
+                toClear.forEach((k) => set.delete(k));
+                next[idx] = set;
+              }
+              return next;
+            });
+            uiLabels.forEach((label) => resetRemovedItem(label));
+          }}
           onRemoveAfterStrokeChange={setAutoRemoveAfterStroke}
           onRemovingChange={setIsRemoving}
+          brushEnabled={brushEnabled}
+          onBrushEnabledChange={setBrushEnabled}
+          manualBrushAvailable={importSource === "sample-v2"}
           visibleSubjectIndices={visibleSubjectIndices}
           modelSubjects={modelSubjects}
           modelImageMap={modelImageMap}
@@ -795,6 +848,9 @@ const Index = ({ importSource }: IndexProps) => {
           onScanAlbumRun={handleRunAlbumScan}
           onScanIndices={handleRunSelectionScan}
           selectedImageIndices={filmstripSelection}
+          appliedDetectionsByImage={appliedDetections}
+          skippedDetectionsByImage={skippedDetections}
+          pendingEditedMasksByImage={pendingEditedMasks}
           scannedLabels={scannedLabels}
           showObjectCoachmark={showObjectCoachmark}
           onDismissObjectCoachmark={() => setShowObjectCoachmark(false)}

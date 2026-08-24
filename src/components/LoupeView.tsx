@@ -2378,7 +2378,7 @@ const LoupeView = ({
         )}
 
         {/* ── Brush toolbar ────────────────────────────────────────────────── */}
-        {isPatchActive && (
+        {isPatchActive && (!disableBrush || editingPendingDet) && (
           <BrushToolbar
             brushSize={brushSize}
             onBrushSizeChange={setBrushSize}

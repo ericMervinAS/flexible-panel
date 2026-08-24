@@ -76,9 +76,9 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
           </span>
           <span className="text-[24px] font-noral text-[#e8e8e8] ">shoot</span>
         </div>
-        <span className="text-[14px] text-[#666]">
+        {/* <span className="text-[14px] text-[#666]">
           Choose how to load your album
-        </span>
+        </span> */}
       </div>
 
       {isLoading ? (
@@ -125,11 +125,38 @@ const ImportGate = ({ onReady }: ImportGateProps) => {
             </svg>
             <div className="flex flex-col gap-1 text-center">
               <span className="text-[18px] font-medium text-[#d8d8d8]">
-                Distraction Removal
+                Option 1
               </span>
               {/* <span className="text-[16px] text-[#555] group-hover:text-[#777] transition-colors">
                 Juliana Wedding
               </span> */}
+            </div>
+          </button>
+
+          {/* Option 2 — same sample album, but brush mode starts enabled. */}
+          <button
+            onClick={() => onReady("sample-v2")}
+            className="group flex flex-col items-center gap-4 w-[268px] py-12 px-8 rounded-xl border border-[#2a2a2a] bg-[#1c1c1c] hover:border-[#444] hover:bg-[#222] transition-colors cursor-pointer"
+          >
+            <svg
+              width="26"
+              height="26"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#888"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="group-hover:stroke-[#ababab] transition-colors"
+            >
+              <path d="M9.5 21c-3-1.5-5.5-4-5.5-8" />
+              <path d="M12 2c-1.5 3-4.5 4-4.5 8 0 3 2 5.5 5.5 6.5" />
+              <path d="M14 7c3 1 5 3 5 7 0 3-2 5.5-5 6.5" />
+            </svg>
+            <div className="flex flex-col gap-1 text-center">
+              <span className="text-[18px] font-medium text-[#d8d8d8]">
+                Option 2
+              </span>
             </div>
           </button>
         </div>

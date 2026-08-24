@@ -13,7 +13,7 @@ import {
 } from "@phosphor-icons/react";
 import type { DistractionDetection } from "@/lib/distractionDetection";
 import SuggestObjectModal from "./SuggestObjectModal";
-import AlbumScanModal, { type AlbumRemoveResult } from "./AlbumScanModal";
+import AlbumScanModal, { type AlbumCategoryStatus } from "./AlbumScanModal";
 import Tooltip from "./Tooltip";
 import graphic1 from "@/assets/Graphic_1.png";
 
@@ -78,6 +78,13 @@ interface LoupePatchPanelProps {
   onSelectAllOccurrences?: (label: string) => void;
   onRemoveAfterStrokeChange?: (v: boolean) => void;
   onRemovingChange?: (v: boolean) => void;
+  /** Whether brush strokes on the canvas actually run inpainting — off by
+   *  default so a stray stroke doesn't trigger a real removal. */
+  brushEnabled?: boolean;
+  onBrushEnabledChange?: (v: boolean) => void;
+  /** Whether the Manual (brush-only) sub-tab exists at all — Option 1's entry
+   *  point is Auto-only with no brush tool; Option 2 exposes both. */
+  manualBrushAvailable?: boolean;
   distractionMap?: Map<number, DistractionDetection[]>;
   /** Whether the current image specifically has been scanned — an album scan
    *  covers every image, but a single "Scan this image" only covers one, so
@@ -91,6 +98,17 @@ interface LoupePatchPanelProps {
    *  (>1) — undefined means "whole album". Swaps "Scan Entire Album" for
    *  "Scan N Images" and scopes the modal it opens to just those photos. */
   selectedImageCount?: number;
+  /** The actual filmstrip multi-selection (superset info behind
+   *  selectedImageCount) — when it holds more than one image, the detected
+   *  summary below combines every selected image instead of just
+   *  currentImageIndex. */
+  selectedImageIndices?: Set<number>;
+  /** Per-image versions of appliedDetectionKeys/dismissedDetectionKeys's
+   *  inputs — needed to compute dismissed/applied status for every image in
+   *  a multi-selection, not just currentImageIndex. */
+  appliedDetectionsByImage?: Record<number, Set<string>>;
+  skippedDetectionsByImage?: Record<number, Set<string>>;
+  pendingEditedMasksByImage?: Record<number, Record<string, unknown>>;
   isModelScanning?: boolean;
   onRerun?: () => void;
   /** Scan just the current image. */
@@ -101,10 +119,13 @@ interface LoupePatchPanelProps {
   /** Non-null while a scan+remove pass triggered from the album modal is running. */
   albumRemoveProgress?: { percent: number; eta: string } | null;
   onCancelAlbumRemove?: () => void;
-  /** Non-null once a triggered pass has finished — shows the modal's results screen. */
-  albumRemoveResults?: AlbumRemoveResult[] | null;
-  onRetryAlbumRemove?: () => void;
-  onDismissAlbumRemoveResults?: () => void;
+  /** Current status of all 4 album-wide distraction categories, within
+   *  whatever scope (whole album vs. filmstrip selection) applies right
+   *  now — drives the modal's unified picker/summary screen. */
+  albumCategoryStatus?: AlbumCategoryStatus[];
+  /** Restore one UI label's removed instances across the album scan's scope
+   *  — undoes the removal only, does not rescan/re-remove. */
+  onResetAlbumRemove?: (label: string) => void;
   onReport?: () => void;
   onSuggestSubmit?: (suggestion: string) => void;
   removedItems?: Set<string>;
@@ -131,19 +152,25 @@ const LoupePatchPanel = ({
   onSelectAllOccurrences,
   onRemoveAfterStrokeChange,
   onRemovingChange,
+  brushEnabled = false,
+  onBrushEnabledChange,
+  manualBrushAvailable = false,
   distractionMap,
   hasScanned: hasScannedProp,
   scannedLabels,
   selectedImageCount,
+  selectedImageIndices,
+  appliedDetectionsByImage,
+  skippedDetectionsByImage,
+  pendingEditedMasksByImage,
   isModelScanning = false,
   onRerun,
   onScanImage,
   onScanAlbum,
   albumRemoveProgress = null,
   onCancelAlbumRemove,
-  albumRemoveResults = null,
-  onRetryAlbumRemove,
-  onDismissAlbumRemoveResults,
+  albumCategoryStatus = [],
+  onResetAlbumRemove,
   onReport,
   onSuggestSubmit,
   removedItems = new Set(),
@@ -167,6 +194,20 @@ const LoupePatchPanel = ({
   const [showAlbumScanModal, setShowAlbumScanModal] = useState(false);
   const [hasRescanned, setHasRescanned] = useState(false);
   const [flaskHovered, setFlaskHovered] = useState(false);
+  // Auto (scan-and-detect) vs Manual (brush-only) sub-tab — always lands on
+  // Auto by default, regardless of import source; Manual is a deliberate
+  // switch the user makes themselves.
+  const [activeSubTab, setActiveSubTab] = useState<"auto" | "manual">("auto");
+
+  const handleSubTabChange = (tab: "auto" | "manual") => {
+    if (tab === activeSubTab) return;
+    // Switching away from Manual with a pending stroke would leave a brush
+    // mask on canvas that's no longer reachable (the Auto tab has no Remove
+    // CTA for it) — clear it so the canvas starts clean on the other side.
+    if (tab === "auto" && canvasHasStrokes) onClearCanvas?.();
+    setActiveSubTab(tab);
+    onBrushEnabledChange?.(tab === "manual");
+  };
 
   const removeAlbumLabel =
     selectedImageCount && selectedImageCount > 1
@@ -194,24 +235,52 @@ const LoupePatchPanel = ({
 
   const hasScanned = hasScannedProp ?? distractionMap !== undefined;
 
+  // Multi-select (filmstrip) combines every selected image's distractions
+  // into one summary instead of just currentImageIndex — a single selection
+  // (the normal case) keeps the old current-image-only behavior.
+  const isMultiSelection = (selectedImageIndices?.size ?? 0) > 1;
+  const summaryImageIndices = isMultiSelection
+    ? Array.from(selectedImageIndices!)
+    : [currentImageIndex];
+
   const detected = useMemo(() => {
-    const imageDets = distractionMap?.get(currentImageIndex) ?? [];
     const rawCountMap = new Map<string, number>();
     const remainingCountMap = new Map<string, number>();
     const appliedCountMap = new Map<string, number>();
-    for (const det of imageDets) {
-      const uiLabel = MODEL_TO_UI[det.label];
-      if (!uiLabel) continue;
-      rawCountMap.set(uiLabel, (rawCountMap.get(uiLabel) ?? 0) + 1);
-      const key = `${uiLabel}:${det.x1}:${det.y1}:${det.x2}:${det.y2}`;
-      if (appliedDetectionKeys?.has(key)) {
-        appliedCountMap.set(uiLabel, (appliedCountMap.get(uiLabel) ?? 0) + 1);
+    for (const idx of summaryImageIndices) {
+      const imageDets = distractionMap?.get(idx) ?? [];
+      // currentImageIndex already has its dismissed/applied sets computed
+      // (and passed down) by the caller — for every other image in a
+      // multi-selection, derive the equivalent from the per-image records.
+      const appliedForImage =
+        idx === currentImageIndex
+          ? (appliedDetectionKeys ?? new Set<string>())
+          : (appliedDetectionsByImage?.[idx] ?? new Set<string>());
+      const dismissedForImage =
+        idx === currentImageIndex
+          ? (dismissedDetectionKeys ?? new Set<string>())
+          : (() => {
+              const combined = new Set(skippedDetectionsByImage?.[idx] ?? []);
+              const edited = pendingEditedMasksByImage?.[idx];
+              if (edited) Object.keys(edited).forEach((k) => combined.add(k));
+              appliedForImage.forEach((k) => combined.add(k));
+              return combined;
+            })();
+
+      for (const det of imageDets) {
+        const uiLabel = MODEL_TO_UI[det.label];
+        if (!uiLabel) continue;
+        rawCountMap.set(uiLabel, (rawCountMap.get(uiLabel) ?? 0) + 1);
+        const key = `${uiLabel}:${det.x1}:${det.y1}:${det.x2}:${det.y2}`;
+        if (appliedForImage.has(key)) {
+          appliedCountMap.set(uiLabel, (appliedCountMap.get(uiLabel) ?? 0) + 1);
+        }
+        // Skip instances the user already resolved directly on the canvas
+        // (Skip, or Edit -> Save, or already applied) so this count matches
+        // what Remove will do next.
+        if (dismissedForImage.has(key)) continue;
+        remainingCountMap.set(uiLabel, (remainingCountMap.get(uiLabel) ?? 0) + 1);
       }
-      // Skip instances the user already resolved directly on the canvas
-      // (Skip, or Edit -> Save, or already applied) so this count matches
-      // what Remove will do next.
-      if (dismissedDetectionKeys?.has(key)) continue;
-      remainingCountMap.set(uiLabel, (remainingCountMap.get(uiLabel) ?? 0) + 1);
     }
     // Once scanned, surface every scannable category — including the ones
     // with zero instances on this image — so the panel also reads as a
@@ -227,23 +296,29 @@ const LoupePatchPanel = ({
         rawCount,
         count: remainingCountMap.get(label) ?? 0,
         // How many instances of this label are still actually present in
-        // the photo — total minus whatever's been inpainted away. A skip
+        // the photo(s) — total minus whatever's been inpainted away. A skip
         // alone doesn't remove pixels, so it stays in this count; only an
         // applied instance does.
         outstandingCount: rawCount - appliedCount,
-        // Every instance of this label on this image has actually been
-        // inpainted — distinct from removedItems, which a partial pass
-        // (some instances Skipped) deliberately leaves unset. A label with
-        // no instances at all is "not found", not "applied".
+        // Every instance of this label across the selected image(s) has
+        // actually been inpainted — distinct from removedItems, which a
+        // partial pass (some instances Skipped) deliberately leaves unset. A
+        // label with no instances at all is "not found", not "applied".
         isFullyApplied: rawCount > 0 && appliedCount === rawCount,
       };
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     distractionMap,
     currentImageIndex,
     dismissedDetectionKeys,
     appliedDetectionKeys,
+    appliedDetectionsByImage,
+    skippedDetectionsByImage,
+    pendingEditedMasksByImage,
     hasScanned,
+    isMultiSelection,
+    selectedImageIndices,
   ]);
 
   // A label reads as "done" once every instance on this image is actually
@@ -251,10 +326,15 @@ const LoupePatchPanel = ({
   // pass (some instances Skipped) deliberately leaves both unset so the
   // label stays a normal, re-selectable checkbox showing what's left.
   // removedItems is a single flat, album-wide set (not scoped per image), so
-  // its fallback must require rawCount > 0 here — otherwise a label removed
-  // on one image would trivially satisfy outstandingCount === 0 (0 - 0) on
+  // its rawCount > 0 fallback must also require outstandingCount === 0 —
+  // otherwise a label removed on one image would trivially satisfy that on
   // every OTHER image too, including ones where it was never even detected,
-  // and falsely show a "removed" tile for a category never found there.
+  // and falsely show a "removed" tile for a category never found there. A
+  // rawCount === 0 category doesn't have that ambiguity: it only reads as
+  // done once THIS image was actually scanned for it and it's in
+  // removedItems (set once Remove Object runs, or once a "Scan this image"
+  // pass has finished covering every category — see Index.tsx) — a category
+  // never scanned here isn't even in `detected` for this image to begin with.
   const isDone = (d: {
     label: string;
     rawCount: number;
@@ -262,7 +342,8 @@ const LoupePatchPanel = ({
     outstandingCount: number;
   }) =>
     d.isFullyApplied ||
-    (removedItems.has(d.label) && d.rawCount > 0 && d.outstandingCount === 0);
+    (removedItems.has(d.label) &&
+      (d.rawCount === 0 || d.outstandingCount === 0));
 
   // Found-and-active first, removed next, not-found (zero instances) last —
   // same ordering as SmartObjectRemoval.
@@ -335,10 +416,16 @@ const LoupePatchPanel = ({
 
   // A skip can bring a selected label's remaining count to zero (its last
   // instance was skipped) — nothing is left to remove, so drop the stale
-  // selection instead of leaving a checked box over a "0" count.
+  // selection instead of leaving a checked box over a "0" count. Only applies
+  // to labels that actually had instances (rawCount > 0); a label with no
+  // instances at all on this image can be deliberately checked (see the
+  // rawCount === 0 render branch below) to queue it for an album-wide scan,
+  // and that selection must survive detected recomputing.
   useEffect(() => {
     setSelected((prev) => {
-      const zeroed = detected.filter((d) => d.count === 0 && prev.has(d.label));
+      const zeroed = detected.filter(
+        (d) => d.rawCount > 0 && d.count === 0 && prev.has(d.label),
+      );
       if (zeroed.length === 0) return prev;
       const next = new Set(prev);
       zeroed.forEach((d) => next.delete(d.label));
@@ -379,7 +466,10 @@ const LoupePatchPanel = ({
 
   // ── Restore ───────────────────────────────────────────────────────────────
   const handleResetClick = (label: string, count: number) => {
-    if (skipConfirmation) {
+    // Nothing was actually inpainted for a zero-instance category — skip the
+    // "this restores N photos" confirmation (there's nothing to confirm) but
+    // still clear it from the shared removedItems set like a real restore.
+    if (count === 0 || skipConfirmation) {
       onResetItem?.(label);
       onResetImage?.(label);
       return;
@@ -405,10 +495,17 @@ const LoupePatchPanel = ({
       ? `Remove ${remainingObjectCount} Objects`
       : "Remove Object";
 
+  // A brush stroke only counts toward Remove Object on Option 2's Manual tab
+  // (manualBrushAvailable) — Option 1 has no manual removal workflow, so a
+  // stray stroke there (e.g. while editing a detection's mask) must never by
+  // itself enable the CTA, AND must block the checkbox-based path too —
+  // otherwise a label checked before the stroke was drawn would keep Remove
+  // Object enabled even though itemsDisabled has already locked the list.
   const canRemove =
     !isRemoving &&
-    ((selected.size > 0 && remainingObjectCount > 0) ||
-      (canvasHasStrokes && !removeAfterStroke));
+    (canvasHasStrokes
+      ? manualBrushAvailable && !removeAfterStroke
+      : selected.size > 0 && remainingObjectCount > 0);
 
   const handleRemove = () => {
     if (!canRemove) return;
@@ -416,9 +513,18 @@ const LoupePatchPanel = ({
     // A label with a Skipped-and-unresolved instance isn't fully handled by
     // this click — leave it out of the "removed" set so it stays a normal,
     // re-selectable checkbox (with the remaining count) instead of flipping
-    // to the done/restore tile.
+    // to the done/restore tile. A selected label with zero instances on this
+    // image has nothing to inpaint, but — now that it's scanned-for and
+    // explicitly selected — it should still land in the same "removed" set
+    // as a real removal so it reads as done rather than lingering as the
+    // manual album-queue checkbox (isDone's rawCount === 0 branch relies on
+    // exactly this).
     const toMarkRemoved = new Set(
-      [...toRemove].filter((label) => !labelsWithSkips?.has(label)),
+      [...toRemove].filter((label) => {
+        if (labelsWithSkips?.has(label)) return false;
+        const d = detected.find((det) => det.label === label);
+        return !!d;
+      }),
     );
 
     // Real inpainting happens in LoupeView, which owns the source image and the
@@ -451,6 +557,64 @@ const LoupePatchPanel = ({
       className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-6"
       style={{ scrollbarWidth: "none" }}
     >
+      {/* ── Auto / Manual sub-tabs ───────────────────────────────────────────
+          Two distinct removal workflows: Auto scans for known distraction
+          categories and lets you check them off; Manual is just the brush,
+          off the object list entirely. Kept mutually exclusive rather than a
+          toggle buried in the Auto panel, since enabling the brush changes
+          what the whole panel below it does. Only Option 2's entry point
+          exposes Manual/the brush tool at all — Option 1 stays Auto-only, no
+          switcher, brush never reachable. */}
+      {manualBrushAvailable && (
+        <div className="flex items-center gap-1 p-0.5 rounded-lg bg-[#141414] shrink-0">
+          {(
+            [
+              { id: "auto", label: "Auto" },
+              { id: "manual", label: "Manual" },
+            ] as const
+          ).map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => handleSubTabChange(id)}
+              className={`flex-1 h-7 rounded-md text-[12px] font-medium transition-colors ${
+                activeSubTab === id
+                  ? "bg-[#2a2a2a] text-[#e2e2e2]"
+                  : "text-[#777] hover:text-[#ababab]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {manualBrushAvailable && activeSubTab === "manual" ? (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
+              Manual Brush
+            </span>
+            <p className="text-[12px] text-[#ababab] leading-4">
+              Paint directly over the object you want to remove, then click
+              Remove.
+            </p>
+          </div>
+          <button
+            disabled={!canRemove}
+            onClick={handleRemove}
+            className={`flex items-center justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium transition-colors ${
+              isRemoving
+                ? "bg-[#1d56d1] text-white cursor-not-allowed"
+                : canRemove
+                  ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
+                  : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
+            }`}
+          >
+            <span>{isRemoving ? "Removing…" : removeLabel}</span>
+          </button>
+        </div>
+      ) : (
+        <>
       {/* ── Smart Object ──────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2">
         {/* Title row */}
@@ -514,18 +678,36 @@ const LoupePatchPanel = ({
           <div className="flex flex-col gap-2 mt-1">
             <button
               onClick={onScanImage}
-              className="flex items-center justify-center h-9 px-3 rounded bg-[#2563eb] hover:bg-[#1d56d1] transition-colors"
+              disabled={canvasHasStrokes}
+              className={`flex items-center justify-center h-9 px-3 rounded transition-colors ${
+                canvasHasStrokes
+                  ? "bg-[#1e2a45] cursor-not-allowed"
+                  : "bg-[#2563eb] hover:bg-[#1d56d1]"
+              }`}
               // className="flex items-center justify-center h-9 px-3 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
             >
-              <span className="text-[12px] font-medium text-white leading-4">
+              <span
+                className={`text-[12px] font-medium leading-4 ${
+                  canvasHasStrokes ? "text-[#474747]" : "text-white"
+                }`}
+              >
                 Remove from this Image
               </span>
             </button>
             <button
               onClick={() => setShowAlbumScanModal(true)}
-              className="flex items-center justify-center h-9 px-3 rounded border border-[#303030] hover:border-[#3a3a3a] transition-colors"
+              disabled={canvasHasStrokes}
+              className={`flex items-center justify-center h-9 px-3 rounded border transition-colors ${
+                canvasHasStrokes
+                  ? "border-[#242424] cursor-not-allowed"
+                  : "border-[#303030] hover:border-[#3a3a3a]"
+              }`}
             >
-              <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+              <span
+                className={`text-[12px] font-medium leading-4 ${
+                  canvasHasStrokes ? "text-[#474747]" : "text-[#e2e2e2]"
+                }`}
+              >
                 {removeAlbumLabel}
               </span>
             </button>
@@ -576,7 +758,10 @@ const LoupePatchPanel = ({
           >
             {orderedItems.map((d) => {
               const isItemRemoved = isDone(d);
-              const isSelected = selected.has(d.label);
+              // A label with nothing left to remove (count 0) must never
+              // render as checked, even if it's still in `selected` for a
+              // tick before the cleanup effect below clears it.
+              const isSelected = selected.has(d.label) && d.count > 0;
               const isIndeterminate = isLabelIndeterminate(d);
 
               if (isItemRemoved) {
@@ -598,24 +783,41 @@ const LoupePatchPanel = ({
                         </span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleResetClick(d.label, d.rawCount)}
-                      className="shrink-0 cursor-pointer"
-                    >
-                      <ArrowCounterClockwiseIcon className="w-3 h-3 text-[#777] transition-colors group-hover:text-[#e2e2e2]" />
-                    </button>
+                    {d.rawCount > 0 && (
+                      <button
+                        onClick={() => handleResetClick(d.label, d.rawCount)}
+                        className="shrink-0 cursor-pointer"
+                      >
+                        <ArrowCounterClockwiseIcon className="w-3 h-3 text-[#777] transition-colors group-hover:text-[#e2e2e2]" />
+                      </button>
+                    )}
                   </div>
                 );
               }
 
               if (d.rawCount === 0) {
+                // Nothing found on this image, but the user may still want to
+                // remove this category across the album — checking it here
+                // just queues it as a preselected category for "Remove from
+                // Album" below (there's nothing to inpaint on this photo).
+                const isQueued = selected.has(d.label);
                 return (
                   <button
                     key={d.label}
-                    disabled
-                    className="flex items-center gap-2 h-4 rounded-[6px] opacity-40 cursor-not-allowed text-left"
+                    onClick={() => toggle(d.label)}
+                    className="flex items-center gap-2 h-4 rounded-[6px] text-left cursor-pointer"
                   >
-                    <div className="shrink-0 w-3 h-3 rounded-[2px] border border-[#474747] bg-transparent" />
+                    <div
+                      className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
+                        isQueued
+                          ? "bg-[#2563eb]"
+                          : "border border-[#474747] bg-transparent"
+                      }`}
+                    >
+                      {isQueued && (
+                        <Check className="w-2 h-2 text-white stroke-[3]" />
+                      )}
+                    </div>
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
                         {d.label}
@@ -748,45 +950,25 @@ const LoupePatchPanel = ({
       {!preScan && !isModelScanning && (
         <button
           onClick={() => setShowAlbumScanModal(true)}
-          className="flex items-center justify-center h-9 px-3 mt-[-16px] rounded border border-[#303030] hover:border-[#3a3a3a] transition-colors"
+          disabled={canvasHasStrokes}
+          className={`flex items-center justify-center h-9 px-3 mt-[-16px] rounded border transition-colors ${
+            canvasHasStrokes
+              ? "border-[#242424] cursor-not-allowed"
+              : "border-[#303030] hover:border-[#3a3a3a]"
+          }`}
         >
-          <span className="text-[12px] font-medium text-[#e2e2e2] leading-4">
+          <span
+            className={`text-[12px] font-medium leading-4 ${
+              canvasHasStrokes ? "text-[#474747]" : "text-[#e2e2e2]"
+            }`}
+          >
             {removeAlbumLabel}
           </span>
         </button>
       )}
 
-      {/* <div className="h-[1px] w-full bg-[#e2e2e20d]"></div> */}
-
-      {/* ── Brush Options ─────────────────────────────────────────────────── */}
-      {/* <div className="flex flex-col gap-3"> */}
-      {/* <span className="text-[11px] font-semibold tracking-[0.5px] uppercase text-[#ababab] leading-3">
-          Brush Options
-        </span> */}
-      {/* 
-        <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
-          Brush Options
-        </span>
-
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
-              Remove after each stroke
-            </span> */}
-      {/* <span className="text-[11px] text-[#ababab] leading-4">
-              Review each removal
-            </span> */}
-      {/* </div>
-          <Toggle
-            checked={removeAfterStroke}
-            onChange={(v) => {
-              setRemoveAfterStroke(v);
-              onRemoveAfterStrokeChange?.(v);
-              if (v && canvasHasStrokes) onClearCanvas?.();
-            }}
-          />
-        </div>
-      </div> */}
+      </>
+      )}
 
       {/* ── Restore confirmation modal (same as SmartObjectRemoval) ───────── */}
       {pendingReset &&
@@ -860,22 +1042,21 @@ const LoupePatchPanel = ({
         />
       )}
 
-      {(showAlbumScanModal || albumRemoveProgress || albumRemoveResults) && (
+      {(showAlbumScanModal || albumRemoveProgress) && (
         <AlbumScanModal
           onClose={() => setShowAlbumScanModal(false)}
-          onFindAndRemove={(labels) => onScanAlbum?.(labels)}
+          onSubmit={(labels) => onScanAlbum?.(labels)}
+          categories={albumCategoryStatus}
+          initialSelectedLabels={detected
+            .filter((d) => d.rawCount === 0 && selected.has(d.label))
+            .map((d) => d.label)}
           imageCount={selectedImageCount}
           progress={albumRemoveProgress}
           onCancelProgress={() => {
             onCancelAlbumRemove?.();
             setShowAlbumScanModal(false);
           }}
-          result={albumRemoveResults}
-          onRetry={onRetryAlbumRemove}
-          onDone={() => {
-            onDismissAlbumRemoveResults?.();
-            setShowAlbumScanModal(false);
-          }}
+          onReset={onResetAlbumRemove}
         />
       )}
     </div>

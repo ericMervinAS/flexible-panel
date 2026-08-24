@@ -14,6 +14,7 @@ import LoupeSubjectPanel, { LoupeRetouchState } from "./LoupeSubjectPanel";
 import LoupePatchPanel from "./LoupePatchPanel";
 import RetouchingOpportunityBanner from "./RetouchingOpportunityBanner";
 import BatchRemovalOffer from "./BatchRemovalOffer";
+import { ALBUM_CATEGORIES, type AlbumCategoryStatus } from "./AlbumScanModal";
 import type { ModelSubject } from "@/hooks/useFaceDetection";
 import { MODEL_TO_UI } from "@/lib/distractionDetection";
 import type { DistractionDetection } from "@/lib/distractionDetection";
@@ -59,6 +60,10 @@ interface RightPanelProps {
     uiLabels: string[],
     indices?: number[],
   ) => void | Promise<void>;
+  /** Undo a prior album-wide removal for these UI labels — restores the
+   *  original pixels (scoped to `indices` when given, else every image that
+   *  has an active removal for the label) ahead of a "reset & retry" pass. */
+  onResetLabelsAcrossAlbum?: (uiLabels: string[], indices?: number[]) => void;
   /** Patch tab: scan just the current image. */
   onScanImage?: () => void;
   /** Grid: run album-wide detection for the selected UI labels. */
@@ -70,8 +75,22 @@ interface RightPanelProps {
   /** Filmstrip multi-selection (loupe view) — when it holds more than one
    *  image, "Scan Entire Album" scopes itself to just these instead. */
   selectedImageIndices?: Set<number>;
+  /** Per-image applied/dismissed detection records — mirrors
+   *  appliedDetectionKeys/dismissedDetectionKeys but for every image, not
+   *  just currentImageIndex, so the patch panel can combine distraction
+   *  status across a filmstrip multi-selection. */
+  appliedDetectionsByImage?: Record<number, Set<string>>;
+  skippedDetectionsByImage?: Record<number, Set<string>>;
+  pendingEditedMasksByImage?: Record<number, Record<string, unknown>>;
   onRemoveAfterStrokeChange?: (v: boolean) => void;
   onRemovingChange?: (v: boolean) => void;
+  /** Whether brush strokes on the canvas actually run inpainting — off by
+   *  default so a stray stroke doesn't trigger a real removal. */
+  brushEnabled?: boolean;
+  onBrushEnabledChange?: (v: boolean) => void;
+  /** Whether the Manual (brush-only) sub-tab exists at all — Option 1's entry
+   *  point is Auto-only with no brush tool; Option 2 exposes both. */
+  manualBrushAvailable?: boolean;
   visibleSubjectIndices?: Set<number> | null;
   modelSubjects?: ModelSubject[];
   modelImageMap?: Map<number, number[]>;
@@ -141,12 +160,19 @@ const RightPanel = ({
   onSelectAllOccurrences,
   onResetImage,
   onBatchRemove,
+  onResetLabelsAcrossAlbum,
   onScanImage,
   onScanAlbumRun,
   onScanIndices,
   selectedImageIndices,
+  appliedDetectionsByImage,
+  skippedDetectionsByImage,
+  pendingEditedMasksByImage,
   onRemoveAfterStrokeChange,
   onRemovingChange,
+  brushEnabled = false,
+  onBrushEnabledChange,
+  manualBrushAvailable = false,
   visibleSubjectIndices,
   modelSubjects,
   modelImageMap,
@@ -304,13 +330,13 @@ const RightPanel = ({
   );
   const [isAutoRemoveInFlight, setIsAutoRemoveInFlight] = useState(false);
   const wasScanningRef = useRef(false);
+  // Flips true once an actual "Remove from Album" pass has completed at
+  // least once — distinct from removedItems, which also gets set by a
+  // single per-image "Remove Object" click. Monotonic: never reset, so the
+  // album modal keeps opening straight into its summary state afterward.
+  const [albumRemoveEverCompleted, setAlbumRemoveEverCompleted] =
+    useState(false);
 
-  // Results screen for the "Remove Distractions from Album" modal — set once
-  // a triggered pass finishes; cleared on retry or dismissal. lastAlbumLabels
-  // remembers what was scanned for so Retry can run the exact same pass.
-  const [albumRemoveResults, setAlbumRemoveResults] = useState<
-    { label: string; count: number; imageCount: number }[] | null
-  >(null);
   const lastAlbumLabelsRef = useRef<string[]>([]);
   // Non-null while the in-flight (or last) find-and-remove pass is scoped to a
   // filmstrip multi-selection rather than the whole album — read by the
@@ -324,6 +350,48 @@ const RightPanel = ({
     selectedImageIndices && selectedImageIndices.size > 1
       ? selectedImageIndices.size
       : undefined;
+  const albumCategoryScopeIndices =
+    selectedImageIndices && selectedImageIndices.size > 1
+      ? Array.from(selectedImageIndices)
+      : null;
+
+  // Live status of every one of the 4 album-wide distraction categories,
+  // within the current scope — the single source of truth for the unified
+  // "Remove Distractions from Album" modal below. Recomputed on every render
+  // (cheap: 4 categories over distractionMap) so a reset or a completed pass
+  // is reflected immediately, no separate "results" state to keep in sync.
+  // The album modal only opens into its composite summary state once an
+  // actual "Remove from Album" pass has completed — resolving a category on
+  // a single image via the per-image panel alone isn't enough, even though
+  // it also sets removedItems (used elsewhere for that image's own
+  // checkbox/done state).
+  const albumSummaryEligible = albumRemoveEverCompleted;
+  const computeAlbumCategories = (
+    scanIndices: number[] | null,
+  ): AlbumCategoryStatus[] => {
+    const inScope = (idx: number) => !scanIndices || scanIndices.includes(idx);
+    return ALBUM_CATEGORIES.map((label) => {
+      let instanceCount = 0;
+      let imageCount = 0;
+      if (distractionMap) {
+        for (const [idx, dets] of distractionMap) {
+          if (!inScope(idx)) continue;
+          const matches = dets.filter((d) => MODEL_TO_UI[d.label] === label);
+          if (matches.length > 0) imageCount++;
+          instanceCount += matches.length;
+        }
+      }
+      return {
+        label,
+        done: albumSummaryEligible && (removedItems?.has(label) ?? false),
+        count: instanceCount,
+        imageCount,
+        foundCount: instanceCount,
+        scanned: scannedLabels?.has(label) ?? false,
+      };
+    });
+  };
+  const albumCategoryStatus = computeAlbumCategories(albumCategoryScopeIndices);
 
   // Whether the album itself has no scan data yet — drives the object panel's
   // switch from checkbox-picker to results.
@@ -364,17 +432,6 @@ const RightPanel = ({
       }
       return count;
     };
-    // Raw instances removed across the scanned scope, for the modal's results
-    // screen (e.g. "120 Thermostats").
-    const instanceCountForLabel = (label: string) => {
-      if (!distractionMap) return 0;
-      let count = 0;
-      for (const [idx, dets] of distractionMap) {
-        if (!inScope(idx)) continue;
-        count += dets.filter((d) => MODEL_TO_UI[d.label] === label).length;
-      }
-      return count;
-    };
     const selectedWithCounts = labels.map((label) => ({
       label,
       count: countForLabel(label),
@@ -407,13 +464,7 @@ const RightPanel = ({
       ]);
       setResetSignal((s) => s + 1);
       setIsAutoRemoveInFlight(false);
-      setAlbumRemoveResults(
-        labels.map((label) => ({
-          label,
-          count: instanceCountForLabel(label),
-          imageCount: countForLabel(label),
-        })),
-      );
+      setAlbumRemoveEverCompleted(true);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDistractionScanning, pendingAutoRemove, distractionMap]);
@@ -425,7 +476,6 @@ const RightPanel = ({
   const runAlbumFindAndRemove = (labels: string[]) => {
     if (!labels.length) return;
     lastAlbumLabelsRef.current = labels;
-    setAlbumRemoveResults(null);
     setPendingAutoRemove(labels);
     setIsAutoRemoveInFlight(true);
     if (selectedImageIndices && selectedImageIndices.size > 1) {
@@ -438,8 +488,14 @@ const RightPanel = ({
     }
   };
 
-  const handleRetryAlbumRemove = () => {
-    runAlbumFindAndRemove(lastAlbumLabelsRef.current);
+  // Restore just the one category the user reset from the album modal —
+  // undoes its prior removal only, does NOT rescan/re-remove. The row simply
+  // flips back to a plain checkbox once albumCategoryStatus reflects it.
+  const handleResetAlbumRemove = (label: string) => {
+    onResetLabelsAcrossAlbum?.(
+      [label],
+      albumCategoryScopeIndices ?? undefined,
+    );
   };
 
   const handleFindAndRemove = () => {
@@ -664,10 +720,17 @@ const RightPanel = ({
                 onSelectAllOccurrences={onSelectAllOccurrences}
                 onRemoveAfterStrokeChange={onRemoveAfterStrokeChange}
                 onRemovingChange={onRemovingChange}
+                brushEnabled={brushEnabled}
+                onBrushEnabledChange={onBrushEnabledChange}
+                manualBrushAvailable={manualBrushAvailable}
                 distractionMap={distractionMap}
                 hasScanned={currentImageScanned}
                 scannedLabels={scannedLabels}
                 selectedImageCount={scanSelectionCount}
+                selectedImageIndices={selectedImageIndices}
+                appliedDetectionsByImage={appliedDetectionsByImage}
+                skippedDetectionsByImage={skippedDetectionsByImage}
+                pendingEditedMasksByImage={pendingEditedMasksByImage}
                 isModelScanning={isDistractionScanning}
                 onRerun={onDistractionRerunCurrent}
                 onScanImage={onScanImage}
@@ -684,9 +747,8 @@ const RightPanel = ({
                     : null
                 }
                 onCancelAlbumRemove={handleCancelFindAndRemove}
-                albumRemoveResults={albumRemoveResults}
-                onRetryAlbumRemove={handleRetryAlbumRemove}
-                onDismissAlbumRemoveResults={() => setAlbumRemoveResults(null)}
+                albumCategoryStatus={albumCategoryStatus}
+                onResetAlbumRemove={handleResetAlbumRemove}
                 onReport={() =>
                   console.log(
                     "[DistractionDetection] User reported a missed detection",
