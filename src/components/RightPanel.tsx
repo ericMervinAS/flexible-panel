@@ -22,7 +22,7 @@ import type { DistractionDetection } from "@/lib/distractionDetection";
 const LOUPE_TABS = [
   { id: "subject", label: "Subject", Icon: User },
   { id: "background", label: "Background", Icon: Stack },
-  { id: "patch", label: "Patch", Icon: Eraser },
+  { id: "patch", label: "Remove", Icon: Eraser },
 ] as const;
 
 type LoupeTab = "subject" | "background" | "patch";
@@ -492,10 +492,7 @@ const RightPanel = ({
   // undoes its prior removal only, does NOT rescan/re-remove. The row simply
   // flips back to a plain checkbox once albumCategoryStatus reflects it.
   const handleResetAlbumRemove = (label: string) => {
-    onResetLabelsAcrossAlbum?.(
-      [label],
-      albumCategoryScopeIndices ?? undefined,
-    );
+    onResetLabelsAcrossAlbum?.([label], albumCategoryScopeIndices ?? undefined);
   };
 
   const handleFindAndRemove = () => {
