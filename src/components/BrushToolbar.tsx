@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { PaintBrush, Circle, ArrowCounterClockwiseIcon, Plus, Minus, ArrowsOutSimpleIcon, ArrowsInSimpleIcon } from "@phosphor-icons/react";
+import { PaintBrush, Circle, ArrowCounterClockwiseIcon, Plus, Eraser, ArrowsOutSimpleIcon, ArrowsInSimpleIcon } from "@phosphor-icons/react";
 
 const makeBrushCursor = (size: number) => {
   const visual = Math.max(8, Math.min(128, size));
@@ -170,10 +170,7 @@ const BrushToolbar = ({ brushSize, onBrushSizeChange, onBrushModeChange, onClear
               : "bg-transparent border-transparent hover:bg-[rgba(226,226,226,0.05)]"
               }`}
           >
-            <div className="relative">
-              <PaintBrush className="w-4 h-4" />
-              <Minus className="absolute -bottom-1 -right-1 w-2.5 h-2.5" weight="bold" />
-            </div>
+            <Eraser className="w-4 h-4" />
           </button>
         </div>
 

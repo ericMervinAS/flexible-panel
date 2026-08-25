@@ -212,7 +212,7 @@ const LoupePatchPanel = ({
   const removeAlbumLabel =
     selectedImageCount && selectedImageCount > 1
       ? `Remove from ${selectedImageCount} Images`
-      : "Remove from Album";
+      : "Auto Remove from Album";
 
   const handleRerun = () => {
     setHasRescanned(true);
@@ -698,7 +698,7 @@ const LoupePatchPanel = ({
                       canvasHasStrokes ? "text-[#474747]" : "text-white"
                     }`}
                   >
-                    Remove from this Image
+                    Auto Remove from Image
                   </span>
                 </button>
                 <button
