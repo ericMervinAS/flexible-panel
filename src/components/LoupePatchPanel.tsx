@@ -279,7 +279,10 @@ const LoupePatchPanel = ({
         // (Skip, or Edit -> Save, or already applied) so this count matches
         // what Remove will do next.
         if (dismissedForImage.has(key)) continue;
-        remainingCountMap.set(uiLabel, (remainingCountMap.get(uiLabel) ?? 0) + 1);
+        remainingCountMap.set(
+          uiLabel,
+          (remainingCountMap.get(uiLabel) ?? 0) + 1,
+        );
       }
     }
     // Once scanned, surface every scannable category — including the ones
@@ -615,119 +618,123 @@ const LoupePatchPanel = ({
         </div>
       ) : (
         <>
-      {/* ── Smart Object ──────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-2">
-        {/* Title row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
-              Distraction Removal
-            </span>
-            {/* <span className="px-1 py-0.5 text-[11px] font-medium leading-3 rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
+          {/* ── Smart Object ──────────────────────────────────────────────────── */}
+          <div className="flex flex-col gap-2">
+            {/* Title row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[14px] font-normal text-[#e2e2e2] leading-5">
+                  AI Distraction Removal
+                </span>
+                {/* <span className="px-1 py-0.5 text-[11px] font-medium leading-3 rounded backdrop-blur-[2px] bg-[rgba(37,99,235,0.12)] border border-[rgba(37,99,235,0.4)] text-[#e2e2e2]">
               Beta
             </span> */}
-            <span
-              className="relative inline-flex"
-              onMouseEnter={() => setFlaskHovered(true)}
-              onMouseLeave={() => setFlaskHovered(false)}
-            >
-              <Tooltip label="Beta" visible={flaskHovered} />
-              <FlaskIcon className="w-4 h-4" weight="fill" color="#EAB308" />
-            </span>
-          </div>
+                <span
+                  className="relative inline-flex"
+                  onMouseEnter={() => setFlaskHovered(true)}
+                  onMouseLeave={() => setFlaskHovered(false)}
+                >
+                  <Tooltip label="Beta" visible={flaskHovered} />
+                  <FlaskIcon
+                    className="w-4 h-4"
+                    weight="fill"
+                    color="#EAB308"
+                  />
+                </span>
+              </div>
 
-          {/* Scan icon — always mounted (even pre-scan, as an invisible
+              {/* Scan icon — always mounted (even pre-scan, as an invisible
               placeholder) so the title row's height stays constant and the
               heading doesn't shift when the panel switches states. */}
-          <button
-            onClick={handleRerun}
-            disabled={preScan || isModelScanning || isRemoving}
-            title="Rerun object scan"
-            className={`flex items-center justify-center w-6 h-6 rounded transition-opacity ${
-              preScan
-                ? "opacity-0 pointer-events-none"
-                : isRemoving
-                  ? "opacity-30 cursor-not-allowed"
-                  : isModelScanning
-                    ? "opacity-60 cursor-not-allowed"
-                    : "opacity-70 hover:opacity-100 cursor-pointer"
-            }`}
-          >
-            {isModelScanning ? (
-              <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
-            ) : (
-              // <ArrowsClockwiseIcon className="w-5 h-5 text-[#555]" />
-              <></>
+              <button
+                onClick={handleRerun}
+                disabled={preScan || isModelScanning || isRemoving}
+                title="Rerun object scan"
+                className={`flex items-center justify-center w-6 h-6 rounded transition-opacity ${
+                  preScan
+                    ? "opacity-0 pointer-events-none"
+                    : isRemoving
+                      ? "opacity-30 cursor-not-allowed"
+                      : isModelScanning
+                        ? "opacity-60 cursor-not-allowed"
+                        : "opacity-70 hover:opacity-100 cursor-pointer"
+                }`}
+              >
+                {isModelScanning ? (
+                  <div className="w-4 h-4 rounded-full border-2 border-[#ababab] border-t-transparent animate-spin" />
+                ) : (
+                  // <ArrowsClockwiseIcon className="w-5 h-5 text-[#555]" />
+                  <></>
+                )}
+              </button>
+            </div>
+
+            {preScan && (
+              <img src={graphic1} className="w-full h-100 object-cover" />
             )}
-          </button>
-        </div>
 
-        {preScan && (
-          <img src={graphic1} className="w-full h-100 object-cover" />
-        )}
+            {preScan && (
+              <p className="text-[12px] text-[#ababab] leading-4">
+                Scan for distracting objects like exit signs, fire alarms, fire
+                extinguishers, and thermostats to remove.
+              </p>
+            )}
 
-        {preScan && (
-          <p className="text-[12px] text-[#ababab] leading-4">
-            Scan for distracting objects like exit signs, fire alarms, fire
-            extinguishers, and thermostats to remove.
-          </p>
-        )}
-
-        {/* Pre-scan entry points */}
-        {preScan && (
-          <div className="flex flex-col gap-2 mt-1">
-            <button
-              onClick={onScanImage}
-              disabled={canvasHasStrokes}
-              className={`flex items-center justify-center h-9 px-3 rounded transition-colors ${
-                canvasHasStrokes
-                  ? "bg-[#1e2a45] cursor-not-allowed"
-                  : "bg-[#2563eb] hover:bg-[#1d56d1]"
-              }`}
-              // className="flex items-center justify-center h-9 px-3 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
-            >
-              <span
-                className={`text-[12px] font-medium leading-4 ${
-                  canvasHasStrokes ? "text-[#474747]" : "text-white"
-                }`}
-              >
-                Remove from this Image
-              </span>
-            </button>
-            <button
-              onClick={() => setShowAlbumScanModal(true)}
-              disabled={canvasHasStrokes}
-              className={`flex items-center justify-center h-9 px-3 rounded border transition-colors ${
-                canvasHasStrokes
-                  ? "border-[#242424] cursor-not-allowed"
-                  : "border-[#303030] hover:border-[#3a3a3a]"
-              }`}
-            >
-              <span
-                className={`text-[12px] font-medium leading-4 ${
-                  canvasHasStrokes ? "text-[#474747]" : "text-[#e2e2e2]"
-                }`}
-              >
-                {removeAlbumLabel}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!isModelScanning && hasScanned && noneFound && (
-          <div className="flex flex-col items-center gap-3 mt-1">
-            <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424] w-full">
-              <WarningIcon className="w-8 h-8 text-[#e2e2e2]" />
-              <div className="flex flex-col gap-1 text-center w-full">
-                <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
-                  No distractions detected
-                </p>
-                <p className="text-[13px] font-normal text-[#ababab] leading-4">
-                  Think we missed something?
-                </p>
+            {/* Pre-scan entry points */}
+            {preScan && (
+              <div className="flex flex-col gap-2 mt-1">
+                <button
+                  onClick={onScanImage}
+                  disabled={canvasHasStrokes}
+                  className={`flex items-center justify-center h-9 px-3 rounded transition-colors ${
+                    canvasHasStrokes
+                      ? "bg-[#1e2a45] cursor-not-allowed"
+                      : "bg-[#2563eb] hover:bg-[#1d56d1]"
+                  }`}
+                  // className="flex items-center justify-center h-9 px-3 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
+                >
+                  <span
+                    className={`text-[12px] font-medium leading-4 ${
+                      canvasHasStrokes ? "text-[#474747]" : "text-white"
+                    }`}
+                  >
+                    Remove from this Image
+                  </span>
+                </button>
+                <button
+                  onClick={() => setShowAlbumScanModal(true)}
+                  disabled={canvasHasStrokes}
+                  className={`flex items-center justify-center h-9 px-3 rounded border transition-colors ${
+                    canvasHasStrokes
+                      ? "border-[#242424] cursor-not-allowed"
+                      : "border-[#303030] hover:border-[#3a3a3a]"
+                  }`}
+                >
+                  <span
+                    className={`text-[12px] font-medium leading-4 ${
+                      canvasHasStrokes ? "text-[#474747]" : "text-[#e2e2e2]"
+                    }`}
+                  >
+                    {removeAlbumLabel}
+                  </span>
+                </button>
               </div>
-              {/* <div className="flex items-center justify-center gap-2 w-full">
+            )}
+
+            {/* Empty state */}
+            {!isModelScanning && hasScanned && noneFound && (
+              <div className="flex flex-col items-center gap-3 mt-1">
+                <div className="flex flex-col items-center justify-center gap-4 p-5 rounded-lg bg-[#242424] w-full">
+                  <WarningIcon className="w-8 h-8 text-[#e2e2e2]" />
+                  <div className="flex flex-col gap-1 text-center w-full">
+                    <p className="text-[16px] font-semibold text-[#e2e2e2] leading-5">
+                      No distractions detected
+                    </p>
+                    <p className="text-[13px] font-normal text-[#ababab] leading-4">
+                      Think we missed something?
+                    </p>
+                  </div>
+                  {/* <div className="flex items-center justify-center gap-2 w-full">
                 <button
                   onClick={handleRerun}
                   className="flex items-center justify-center min-w-[44px] px-3 py-2 rounded bg-[#303030] hover:bg-[#3a3a3a] transition-colors"
@@ -747,146 +754,148 @@ const LoupePatchPanel = ({
                   </button>
                 )}
               </div> */}
-            </div>
-          </div>
-        )}
+                </div>
+              </div>
+            )}
 
-        {/* Detected items grid */}
-        {!preScan && !noneFound && detected.length > 0 && (
-          <div
-            className={`grid grid-cols-2 mt-2 gap-4 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}
-          >
-            {orderedItems.map((d) => {
-              const isItemRemoved = isDone(d);
-              // A label with nothing left to remove (count 0) must never
-              // render as checked, even if it's still in `selected` for a
-              // tick before the cleanup effect below clears it.
-              const isSelected = selected.has(d.label) && d.count > 0;
-              const isIndeterminate = isLabelIndeterminate(d);
+            {/* Detected items grid */}
+            {!preScan && !noneFound && detected.length > 0 && (
+              <div
+                className={`grid grid-cols-2 mt-2 gap-4 transition-opacity ${itemsDisabled ? "opacity-40 pointer-events-none" : ""}`}
+              >
+                {orderedItems.map((d) => {
+                  const isItemRemoved = isDone(d);
+                  // A label with nothing left to remove (count 0) must never
+                  // render as checked, even if it's still in `selected` for a
+                  // tick before the cleanup effect below clears it.
+                  const isSelected = selected.has(d.label) && d.count > 0;
+                  const isIndeterminate = isLabelIndeterminate(d);
 
-              if (isItemRemoved) {
-                return (
-                  <div
-                    key={d.label}
-                    onMouseEnter={() => onHoveredLabelChange?.(d.label)}
-                    onMouseLeave={() => onHoveredLabelChange?.(null)}
-                    className="flex items-center justify-between gap-2 h-4 rounded-[6px] transition-colors text-left group"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
+                  if (isItemRemoved) {
+                    return (
+                      <div
+                        key={d.label}
+                        onMouseEnter={() => onHoveredLabelChange?.(d.label)}
+                        onMouseLeave={() => onHoveredLabelChange?.(null)}
+                        className="flex items-center justify-between gap-2 h-4 rounded-[6px] transition-colors text-left group"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <button
+                            onClick={() =>
+                              d.rawCount > 0 &&
+                              handleResetClick(d.label, d.rawCount)
+                            }
+                            disabled={d.rawCount === 0}
+                            className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center bg-[#2563eb] opacity-50 ${
+                              d.rawCount > 0 ? "cursor-pointer" : ""
+                            }`}
+                          >
+                            <Check className="w-2 h-2 text-white stroke-[3]" />
+                          </button>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
+                              {d.label}
+                            </span>
+                            <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
+                              {d.rawCount}
+                            </span>
+                          </div>
+                        </div>
+                        {d.rawCount > 0 && (
+                          <button
+                            onClick={() =>
+                              handleResetClick(d.label, d.rawCount)
+                            }
+                            className="shrink-0 cursor-pointer"
+                          >
+                            <ArrowCounterClockwiseIcon className="w-3 h-3 text-[#777] transition-colors group-hover:text-[#e2e2e2]" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (d.rawCount === 0) {
+                    // Nothing found on this image, but the user may still want to
+                    // remove this category across the album — checking it here
+                    // just queues it as a preselected category for "Remove from
+                    // Album" below (there's nothing to inpaint on this photo).
+                    const isQueued = selected.has(d.label);
+                    return (
                       <button
-                        onClick={() =>
-                          d.rawCount > 0 &&
-                          handleResetClick(d.label, d.rawCount)
-                        }
-                        disabled={d.rawCount === 0}
-                        className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center bg-[#2563eb] opacity-50 ${
-                          d.rawCount > 0 ? "cursor-pointer" : ""
+                        key={d.label}
+                        onClick={() => toggle(d.label)}
+                        className="flex items-center gap-2 h-4 rounded-[6px] text-left cursor-pointer"
+                      >
+                        <div
+                          className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
+                            isQueued
+                              ? "bg-[#2563eb]"
+                              : "border border-[#474747] bg-transparent"
+                          }`}
+                        >
+                          {isQueued && (
+                            <Check className="w-2 h-2 text-white stroke-[3]" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
+                            {d.label}
+                          </span>
+                          <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
+                            0
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={d.label}
+                      onClick={() => toggle(d.label)}
+                      onMouseEnter={() =>
+                        !itemsDisabled && onHoveredLabelChange?.(d.label)
+                      }
+                      onMouseLeave={() =>
+                        !itemsDisabled && onHoveredLabelChange?.(null)
+                      }
+                      className={`flex items-center gap-2 h-4 rounded-[6px] transition-colors text-left ${
+                        itemsDisabled ? "cursor-not-allowed" : "cursor-pointer"
+                      }`}
+                    >
+                      <div
+                        className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
+                          isSelected
+                            ? "bg-[#2563eb]"
+                            : "border border-[#474747] bg-transparent"
                         }`}
                       >
-                        <Check className="w-2 h-2 text-white stroke-[3]" />
-                      </button>
+                        {isSelected &&
+                          (isIndeterminate ? (
+                            <div className="w-1.5 h-[1.5px] rounded-full bg-white" />
+                          ) : (
+                            <Check className="w-2 h-2 text-white stroke-[3]" />
+                          ))}
+                      </div>
                       <div className="flex items-center gap-1 min-w-0">
                         <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
                           {d.label}
                         </span>
                         <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
-                          {d.rawCount}
-                        </span>
-                      </div>
-                    </div>
-                    {d.rawCount > 0 && (
-                      <button
-                        onClick={() => handleResetClick(d.label, d.rawCount)}
-                        className="shrink-0 cursor-pointer"
-                      >
-                        <ArrowCounterClockwiseIcon className="w-3 h-3 text-[#777] transition-colors group-hover:text-[#e2e2e2]" />
-                      </button>
-                    )}
-                  </div>
-                );
-              }
-
-              if (d.rawCount === 0) {
-                // Nothing found on this image, but the user may still want to
-                // remove this category across the album — checking it here
-                // just queues it as a preselected category for "Remove from
-                // Album" below (there's nothing to inpaint on this photo).
-                const isQueued = selected.has(d.label);
-                return (
-                  <button
-                    key={d.label}
-                    onClick={() => toggle(d.label)}
-                    className="flex items-center gap-2 h-4 rounded-[6px] text-left cursor-pointer"
-                  >
-                    <div
-                      className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
-                        isQueued
-                          ? "bg-[#2563eb]"
-                          : "border border-[#474747] bg-transparent"
-                      }`}
-                    >
-                      {isQueued && (
-                        <Check className="w-2 h-2 text-white stroke-[3]" />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
-                        {d.label}
-                      </span>
-                      <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
-                        0
-                      </span>
-                    </div>
-                  </button>
-                );
-              }
-
-              return (
-                <button
-                  key={d.label}
-                  onClick={() => toggle(d.label)}
-                  onMouseEnter={() =>
-                    !itemsDisabled && onHoveredLabelChange?.(d.label)
-                  }
-                  onMouseLeave={() =>
-                    !itemsDisabled && onHoveredLabelChange?.(null)
-                  }
-                  className={`flex items-center gap-2 h-4 rounded-[6px] transition-colors text-left ${
-                    itemsDisabled ? "cursor-not-allowed" : "cursor-pointer"
-                  }`}
-                >
-                  <div
-                    className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center transition-colors ${
-                      isSelected
-                        ? "bg-[#2563eb]"
-                        : "border border-[#474747] bg-transparent"
-                    }`}
-                  >
-                    {isSelected &&
-                      (isIndeterminate ? (
-                        <div className="w-1.5 h-[1.5px] rounded-full bg-white" />
-                      ) : (
-                        <Check className="w-2 h-2 text-white stroke-[3]" />
-                      ))}
-                  </div>
-                  <div className="flex items-center gap-1 min-w-0">
-                    <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
-                      {d.label}
-                    </span>
-                    <span className="text-[10px] font-medium text-[#777] leading-3 shrink-0">
-                      {/* Once some (but not all) instances are already resolved
+                          {/* Once some (but not all) instances are already resolved
                           (e.g. one dot restored out of several removed), show
                           "remaining/total" instead of a bare count that reads
                           as the full total. */}
-                      {d.outstandingCount !== d.rawCount
-                        ? `${d.outstandingCount}/${d.rawCount}`
-                        : d.rawCount}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-            {/* {detected.length > 0 && (
+                          {d.outstandingCount !== d.rawCount
+                            ? `${d.outstandingCount}/${d.rawCount}`
+                            : d.rawCount}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+                {/* {detected.length > 0 && (
                 <button
                   onClick={() => setShowSuggestModal(true)}
                   className="group relative col-span-2 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
@@ -902,10 +911,10 @@ const LoupePatchPanel = ({
                   </span>
                 </button>
               )} */}
-          </div>
-        )}
+              </div>
+            )}
 
-        {/* {detected.length > 0 && (
+            {/* {detected.length > 0 && (
           <button
             onClick={() => setShowSuggestModal(true)}
             className="group relative mt-1 flex items-center justify-center gap-2 h-9 w-full rounded-[8px] bg-[#1f1f1f] hover:bg-[#252525] border border-[#2e2e2e] hover:border-[#3a3a3a] transition-colors cursor-pointer"
@@ -917,8 +926,8 @@ const LoupePatchPanel = ({
           </button>
         )} */}
 
-        {/* Remove CTA — matches Grid View processing style */}
-        {/* <button
+            {/* Remove CTA — matches Grid View processing style */}
+            {/* <button
           disabled={!canRemove}
           onClick={handleRemove}
           className={`flex items-center justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium transition-colors ${isRemoving
@@ -930,55 +939,54 @@ const LoupePatchPanel = ({
         >
           <span>{isRemoving ? "Removing…" : removeLabel}</span>
         </button> */}
-      </div>
+          </div>
 
-      {!preScan && showRescanCTA && (
-        <button
-          onClick={handleRescanImage}
-          className="flex items-center mt-[-8px] justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium bg-[#2563eb] text-white hover:bg-[#1d56d1] transition-colors cursor-pointer"
-        >
-          <span>Rescan Image</span>
-        </button>
-      )}
+          {!preScan && showRescanCTA && (
+            <button
+              onClick={handleRescanImage}
+              className="flex items-center mt-[-8px] justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium bg-[#2563eb] text-white hover:bg-[#1d56d1] transition-colors cursor-pointer"
+            >
+              <span>Rescan Image</span>
+            </button>
+          )}
 
-      {!preScan && !showRescanCTA && (
-        <button
-          disabled={!canRemove}
-          onClick={handleRemove}
-          className={`flex items-center mt-[-8px] justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium transition-colors ${
-            isRemoving
-              ? "bg-[#1d56d1] text-white cursor-not-allowed"
-              : canRemove
-                ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
-                : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
-          }`}
-        >
-          <span>{isRemoving ? "Removing…" : removeLabel}</span>
-        </button>
-      )}
+          {!preScan && !showRescanCTA && (
+            <button
+              disabled={!canRemove}
+              onClick={handleRemove}
+              className={`flex items-center mt-[-8px] justify-center gap-2 h-9 w-full px-3 rounded text-[12px] font-medium transition-colors ${
+                isRemoving
+                  ? "bg-[#1d56d1] text-white cursor-not-allowed"
+                  : canRemove
+                    ? "bg-[#2563eb] text-white hover:bg-[#1d56d1] cursor-pointer"
+                    : "bg-[#1e2a45] text-[#474747] cursor-not-allowed"
+              }`}
+            >
+              <span>{isRemoving ? "Removing…" : removeLabel}</span>
+            </button>
+          )}
 
-      {/* Post-scan: still offer to scan the rest of the album */}
-      {!preScan && !isModelScanning && (
-        <button
-          onClick={() => setShowAlbumScanModal(true)}
-          disabled={canvasHasStrokes}
-          className={`flex items-center justify-center h-9 px-3 mt-[-16px] rounded border transition-colors ${
-            canvasHasStrokes
-              ? "border-[#242424] cursor-not-allowed"
-              : "border-[#303030] hover:border-[#3a3a3a]"
-          }`}
-        >
-          <span
-            className={`text-[12px] font-medium leading-4 ${
-              canvasHasStrokes ? "text-[#474747]" : "text-[#e2e2e2]"
-            }`}
-          >
-            {removeAlbumLabel}
-          </span>
-        </button>
-      )}
-
-      </>
+          {/* Post-scan: still offer to scan the rest of the album */}
+          {!preScan && !isModelScanning && (
+            <button
+              onClick={() => setShowAlbumScanModal(true)}
+              disabled={canvasHasStrokes}
+              className={`flex items-center justify-center h-9 px-3 mt-[-16px] rounded border transition-colors ${
+                canvasHasStrokes
+                  ? "border-[#242424] cursor-not-allowed"
+                  : "border-[#303030] hover:border-[#3a3a3a]"
+              }`}
+            >
+              <span
+                className={`text-[12px] font-medium leading-4 ${
+                  canvasHasStrokes ? "text-[#474747]" : "text-[#e2e2e2]"
+                }`}
+              >
+                {removeAlbumLabel}
+              </span>
+            </button>
+          )}
+        </>
       )}
 
       {/* ── Restore confirmation modal (same as SmartObjectRemoval) ───────── */}
