@@ -768,12 +768,23 @@ const LoupePatchPanel = ({
                 return (
                   <div
                     key={d.label}
+                    onMouseEnter={() => onHoveredLabelChange?.(d.label)}
+                    onMouseLeave={() => onHoveredLabelChange?.(null)}
                     className="flex items-center justify-between gap-2 h-4 rounded-[6px] transition-colors text-left group"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center bg-[#2563eb] opacity-50">
+                      <button
+                        onClick={() =>
+                          d.rawCount > 0 &&
+                          handleResetClick(d.label, d.rawCount)
+                        }
+                        disabled={d.rawCount === 0}
+                        className={`shrink-0 w-3 h-3 rounded-[2px] flex items-center justify-center bg-[#2563eb] opacity-50 ${
+                          d.rawCount > 0 ? "cursor-pointer" : ""
+                        }`}
+                      >
                         <Check className="w-2 h-2 text-white stroke-[3]" />
-                      </div>
+                      </button>
                       <div className="flex items-center gap-1 min-w-0">
                         <span className="text-[11px] text-[#e2e2e2] leading-4 truncate">
                           {d.label}

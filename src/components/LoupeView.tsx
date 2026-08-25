@@ -76,6 +76,10 @@ interface LoupeViewProps {
   isExternallyRemoving?: boolean;
   highlightedDetections?: DistractionDetection[];
   hoveredDetections?: DistractionDetection[];
+  /** UI label currently hovered in the patch panel's "removed" list — highlights
+   *  the matching removal dot(s) on canvas rather than drawing a pending-box
+   *  overlay (those dots are already-applied, not pending detections). */
+  hoveredRemovedLabel?: string | null;
   /** Fired after a canvas-side brush removal completes (timer-driven). */
   onCanvasRemoveSuccess?: () => void;
   /** Shared removed-items state (Set of removed object UI labels) — owned by the page. */
@@ -159,6 +163,7 @@ const LoupeView = ({
   isExternallyRemoving = false,
   highlightedDetections = [],
   hoveredDetections = [],
+  hoveredRemovedLabel = null,
   onCanvasRemoveSuccess,
   removedItems: _removedItems,
   onAddRemovedItems: _onAddRemovedItems,
@@ -2018,6 +2023,11 @@ const LoupeView = ({
 
   // Removal masks for the current image + whether the dot layer should render.
   const dotMasks = removalsByImage[currentIndex] ?? [];
+  // Hovering a "removed" label in the patch panel should reveal its dot(s)
+  // even though the cursor is over the panel, not the image.
+  const hasHoveredRemovedDot =
+    !!hoveredRemovedLabel &&
+    dotMasks.some((m) => m.label === hoveredRemovedLabel);
   const dotsVisible =
     isPatchActive &&
     !!imageBounds &&
@@ -2027,7 +2037,7 @@ const LoupeView = ({
     !showStrokeHint &&
     !isAutoRemoving &&
     !isExternallyRemoving &&
-    !!dotHoverPos; // only while the cursor is actually over the image
+    (!!dotHoverPos || hasHoveredRemovedDot); // cursor over the image, or a panel-hovered label with a matching dot
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -2182,11 +2192,16 @@ const LoupeView = ({
             </svg>
           )}
 
-          {/* Removal dots — one per removed object, proximity-revealed outline */}
+          {/* Removal dots — one per removed object, proximity-revealed outline.
+              A panel-hover with the cursor NOT over the image should only
+              surface that one label's dot(s), not the whole set. */}
           {dotsVisible && imageBounds && (
             <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
               <g style={{ pointerEvents: "auto" }}>
-                {dotMasks.map((m) => {
+                {(dotHoverPos
+                  ? dotMasks
+                  : dotMasks.filter((m) => m.label === hoveredRemovedLabel)
+                ).map((m) => {
                   const rW = imageBounds.right - imageBounds.left;
                   const rH = imageBounds.bottom - imageBounds.top;
                   const cx =
@@ -2211,14 +2226,29 @@ const LoupeView = ({
                         imageBounds,
                       )
                     : false;
+                  // Hovering the label in the patch panel's "removed" list
+                  // highlights every dot for that label, same treatment as
+                  // hovering the dot directly.
+                  const isLabelHovered =
+                    !!hoveredRemovedLabel && m.label === hoveredRemovedLabel;
                   const revealed =
+                    isActive ||
+                    isDragging ||
+                    menuOpen ||
+                    pointerInMask ||
+                    isLabelHovered;
+                  // Panel-hover should only pop the dot itself, not the
+                  // footprint box/brush-mask outline — that stays reserved
+                  // for actually interacting with the dot on canvas.
+                  const showFootprint =
                     isActive || isDragging || menuOpen || pointerInMask;
                   const r = revealed ? 6.5 / zoom : 5 / zoom;
                   const dotOpacity = revealed ? 1 : 0.8;
-                  const borderW = isActive ? 2 / zoom : 1 / zoom;
+                  const borderW =
+                    isActive || isLabelHovered ? 2 / zoom : 1 / zoom;
                   return (
                     <g key={m.id}>
-                      {revealed && m.kind === "object" && (
+                      {showFootprint && m.kind === "object" && (
                         // Actual inpaint mask: the padded detection box. Its bbox is the
                         // real mask footprint, so it can host the right-click handler directly.
                         <rect
@@ -2234,7 +2264,7 @@ const LoupeView = ({
                           onContextMenu={(e) => handleDotContextMenu(e, m)}
                         />
                       )}
-                      {revealed && m.kind === "brush" && m.dataUrl && (
+                      {showFootprint && m.kind === "brush" && m.dataUrl && (
                         <>
                           {/* Actual brush mask, drawn in place (mask canvas is full-image sized). */}
                           <image

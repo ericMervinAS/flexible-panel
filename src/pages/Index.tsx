@@ -592,8 +592,15 @@ const Index = ({ importSource }: IndexProps) => {
   const hoveredDetections = useMemo(() => {
     if (!hoveredLabel || highlightedLabels.has(hoveredLabel)) return [];
     const imageDets = distractionMap?.get(selectedIndex) ?? [];
-    return imageDets.filter((det) => MODEL_TO_UI[det.label] === hoveredLabel);
-  }, [distractionMap, selectedIndex, hoveredLabel, highlightedLabels]);
+    // Already-applied instances get their own removal dot (see
+    // hoveredRemovedLabel below) — exclude them here so hovering a removed
+    // label doesn't also draw a pending-box outline over it.
+    return imageDets.filter(
+      (det) =>
+        MODEL_TO_UI[det.label] === hoveredLabel &&
+        !appliedDetectionKeys.has(detKey(det)),
+    );
+  }, [distractionMap, selectedIndex, hoveredLabel, highlightedLabels, appliedDetectionKeys]);
 
   const visibleSubjectIndices = null;
 
@@ -735,6 +742,7 @@ const Index = ({ importSource }: IndexProps) => {
               }
               highlightedDetections={highlightedDetections}
               hoveredDetections={hoveredDetections}
+              hoveredRemovedLabel={hoveredLabel}
               removedItems={removedItems}
               onAddRemovedItems={addRemovedItems}
               onResetRemovedItem={resetRemovedItem}
